@@ -87,12 +87,12 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
     # Границы зон жёстко разнесены: правый край кольца (cx+r_out=~84)
     # < левого края текста легенды (legend_x=150). Пересечение физически
     # невозможно при любой длине подписей.
-    cx = size * 0.36                # центр круга (левая часть)
+    cx = size * 0.30                # центр круга (левая часть)
     cy = size / 2.0
-    r_out = size * 0.36
-    r_in = size * 0.22
-    legend_x = int(size * 0.66)     # левый край легенды (правая часть)
-    width = size * 2                # холст 460px: кольцо слева, легенда справа
+    r_out = size * 0.30             # правый край кольца ≈ 138
+    r_in = size * 0.18
+    legend_x = int(size * 0.90)     # левый край легенды ≈ 207 — зазор от кольца ≥ 65px
+    width = int(size * 2.4)         # холст ~552px: кольцо слева, большой зазор, легенда справа
     height = size
     segs: List[str] = []
 
@@ -152,7 +152,7 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
     # не пересекаются ни между собой, ни с кольцом (левый край текста 170 >
     # правый край кольца cx+r_out=82.9)
     lx0 = float(legend_x)
-    row_h = 34
+    row_h = 46                     # большой межстрочный шаг легенды
     rows = len(parts)
     ly0 = cy - (rows - 1) * row_h / 2.0 + 4
     legend_items = []
