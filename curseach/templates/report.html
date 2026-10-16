@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Отчёт об аудите безопасности — {{ target_url }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            background: #e8eaed;
+            color: #1a1a1a;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                         "Helvetica Neue", Arial, sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .page {
+            max-width: 900px;
+            margin: 30px auto;
+            background: #ffffff;
+            padding: 50px 55px 60px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+            position: relative;
+        }
+
+        /* --- Шапка документа --- */
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #1a1a1a;
+            padding-bottom: 18px;
+            margin-bottom: 30px;
+        }
+        .doc-header-left h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111;
+            letter-spacing: 0.2px;
+            margin-bottom: 4px;
+        }
+        .doc-header-left .org {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            font-weight: 600;
+        }
+        .doc-header-right {
+            text-align: right;
+            font-size: 12px;
+            color: #555;
+        }
+        .doc-header-right .doc-id {
+            font-weight: 700;
+            color: #111;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+
+        /* --- Мета --- */
+        .doc-meta {
+            margin-bottom: 34px;
+            border: 1px solid #d0d4d9;
+            background: #f7f8fa;
+        }
+        .doc-meta table { width: 100%; border-collapse: collapse; }
+        .doc-meta td {
+            padding: 10px 16px;
+            font-size: 13px;
+            border-bottom: 1px solid #e0e3e7;
+            vertical-align: top;
+        }
+        .doc-meta tr:last-child td { border-bottom: none; }
+        .doc-meta td.key {
+            width: 180px;
+            color: #666;
+            font-weight: 600;
+            background: #f0f2f5;
+            letter-spacing: 0.3px;
+        }
+        .doc-meta td.value { color: #111; font-weight: 500; }
+
+        /* --- Заголовок раздела --- */
+        .section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #d0d4d9;
+            margin-bottom: 18px;
+        }
+
+        /* --- Сводка --- */
+        .summary {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 34px;
+            flex-wrap: wrap;
+        }
+        .summary-card {
+            flex: 1 1 100px;
+            border: 1px solid #d0d4d9;
+            background: #ffffff;
+            padding: 16px 14px;
+            text-align: center;
+            border-top: 3px solid #1a1a1a;
+        }
+        .summary-card .num {
+            font-size: 28px;
+            font-weight: 700;
+            color: #111;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        .summary-card .label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 600;
+        }
+
+        .summary-card.score { min-width: 150px; }
+        .summary-card.score .num { font-size: 34px; }
+        .summary-card.score.score-safe     { border-top-color: #1b6e2f; }
+        .summary-card.score.score-safe .num { color: #1b6e2f; }
+        .summary-card.score.score-medium   { border-top-color: #b87300; }
+        .summary-card.score.score-medium .num { color: #b87300; }
+        .summary-card.score.score-high     { border-top-color: #7a1fa2; }
+        .summary-card.score.score-high .num { color: #7a1fa2; }
+        .summary-card.score.score-critical { border-top-color: #b3261e; }
+        .summary-card.score.score-critical .num { color: #b3261e; }
+
+        .summary-card.critical { border-top-color: #b3261e; }
+        .summary-card.critical .num { color: #b3261e; }
+        .summary-card.high     { border-top-color: #7a1fa2; }
+        .summary-card.high .num { color: #7a1fa2; }
+        .summary-card.medium   { border-top-color: #b87300; }
+        .summary-card.medium .num { color: #b87300; }
+        .summary-card.low      { border-top-color: #1b6e2f; }
+        .summary-card.low .num { color: #1b6e2f; }
+
+        /* --- Таблица находок --- */
+        .findings-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12.5px;
+            margin-bottom: 20px;
+        }
+        .findings-table thead th {
+            background: #1a1a1a;
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            text-align: left;
+            padding: 10px 12px;
+            border: 1px solid #1a1a1a;
+            white-space: nowrap;
+        }
+        .findings-table tbody td {
+            padding: 10px 12px;
+            border: 1px solid #d0d4d9;
+            vertical-align: top;
+            color: #1a1a1a;
+            line-height: 1.5;
+        }
+        .findings-table tbody tr:nth-child(even) td { background: #f7f8fa; }
+
+        .level-badge {
+            display: inline-block;
+            padding: 3px 9px;
+            font-size: 10.5px;
+            font-weight: 700;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            border-radius: 2px;
+            white-space: nowrap;
+        }
+        .level-badge.CRITICAL { background: #fbe9e7; color: #b3261e; border: 1px solid #e2b5b0; }
+        .level-badge.HIGH     { background: #f4e6f8; color: #7a1fa2; border: 1px solid #d5b3e0; }
+        .level-badge.MEDIUM   { background: #fdf0dc; color: #b87300; border: 1px solid #ecd1a0; }
+        .level-badge.LOW      { background: #e6f3ea; color: #1b6e2f; border: 1px solid #b8dcc2; }
+
+        .findings-table code {
+            font-family: "SF Mono", Consolas, "Courier New", monospace;
+            font-size: 11.5px;
+            background: #eef0f3;
+            padding: 2px 6px;
+            border-radius: 2px;
+            color: #1a1a1a;
+            white-space: nowrap;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #666;
+            font-size: 13px;
+            border: 1px solid #d0d4d9;
+            background: #f7f8fa;
+        }
+        .empty-state .check {
+            font-size: 28px;
+            color: #1b6e2f;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .doc-footer {
+            margin-top: 40px;
+            padding-top: 16px;
+            border-top: 1px solid #d0d4d9;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #888;
+            letter-spacing: 0.3px;
+        }
+
+        /* --- Панель кнопок --- */
+        .toolbar {
+            max-width: 900px;
+            margin: 30px auto -10px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .toolbar-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar button {
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 9px 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border: 1px solid;
+        }
+        .btn-download-pdf {
+            background: #1a73e8;
+            color: #fff;
+            border-color: #1a73e8;
+        }
+        .btn-download-pdf:hover { background: #1558b0; border-color: #1558b0; }
+        .btn-bundle {
+            background: #7a1fa2;
+            color: #fff;
+            border-color: #7a1fa2;
+        }
+        .btn-bundle:hover { background: #5c1780; border-color: #5c1780; }
+        .btn-back {
+            background: #fff;
+            color: #333;
+            border-color: #d0d4d9;
+        }
+        .btn-back:hover { background: #f0f2f5; }
+        .btn-print {
+            background: #1a73e8;
+            color: #fff;
+            border-color: #1a73e8;
+        }
+        .btn-print:hover { background: #1558b0; border-color: #1558b0; }
+
+        /* =====================================================
+           ПЕЧАТЬ / СОХРАНЕНИЕ В PDF
+           ===================================================== */
+        @page {
+            size: A4;
+            margin: 15mm 14mm;
+        }
+
+        @media print {
+            html, body {
+                background: #fff;
+            }
+            .page {
+                box-shadow: none;
+                margin: 0;
+                max-width: 100%;
+                padding: 0;
+            }
+            .toolbar { display: none; }
+            .findings-table thead th {
+                background: #1a1a1a !important;
+                color: #fff !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .level-badge,
+            .summary-card {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .page { padding: 30px 20px; margin: 15px; }
+            .summary { flex-wrap: wrap; }
+            .summary-card { flex: 1 1 45%; }
+            .doc-header { flex-direction: column; gap: 10px; }
+            .doc-header-right { text-align: left; }
+            .findings-table { font-size: 11px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <div class="toolbar-buttons">
+            {% if scan_id is not none %}
+                <button class="btn-bundle" onclick="window.location.href='/history/{{ scan_id }}/bundle'">Скачать всё (ZIP)</button>
+                <button class="btn-download-pdf" onclick="window.location.href='/history/{{ scan_id }}/view/pdf'">Скачать PDF</button>
+                <button class="btn-back" onclick="window.open('/history/{{ scan_id }}/full', '_blank')">С диаграммой</button>
+            {% else %}
+                <button class="btn-print" onclick="window.print()">Печать / Сохранить в PDF</button>
+            {% endif %}
+            <button class="btn-back" onclick="window.close()">Закрыть</button>
+        </div>
+    </div>
+
+    <div class="page">
+
+        <div class="doc-header">
+            <div class="doc-header-left">
+                <h1>Отчёт об аудите безопасности API</h1>
+                <div class="org">DevSecOps Security Assessment</div>
+            </div>
+            <div class="doc-header-right">
+                <div class="doc-id">Документ № {{ scan_date[:10].replace('-', '') }}-01</div>
+                <div class="doc-date">Дата формирования: {{ scan_date }}</div>
+            </div>
+        </div>
+
+        <div class="doc-meta">
+            <table>
+                <tr>
+                    <td class="key">Целевой ресурс</td>
+                    <td class="value">{{ target_url }}</td>
+                </tr>
+                <tr>
+                    <td class="key">Режим сканирования</td>
+                    <td class="value">{{ mode_ru }}</td>
+                </tr>
+                <tr>
+                    <td class="key">Дата и время</td>
+                    <td class="value">{{ scan_date }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section-title">Сводка результатов</div>
+        <div class="summary">
+            <div class="summary-card score
+                {% if score >= 80 %}score-safe{% elif score >= 50 %}score-medium{% elif score >= 20 %}score-high{% else %}score-critical{% endif %}">
+                <div class="num">{{ score }}</div>
+                <div class="label">Оценка безопасности</div>
+            </div>
+            <div class="summary-card critical">
+                <div class="num">{{ critical }}</div>
+                <div class="label">Критично</div>
+            </div>
+            <div class="summary-card high">
+                <div class="num">{{ high }}</div>
+                <div class="label">Высоко</div>
+            </div>
+            <div class="summary-card medium">
+                <div class="num">{{ medium }}</div>
+                <div class="label">Средне</div>
+            </div>
+            <div class="summary-card low">
+                <div class="num">{{ low }}</div>
+                <div class="label">Низко</div>
+            </div>
+        </div>
+
+        <div class="section-title">Найденные уязвимости</div>
+
+        {% if findings %}
+        <table class="findings-table">
+            <thead>
+                <tr>
+                    <th style="width: 85px;">Уровень</th>
+                    <th style="width: 150px;">Тип</th>
+                    <th style="width: 180px;">Эндпоинт</th>
+                    <th>Описание</th>
+                    <th>Рекомендация</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for item in findings %}
+                <tr>
+                    <td><span class="level-badge {{ item.level }}">{{ item.level }}</span></td>
+                    <td>{{ item.type }}</td>
+                    <td><code>{{ item.endpoint }}</code></td>
+                    <td>
+                        {{ item.desc }}
+                        {% if item.details and item.details.plain %}
+                        <div style="margin-top:6px; color:#555; font-size:11.5px; line-height:1.5;">
+                            {{ item.details.plain }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:11.5px; color:#444;">
+                        {{ item.details.recommendation if item.details else "—" }}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <div class="check">✓</div>
+            По результатам сканирования уязвимостей не обнаружено.<br>
+            Целевой ресурс соответствует базовым требованиям безопасности.
+        </div>
+        {% endif %}
+
+        <div class="doc-footer">
+            <span>Отчёт сформирован автоматически системой DevSecOps Scanner</span>
+            <span>{{ scan_date }}</span>
+        </div>
+
+    </div>
+
+</body>
+</html>
