@@ -83,15 +83,15 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
         ("Низкие", low, "#3fb950"),
     ]
     total = sum(v for _, v, _ in parts)
-    # Кольцо крупное, целиком в левой части холста; легенда — в правой.
+    # Кольцо крупное, целиком в левой части холста; легенда — сильно правее.
     # Правый край кольца (cx + r_out) жёстко меньше левого края легенды.
-    cx = size * 0.30                # центр круга (крупный, слева)
+    cx = size * 0.52                # центр круга (ещё крупнее)
     cy = size / 2.0
-    r_out = size * 0.30             # радиус кольца
-    r_in = size * 0.18
-    ring_right = cx + r_out         # ≈ 180 при size=300
-    legend_x = int(ring_right + size * 0.45)  # очень большой зазор от кольца (~135px)
-    width = legend_x + int(size * 0.85)       # легенда занимает всю правую половину
+    r_out = size * 0.46             # радиус кольца (было 0.30*size)
+    r_in = size * 0.27
+    ring_right = cx + r_out         # ≈ 294 при size=300
+    legend_x = int(ring_right + size * 0.55)  # огромный зазор от кольца (~165px)
+    width = legend_x + int(size * 1.05)       # легенда занимает всю правую половину
     height = size
     segs: List[str] = []
 
@@ -126,32 +126,43 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
                 # иначе надписи наслаиваются друг на друга
                 mid = (a0 + a1) / 2.0
                 arc_len = math.radians(sweep) * (r_out + r_in) / 2.0
-                if sweep >= 30 and arc_len >= 20:
-                    rr = (r_out + r_in) / 2.0
-                    tx = cx + rr * math.cos(math.radians(mid - 90.0))
-                    ty = cy + rr * math.sin(math.radians(mid - 90.0))
+                rr = (r_out + r_in) / 2.0
+                tx = cx + rr * math.cos(math.radians(mid - 90.0))
+                ty = cy + rr * math.sin(math.radians(mid - 90.0))
+                if sweep >= 24 and arc_len >= 18:
+                    # число внутри широкого сектора
                     segs.append(
-                        f'<text x="{tx:.1f}" y="{ty + 6:.1f}" fill="#ffffff" '
-                        f'font-size="17" font-weight="bold" text-anchor="middle" '
+                        f'<text x="{tx:.1f}" y="{ty + 8:.1f}" fill="#ffffff" '
+                        f'font-size="22" font-weight="bold" text-anchor="middle" '
+                        f'font-family="DejaVu Sans, Arial, sans-serif">{val}</text>'
+                    )
+                elif val > 0:
+                    # узкий сектор — выносим число наружу за кольцо,
+                    # чтобы значение не терялось (например «Низкие: 1»)
+                    ox = cx + (r_out + 16) * math.cos(math.radians(mid - 90.0))
+                    oy = cy + (r_out + 16) * math.sin(math.radians(mid - 90.0))
+                    segs.append(
+                        f'<text x="{ox:.1f}" y="{oy + 7:.1f}" fill="{color}" '
+                        f'font-size="20" font-weight="bold" text-anchor="middle" '
                         f'font-family="DejaVu Sans, Arial, sans-serif">{val}</text>'
                     )
             angle += sweep
 
     # центр круга: итог
     center_text = (
-        f'<text x="{cx}" y="{cy - 4}" fill="#1a1a1a" font-size="40" '
+        f'<text x="{cx}" y="{cy - 6}" fill="#1a1a1a" font-size="54" '
         f'font-weight="bold" text-anchor="middle" '
         f'font-family="DejaVu Sans, Arial, sans-serif">{total}</text>'
-        f'<text x="{cx}" y="{cy + 22}" fill="#57606a" font-size="14" '
+        f'<text x="{cx}" y="{cy + 30}" fill="#57606a" font-size="18" '
         f'text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif">'
         f'всего</text>'
     )
 
     # легенда: вся правая половина холста, КРУПНЫЙ текст и большой шаг строк
     lx0 = float(legend_x)
-    row_h = 58                     # крупный межстрочный шаг легенды
-    marker = 16                    # размер цветного маркера
-    font = 17                      # крупный шрифт подписей
+    row_h = 62                     # крупный межстрочный шаг легенды
+    marker = 20                    # размер цветного маркера
+    font = 22                      # крупный шрифт подписей
     rows = len(parts)
     ly0 = cy - (rows - 1) * row_h / 2.0 + font / 2.0
     legend_items = []
