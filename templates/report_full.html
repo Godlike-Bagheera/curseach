@@ -359,12 +359,10 @@
              а контент начинался с нормальным отступом (см. .print-page
              ниже). Так таблица не прилипает к верху второй страницы,
              и в PDF нет лишних надписей поверх контента. */
+        /* margin: 0 — см. комментарий выше: поля листов даёт padding .page */
         @page {
             size: A4;
-            margin: 14mm;
-        }
-        @page :first {
-            margin: 14mm 14mm 16mm;
+            margin: 0;
         }
 
         @media print {
@@ -373,7 +371,8 @@
                 box-shadow: none;
                 margin: 0;
                 max-width: 100%;
-                padding: 0;
+                /* @page margin:0 => поля листа даёт padding контейнера */
+                padding: 14mm 14mm 16mm;
             }
             .toolbar { display: none !important; }
 
@@ -434,7 +433,7 @@
     <div class="toolbar">
         <button class="btn-back" onclick="window.open('/history/{{ scan_id }}/view', '_blank')">Только таблица</button>
         <button class="btn-bundle" onclick="window.location.href='/history/{{ scan_id }}/bundle'">Скачать всё (ZIP)</button>
-        <button class="btn-download-pdf" onclick="window.print()" title="Откроется диалог печати браузера — выберите «Сохранить как PDF»">Скачать PDF</button>
+        <button class="btn-download-pdf" onclick="window.location.href='/history/{{ scan_id }}/full/pdf'" title="Серверный PDF: без дат/URL сверху и снизу">Скачать PDF</button>
         <button class="btn-back" onclick="window.close()">Закрыть</button>
     </div>
 

@@ -1,5 +1,6 @@
 # Зафиксированные версии (pip freeze после проверки pytest + smoke-запуска).
-# Playwright УДАЛЁН: PDF формируется клиентской печатью браузера (window.print()).
+# Playwright/Chromium НЕ нужны: PDF рендерится на сервере лёгким WeasyPrint
+# (чистый Python, без ~400 МБ браузера); window.print() остался как резервная печать.
 fastapi==0.115.6
 starlette==0.41.3
 uvicorn[standard]==0.32.1
@@ -8,3 +9,4 @@ jinja2==3.1.4
 pydantic==2.10.3
 python-multipart==0.0.20
 openpyxl==3.1.5
+weasyprint==63.1

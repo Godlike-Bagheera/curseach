@@ -126,6 +126,64 @@ async def view_history_full(scan_id: int, request: Request, user: str = Depends(
     return common.templates.TemplateResponse(request, "report_full.html", ctx)
 
 
+# ---------- Серверный PDF (WeasyPrint, без колонтитулов браузера) ----------
+def _render_pdf(template_name: str, ctx: dict, filename: str) -> Response:
+    from .. import pdf as pdf_mod
+
+    if not pdf_mod.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="WeasyPrint не установлен. Выполните: pip install weasyprint",
+        )
+    html_str = common.templates.get_template(template_name).render(**ctx)
+    try:
+        pdf_bytes = pdf_mod.html_to_pdf(html_str, ctx)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {exc}")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/history/{scan_id}/pdf")
+async def download_history_pdf(scan_id: int, user: str = Depends(require_admin)):
+    """PDF страницы «Диаграмма» (SVG-диаграммы вместо Canvas)."""
+    scan = _get_scan_or_404(scan_id)
+    ctx = build_chart_context(scan)
+    return _render_pdf("chart.html", ctx, f"scan_{scan_id}_chart.pdf")
+
+
+@router.get("/history/{scan_id}/full/pdf")
+async def download_history_full_pdf(scan_id: int, user: str = Depends(require_admin)):
+    """PDF полного объединённого отчёта."""
+    scan = _get_scan_or_404(scan_id)
+    ctx = build_chart_context(scan, include_findings=True)
+    return _render_pdf("report_full.html", ctx, f"scan_{scan_id}_full_report.pdf")
+
+
+@router.get("/history/{scan_id}/view/pdf")
+async def download_history_view_pdf(scan_id: int, user: str = Depends(require_admin)):
+    """PDF классического отчёта по находкам."""
+    scan = _get_scan_or_404(scan_id)
+    score = calculate_score(scan["critical"], scan["high"], scan["medium"], scan["low"])
+    ctx = {
+        "target_url": scan["target_url"],
+        "findings": scan["results"],
+        "critical": scan["critical"],
+        "high": scan["high"],
+        "medium": scan["medium"],
+        "low": scan["low"],
+        "score": score,
+        "mode_ru": "ПОЛНАЯ ПРОВЕРКА",
+        "scan_date": scan["scan_date"].replace("T", " ")[:19],
+        "source": "history",
+        "scan_id": scan["id"],
+    }
+    return _render_pdf("report.html", ctx, f"scan_{scan_id}_report.pdf")
+
+
 # ---------- Экспорт ----------
 @router.get("/history/{scan_id}/json")
 async def download_history_json(scan_id: int, user: str = Depends(require_admin)):

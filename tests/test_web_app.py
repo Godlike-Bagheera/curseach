@@ -84,3 +84,48 @@ def test_sarif_export_shape():
     run = sarif["runs"][0]
     assert run["tool"]["driver"]["rules"][0]["id"] == "SQLi"
     assert run["results"][0]["level"] == "error"
+
+
+# ---------- Серверный PDF (WeasyPrint) ----------
+def _make_scan():
+    import database
+    database.save_scan(
+        "http://127.0.0.1:8000", 1, 1, 1, 1,
+        [
+            {"type": "SQLi", "level": "CRITICAL", "description": "d1"},
+            {"type": "IDOR", "level": "HIGH", "description": "d2"},
+        ],
+    )
+    return database.get_all_scans()[0]["id"]
+
+
+@pytest.fixture()
+def authed_client(client):
+    _login(client)
+    return client
+
+
+def test_pdf_routes_require_auth(client):
+    r = client.get("/history/1/pdf", follow_redirects=False)
+    assert r.status_code in (303, 401)
+
+
+def test_chart_pdf_generated(authed_client):
+    sid = _make_scan()
+    r = authed_client.get(f"/history/{sid}/pdf")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content[:4] == b"%PDF"
+    assert len(r.content) > 5000
+
+
+def test_full_and_view_pdf_generated(authed_client):
+    sid = _make_scan()
+    for path in (f"/history/{sid}/full/pdf", f"/history/{sid}/view/pdf"):
+        r = authed_client.get(path)
+        assert r.status_code == 200 and r.content[:4] == b"%PDF", path
+
+
+def test_pdf_missing_scan_404(authed_client):
+    r = authed_client.get("/history/999999/pdf")
+    assert r.status_code == 404

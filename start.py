@@ -36,6 +36,7 @@ REQUIRED_PACKAGES = {
     "pydantic": "pydantic",
     "multipart": "python-multipart",
     "openpyxl": "openpyxl",
+    "weasyprint": "weasyprint",
 }
 
 # ---------- Цветной вывод ----------
