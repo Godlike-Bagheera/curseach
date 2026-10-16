@@ -296,6 +296,23 @@
                 padding: 14mm 14mm 16mm;
             }
             .toolbar { display: none !important; }
+
+            /* Таблица находок целиком (с заголовком) уходит на новую
+               страницу и не рвётся — иначе после page-break она
+               "прилипала" к самому верху листа. */
+            .findings-section {
+                page-break-before: always;
+                break-before: page;
+                padding-top: 6mm;
+            }
+            .findings-table tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            .section-title {
+                page-break-after: avoid;
+                break-after: avoid;
+            }
             .findings-table thead th {
                 background: #1a1a1a !important;
                 color: #fff !important;
@@ -389,6 +406,7 @@
             </div>
         </div>
 
+        <div class="findings-section">
         <div class="section-title">Найденные уязвимости</div>
 
         {% if findings %}
@@ -430,6 +448,7 @@
             Целевой ресурс соответствует базовым требованиям безопасности.
         </div>
         {% endif %}
+        </div><!-- /findings-section -->
 
         <div class="doc-footer">
             <span>Отчёт сформирован автоматически системой DevSecOps Scanner</span>

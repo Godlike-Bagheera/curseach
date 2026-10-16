@@ -307,14 +307,9 @@
         }
         .btn-close:hover { background: #f0f2f5; }
 
-        /* =====================================================
-           ПЕЧАТЬ / СОХРАНЕНИЕ В PDF
-           margin у @page даёт поля КАЖДОЙ странице.
-           ===================================================== */
-        /* margin: 0 — ОБЯЗАТЕЛЬНО: браузер рисует дату/заголовок/URL
-           (колонтитулы) именно в полях @page. При нулевых полях им
-           не остаётся места, и PDF выходит чистым. Поля документа
-           задаёт .page с внутренним padding. */
+        /* Колонтитулы браузера (дата/заголовок/URL) рисуются ТОЛЬКО
+           в полях страницы. При нулевых полях им не остаётся места —
+           PDF выходит чистым, без надписей сверху/снизу. */
         @page {
             size: A4;
             margin: 0;
@@ -333,14 +328,26 @@
             }
             .toolbar { display: none !important; }
 
+            /* Ключевое против "прилипания": блок таблица+обёртка
+               целиком уходит на новую страницу и не рвётся внутри. */
+            .types-table-wrap {
+                page-break-before: always;
+                break-before: page;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
             .doc-header,
             .doc-meta,
             .summary,
             .chart-box,
-            .types-table-wrap,
             .doc-footer {
                 page-break-inside: avoid;
                 break-inside: avoid;
+            }
+            .section-title {
+                page-break-after: avoid;
+                break-after: avoid;
             }
             .summary-card,
             .level-badge,

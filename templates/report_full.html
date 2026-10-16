@@ -350,11 +350,21 @@
         /* =====================================================
            ПЕЧАТЬ / PDF
            ===================================================== */
-        /* margin: 0 — браузер рисует дату/заголовок/URL (колонтитулы)
-           только в полях @page. При нулевых полях PDF выходит чистым. */
+        /* Колонтитулы браузера (дата/заголовок/URL) рисуются ТОЛЬКО
+           в полях страницы. Поэтому:
+           - на первой странице поля обычные (14mm) — там колонтитулов
+             и так нет из-за offset;
+           - на последующих страницах верхнее поле = высоте полос
+             колонтитулов (~9mm), чтобы они печатались в этих полях,
+             а контент начинался с нормальным отступом (см. .print-page
+             ниже). Так таблица не прилипает к верху второй страницы,
+             и в PDF нет лишних надписей поверх контента. */
         @page {
             size: A4;
-            margin: 0;
+            margin: 14mm;
+        }
+        @page :first {
+            margin: 14mm 14mm 16mm;
         }
 
         @media print {
@@ -363,9 +373,22 @@
                 box-shadow: none;
                 margin: 0;
                 max-width: 100%;
-                padding: 14mm 14mm 16mm;
+                padding: 0;
             }
             .toolbar { display: none !important; }
+
+            /* Принудительный перенос секций на новую страницу +
+               верхний отступ, компенсирующий полосу колонтитула
+               на 2+ страницах. */
+            .print-page {
+                page-break-after: always;
+                break-after: page;
+                padding-top: 8mm;
+            }
+            .print-page.last-page {
+                page-break-after: auto;
+                break-after: auto;
+            }
 
             /* Разрешаем разрыв между крупными секциями. */
             .doc-header,
@@ -375,6 +398,11 @@
             .types-table-wrap {
                 page-break-inside: avoid;
                 break-inside: avoid;
+            }
+            /* Заголовки секций не осиротили на дне страницы. */
+            .section-title {
+                page-break-after: avoid;
+                break-after: avoid;
             }
             /* Строки таблицы находок не рвём посередине строки. */
             .findings-table tr {
@@ -412,6 +440,7 @@
 
     <div class="page">
 
+      <div class="print-page">
         <div class="doc-header">
             <div class="doc-header-left">
                 <h1>Отчёт об аудите безопасности API</h1>
@@ -513,8 +542,11 @@
                 {% endif %}
             </div>
 
-        </div>
+        </div><!-- /chart-layout -->
 
+        </div><!-- /print-page 1 -->
+
+        <div class="print-page last-page">
         <div class="section-title">Найденные уязвимости</div>
 
         {% if findings %}
@@ -561,6 +593,7 @@
             <span>Отчёт сформирован автоматически системой DevSecOps Scanner</span>
             <span>{{ scan_date }}</span>
         </div>
+        </div><!-- /print-page 2 -->
 
     </div>
 
