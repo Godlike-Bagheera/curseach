@@ -67,12 +67,12 @@ def _donut_segment_path(cx: float, cy: float, r_out: float, r_in: float,
 
 
 def make_donut_svg(critical: int, high: int, medium: int, low: int,
-                   size: int = 230) -> str:
+                   size: int = 300) -> str:
     """Кольцевая диаграмма «по уровням риска» + легенда с подписями.
 
-    Каждый сегмент подписан снаружи выноской («название — количество»),
-    под кругом — легенда с цветными маркерами и процентами. WeasyPrint
-    рендерит SVG нативно, поэтому в PDF всё чётко и без Canvas.
+    Большой круг слева, крупная легенда справа; зоны жёстко разнесены,
+    пересечение текста с диаграммой невозможно. WeasyPrint рендерит SVG
+    нативно, поэтому в PDF всё чётко и без Canvas.
     """
     import math
 
@@ -83,16 +83,15 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
         ("Низкие", low, "#3fb950"),
     ]
     total = sum(v for _, v, _ in parts)
-    # Кольцо ЦЕЛИКОМ в левой половине холста, легенда ЦЕЛИКОМ в правой.
-    # Границы зон жёстко разнесены: правый край кольца (cx+r_out=~84)
-    # < левого края текста легенды (legend_x=150). Пересечение физически
-    # невозможно при любой длине подписей.
-    cx = size * 0.30                # центр круга (левая часть)
+    # Кольцо крупное, целиком в левой части холста; легенда — в правой.
+    # Правый край кольца (cx + r_out) жёстко меньше левого края легенды.
+    cx = size * 0.34                # центр круга (крупный, слева)
     cy = size / 2.0
-    r_out = size * 0.30             # правый край кольца ≈ 138
-    r_in = size * 0.18
-    legend_x = int(size * 0.90)     # левый край легенды ≈ 207 — зазор от кольца ≥ 65px
-    width = int(size * 2.4)         # холст ~552px: кольцо слева, большой зазор, легенда справа
+    r_out = size * 0.33             # радиус кольца — больше чем было
+    r_in = size * 0.20
+    ring_right = cx + r_out         # ≈ 201 при size=300
+    legend_x = int(ring_right + size * 0.22)  # большой зазор от кольца (~66px)
+    width = legend_x + int(size * 0.95)       # легенда занимает всю правую половину
     height = size
     segs: List[str] = []
 
@@ -127,43 +126,44 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
                 # иначе надписи наслаиваются друг на друга
                 mid = (a0 + a1) / 2.0
                 arc_len = math.radians(sweep) * (r_out + r_in) / 2.0
-                if sweep >= 30 and arc_len >= 16:
+                if sweep >= 30 and arc_len >= 20:
                     rr = (r_out + r_in) / 2.0
                     tx = cx + rr * math.cos(math.radians(mid - 90.0))
                     ty = cy + rr * math.sin(math.radians(mid - 90.0))
                     segs.append(
-                        f'<text x="{tx:.1f}" y="{ty + 4:.1f}" fill="#ffffff" '
-                        f'font-size="12" font-weight="bold" text-anchor="middle" '
+                        f'<text x="{tx:.1f}" y="{ty + 6:.1f}" fill="#ffffff" '
+                        f'font-size="17" font-weight="bold" text-anchor="middle" '
                         f'font-family="DejaVu Sans, Arial, sans-serif">{val}</text>'
                     )
             angle += sweep
 
     # центр круга: итог
     center_text = (
-        f'<text x="{cx}" y="{cy - 2}" fill="#1a1a1a" font-size="28" '
+        f'<text x="{cx}" y="{cy - 4}" fill="#1a1a1a" font-size="40" '
         f'font-weight="bold" text-anchor="middle" '
         f'font-family="DejaVu Sans, Arial, sans-serif">{total}</text>'
-        f'<text x="{cx}" y="{cy + 15}" fill="#57606a" font-size="10" '
+        f'<text x="{cx}" y="{cy + 22}" fill="#57606a" font-size="14" '
         f'text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif">'
         f'всего</text>'
     )
 
-    # легенда: ПРАВО половины холста, строки с большим межстрочным шагом —
-    # не пересекаются ни между собой, ни с кольцом (левый край текста 170 >
-    # правый край кольца cx+r_out=82.9)
+    # легенда: вся правая половина холста, КРУПНЫЙ текст и большой шаг строк
     lx0 = float(legend_x)
-    row_h = 46                     # большой межстрочный шаг легенды
+    row_h = 58                     # крупный межстрочный шаг легенды
+    marker = 16                    # размер цветного маркера
+    font = 17                      # крупный шрифт подписей
     rows = len(parts)
-    ly0 = cy - (rows - 1) * row_h / 2.0 + 4
+    ly0 = cy - (rows - 1) * row_h / 2.0 + font / 2.0
     legend_items = []
     for i, (name, val, color) in enumerate(parts):
         pct = round(100.0 * val / total) if total else 0
         y = ly0 + i * row_h
         value_part = f"{val} ({pct}%)" if val else "0"
         legend_items.append(
-            f'<rect x="{lx0:.0f}" y="{y - 10:.0f}" width="12" height="12" rx="3" '
-            f'fill="{color}"/>'
-            f'<text x="{lx0 + 20:.0f}" y="{y + 1:.0f}" fill="#1a1a1a" font-size="13" '
+            f'<rect x="{lx0:.0f}" y="{y - marker / 2 - 2:.0f}" width="{marker}" '
+            f'height="{marker}" rx="4" fill="{color}"/>'
+            f'<text x="{lx0 + marker + 10:.0f}" y="{y + font / 3:.0f}" '
+            f'fill="#1a1a1a" font-size="{font}" '
             f'font-family="DejaVu Sans, Arial, sans-serif">'
             f'{name}: <tspan font-weight="bold">{value_part}</tspan></text>'
         )
