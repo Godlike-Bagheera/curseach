@@ -77,18 +77,22 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
     import math
 
     parts = [
-        ("CRITICAL", critical), ("HIGH", high),
-        ("MEDIUM", medium), ("LOW", low),
+        ("Критические", critical, "#da3633"),
+        ("Высокие", high, "#f0883e"),
+        ("Средние", medium, "#d29922"),
+        ("Низкие", low, "#3fb950"),
     ]
-    total = sum(v for _, v in parts)
-    # Круг справа, легенда слева — текст никогда не выходит за рамки SVG
-    circle_x = size * 0.72          # центр круга (правая часть)
-    legend_x = 8                    # левый край легенды
-    cx = circle_x
+    total = sum(v for _, v, _ in parts)
+    # Кольцо ЦЕЛИКОМ в левой половине холста, легенда ЦЕЛИКОМ в правой.
+    # Границы зон жёстко разнесены: правый край кольца (cx+r_out=~84)
+    # < левого края текста легенды (legend_x=150). Пересечение физически
+    # невозможно при любой длине подписей.
+    cx = size * 0.36                # центр круга (левая часть)
     cy = size / 2.0
-    r_out = size * 0.32
-    r_in = size * 0.19
-    width = int(size * 1.55)
+    r_out = size * 0.36
+    r_in = size * 0.22
+    legend_x = int(size * 0.66)     # левый край легенды (правая часть)
+    width = size * 2                # холст 460px: кольцо слева, легенда справа
     height = size
     segs: List[str] = []
 
@@ -100,7 +104,7 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
     else:
         angle = 0.0
         gap = 1.2 if len([p for p in parts if p[1] > 0]) > 1 else 0.0
-        for name, val in parts:
+        for name, val, color in parts:
             if val == 0:
                 continue
             sweep = 360.0 * val / total
@@ -111,13 +115,13 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
             if sweep >= 359.9:  # единственная категория — полное кольцо
                 segs.append(
                     f'<circle cx="{cx}" cy="{cy}" r="{(r_out + r_in) / 2:.1f}" '
-                    f'fill="none" stroke="{_LEVEL_COLORS[name]}" '
+                    f'fill="none" stroke="{color}" '
                     f'stroke-width="{r_out - r_in:.1f}"/>'
                 )
             else:
                 segs.append(
                     f'<path d="{_donut_segment_path(cx, cy, r_out, r_in, a0, a1)}" '
-                    f'fill="{_LEVEL_COLORS[name]}"/>'
+                    f'fill="{color}"/>'
                 )
                 # число внутри сегмента — только если сектор реально широкий,
                 # иначе надписи наслаиваются друг на друга
@@ -144,24 +148,24 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
         f'всего</text>'
     )
 
-    # легенда: слева от круга, по вертикали по центру — текст гарантированно
-    # внутри рамок SVG и никогда не перекрывает диаграмму
+    # легенда: ПРАВО половины холста, строки с большим межстрочным шагом —
+    # не пересекаются ни между собой, ни с кольцом (левый край текста 170 >
+    # правый край кольца cx+r_out=82.9)
     lx0 = float(legend_x)
-    row_h = 30
+    row_h = 34
     rows = len(parts)
     ly0 = cy - (rows - 1) * row_h / 2.0 + 4
     legend_items = []
-    for i, (name, val) in enumerate(parts):
+    for i, (name, val, color) in enumerate(parts):
         pct = round(100.0 * val / total) if total else 0
         y = ly0 + i * row_h
-        label = _LEVEL_RU[name]
         value_part = f"{val} ({pct}%)" if val else "0"
         legend_items.append(
             f'<rect x="{lx0:.0f}" y="{y - 10:.0f}" width="12" height="12" rx="3" '
-            f'fill="{_LEVEL_COLORS[name]}"/>'
+            f'fill="{color}"/>'
             f'<text x="{lx0 + 20:.0f}" y="{y + 1:.0f}" fill="#1a1a1a" font-size="13" '
             f'font-family="DejaVu Sans, Arial, sans-serif">'
-            f'{label}: <tspan font-weight="bold">{value_part}</tspan></text>'
+            f'{name}: <tspan font-weight="bold">{value_part}</tspan></text>'
         )
 
     return (
