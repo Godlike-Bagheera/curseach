@@ -1,6 +1,7 @@
 """Задачи сканирования: ScanTask, движок, реестр задач, фоновый GC."""
 
 import asyncio
+import sqlite3
 import threading
 import time
 import uuid
@@ -315,14 +316,29 @@ async def scan_engine(task: ScanTask):
         # Сначала сохраняем в историю, потом отправляем "complete" —
         # иначе UI показывает «ГОТОВО», а записи в БД нет.
         try:
-            database.save_scan(
-                target_url=task.target_url,
-                critical=task.critical_count,
-                high=task.high_count,
-                medium=task.medium_count,
-                low=task.low_count,
-                results=task.scan_results,
-            )
+            # Самовосстановление: если процесс сканера был запущен со старым
+            # кодом (до init_db на startup) или файл БД удалён — создаём схему
+            # и повторяем сохранение. Исключение из этого места больше не должно
+            # приводить к "no such table: scans".
+            try:
+                database.save_scan(
+                    target_url=task.target_url,
+                    critical=task.critical_count,
+                    high=task.high_count,
+                    medium=task.medium_count,
+                    low=task.low_count,
+                    results=task.scan_results,
+                )
+            except sqlite3.OperationalError:
+                database.init_db()  # пересоздаём схему и пробуем ещё раз
+                database.save_scan(
+                    target_url=task.target_url,
+                    critical=task.critical_count,
+                    high=task.high_count,
+                    medium=task.medium_count,
+                    low=task.low_count,
+                    results=task.scan_results,
+                )
             task.add_log("[OK] Результаты сохранены в историю")
         except Exception as e:
             task.add_log(f"[ОШИБКА] Не удалось сохранить: {e}")
