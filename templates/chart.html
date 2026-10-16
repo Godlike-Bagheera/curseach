@@ -315,12 +315,15 @@
            колонтитулов остаются пустыми — в PDF нет ни дат/URL, ни
            "прилипшего" текста: вторая таблица начинает свой лист с
            нормальным верхним полем (14mm). */
-        /* margin: 0 — при серверном рендере PDF (WeasyPrint) поля листов
-           задаёт padding контейнера .page; при печати браузером нулевые
-           поля убирают дату/заголовок/URL из колонтитулов. */
+        /* НЕНУЛЕВЫЕ поля страницы. Контент никогда не пересекает границу
+           листа, поэтому полосы колонтитулов (дата/заголовок/URL) лежат
+           в полях и не накладываются на текст; а серверный PDF (WeasyPrint)
+           печатает эти же поля без всяких колонтитулов по определению.
+           Вторая страница начинается с нормального верхнего отступа 15mm —
+           диаграмма/таблица НЕ прилипают к верху листа. */
         @page {
             size: A4;
-            margin: 0;
+            margin: 15mm 14mm 16mm;
         }
 
         @media print {
@@ -332,22 +335,17 @@
                 box-shadow: none;
                 margin: 0;
                 max-width: 100%;
-                /* @page margin:0 => поля листа даёт padding контейнера */
-                padding: 14mm 14mm 16mm;
+                padding: 0; /* поля листа задаёт @page */
             }
             .toolbar { display: none !important; }
 
-            /* Явные страницы: содержимое каждой секции гарантированно
-               целиком помещается на своём листе и не рвётся пополам. */
+            /* Явные страницы: каждая секция — отдельный лист,
+               ничего не рвётся пополам и не прилипает к краям. */
             .print-page {
                 page-break-after: always;
                 break-after: page;
                 page-break-inside: avoid;
                 break-inside: avoid;
-                height: 297mm; /* полный лист A4: поля — внутри через padding .page */
-                overflow: hidden;
-                box-sizing: border-box;
-                padding: 0;
             }
             .print-page.last-page {
                 page-break-after: auto;
@@ -459,11 +457,7 @@
         </div>
 
         <div class="section-title">Распределение уязвимостей</div>
-      </div><!-- /print-page 1 -->
-
-      <div class="print-page last-page">
         <div class="chart-layout">
-
             <div class="chart-box">
                 <h3>По уровням риска</h3>
                 {% if total > 0 %}
@@ -476,7 +470,12 @@
                 </div>
                 {% endif %}
             </div>
+        </div>
+      </div><!-- /print-page 1 -->
 
+      <div class="print-page last-page">
+        <div class="types-section">
+            <div class="section-title">Уязвимости по типам</div>
             <div class="types-table-wrap">
                 <h3>По типам уязвимостей</h3>
                 {% if types_data %}

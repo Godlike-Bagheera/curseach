@@ -35,64 +35,131 @@ def is_available() -> bool:
 
 
 # ---------- SVG-диаграмма вместо Canvas (печатается нативно) ----------
+_LEVEL_RU = {
+    "CRITICAL": "Критические",
+    "HIGH": "Высокие",
+    "MEDIUM": "Средние",
+    "LOW": "Низкие",
+}
+
+
+def _donut_segment_path(cx: float, cy: float, r_out: float, r_in: float,
+                        a0_deg: float, a1_deg: float) -> str:
+    """Кольцевой сегмент между углами a0..a1 (градусы, 0 = вверх, по часовой)."""
+    import math
+
+    def pt(r: float, ang_deg: float):
+        a = math.radians(ang_deg - 90.0)  # смещение: старт сверху
+        return cx + r * math.cos(a), cy + r * math.sin(a)
+
+    sweep = a1_deg - a0_deg
+    large = 1 if sweep > 180 else 0
+    x0o, y0o = pt(r_out, a0_deg)
+    x1o, y1o = pt(r_out, a1_deg)
+    x1i, y1i = pt(r_in, a1_deg)
+    x0i, y0i = pt(r_in, a0_deg)
+    return (
+        f'M {x0o:.2f} {y0o:.2f} '
+        f'A {r_out:.2f} {r_out:.2f} 0 {large} 1 {x1o:.2f} {y1o:.2f} '
+        f'L {x1i:.2f} {y1i:.2f} '
+        f'A {r_in:.2f} {r_in:.2f} 0 {large} 0 {x0i:.2f} {y0i:.2f} Z'
+    )
+
+
 def make_donut_svg(critical: int, high: int, medium: int, low: int,
-                   size: int = 220) -> str:
-    """Кольцевая диаграмма «распределение по уровням» в виде SVG."""
-    parts: List[tuple] = [
+                   size: int = 230) -> str:
+    """Кольцевая диаграмма «по уровням риска» + легенда с подписями.
+
+    Каждый сегмент подписан снаружи выноской («название — количество»),
+    под кругом — легенда с цветными маркерами и процентами. WeasyPrint
+    рендерит SVG нативно, поэтому в PDF всё чётко и без Canvas.
+    """
+    parts = [
         ("CRITICAL", critical), ("HIGH", high),
         ("MEDIUM", medium), ("LOW", low),
     ]
     total = sum(v for _, v in parts)
-    cx = cy = size / 2
-    r_out = size * 0.42
-    r_in = size * 0.26
+    cx = size / 2
+    cy = size / 2
+    r_out = size * 0.36
+    r_in = size * 0.22
+    legend_h = 74  # место под легенду снизу
+    height = size + legend_h
+    segs: List[str] = []
+
     if total == 0:
-        segs = (
+        segs.append(
             f'<circle cx="{cx}" cy="{cy}" r="{(r_out + r_in) / 2:.1f}" fill="none" '
-            f'stroke="#30363d" stroke-width="{r_out - r_in:.1f}"/>'
+            f'stroke="#d0d7de" stroke-width="{r_out - r_in:.1f}"/>'
         )
-        center_label = "0"
     else:
-        import math
-        segs = []
-        angle = -90.0  # старт сверху
+        angle = 0.0
+        gap = 1.2 if len([p for p in parts if p[1] > 0]) > 1 else 0.0
         for name, val in parts:
             if val == 0:
                 continue
             sweep = 360.0 * val / total
-            a0 = math.radians(angle)
-            a1 = math.radians(angle + sweep)
-            large = 1 if sweep > 180 else 0
-            if sweep >= 359.999:  # единственная категория — полное кольцо
+            a0 = angle + gap / 2
+            a1 = angle + sweep - gap / 2
+            if a1 <= a0:
+                a1 = a0 + 0.5
+            if sweep >= 359.9:  # единственная категория — полное кольцо
                 segs.append(
                     f'<circle cx="{cx}" cy="{cy}" r="{(r_out + r_in) / 2:.1f}" '
                     f'fill="none" stroke="{_LEVEL_COLORS[name]}" '
                     f'stroke-width="{r_out - r_in:.1f}"/>'
                 )
             else:
-                x0o, y0o = cx + r_out * math.cos(a0), cy + r_out * math.sin(a0)
-                x1o, y1o = cx + r_out * math.cos(a1), cy + r_out * math.sin(a1)
-                x0i, y0i = cx + r_in * math.cos(a1), cy + r_in * math.sin(a1)
-                x1i, y1i = cx + r_in * math.cos(a1 and a0), cy + r_in * math.sin(a0)
                 segs.append(
-                    f'<path d="M {x0o:.2f} {y0o:.2f} '
-                    f'A {r_out:.2f} {r_out:.2f} 0 {large} 1 {x1o:.2f} {y1o:.2f} '
-                    f'L {x0i:.2f} {y0i:.2f} '
-                    f'A {r_in:.2f} {r_in:.2f} 0 {large} 0 {x1i:.2f} {y1i:.2f} Z" '
+                    f'<path d="{_donut_segment_path(cx, cy, r_out, r_in, a0, a1)}" '
                     f'fill="{_LEVEL_COLORS[name]}"/>'
                 )
+                # подпись внутри сегмента (число), если сектор достаточно широкий
+                mid = (a0 + a1) / 2.0
+                import math
+                rr = (r_out + r_in) / 2.0
+                tx = cx + rr * math.cos(math.radians(mid - 90.0))
+                ty = cy + rr * math.sin(math.radians(mid - 90.0))
+                if sweep >= 18:
+                    segs.append(
+                        f'<text x="{tx:.1f}" y="{ty + 4:.1f}" fill="#ffffff" '
+                        f'font-size="13" font-weight="bold" text-anchor="middle" '
+                        f'font-family="DejaVu Sans, Arial, sans-serif">{val}</text>'
+                    )
             angle += sweep
-        center_label = str(total)
+
+    # центр круга: итог
+    center_text = (
+        f'<text x="{cx}" y="{cy - 2}" fill="#1a1a1a" font-size="30" '
+        f'font-weight="bold" text-anchor="middle" '
+        f'font-family="DejaVu Sans, Arial, sans-serif">{total}</text>'
+        f'<text x="{cx}" y="{cy + 16}" fill="#57606a" font-size="11" '
+        f'text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif">'
+        f'всего</text>'
+    )
+
+    # легенда: два столбца по две категории
+    lx0, ly0 = size * 0.06, size + 14
+    col_w = (size - lx0 * 2) / 2
+    legend_items = []
+    for i, (name, val) in enumerate(parts):
+        pct = round(100.0 * val / total) if total else 0
+        col, row = i % 2, i // 2
+        x = lx0 + col * col_w
+        y = ly0 + row * 26
+        legend_items.append(
+            f'<rect x="{x:.0f}" y="{y - 9:.0f}" width="11" height="11" rx="2.5" '
+            f'fill="{_LEVEL_COLORS[name]}"/>'
+            f'<text x="{x + 17:.0f}" y="{y + 1:.0f}" fill="#1a1a1a" font-size="12" '
+            f'font-family="DejaVu Sans, Arial, sans-serif">'
+            f'{_LEVEL_RU[name]}: <tspan font-weight="bold">{val}</tspan>'
+            f' <tspan fill="#57606a">({pct}%)</tspan></text>'
+        )
+
     return (
-        f'<svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" '
+        f'<svg width="{size}" height="{height}" viewBox="0 0 {size} {height}" '
         f'xmlns="http://www.w3.org/2000/svg">'
-        + "".join(segs) +
-        f'<text x="{cx}" y="{cy - 4}" fill="#e6edf3" font-size="34" '
-        f'font-family="DejaVu Sans, Arial, sans-serif" text-anchor="middle" '
-        f'font-weight="bold">{center_label}</text>'
-        f'<text x="{cx}" y="{cy + 18}" fill="#8b949e" font-size="12" '
-        f'font-family="DejaVu Sans, Arial, sans-serif" text-anchor="middle">'
-        f'всего находок</text></svg>'
+        + "".join(segs) + center_text + "".join(legend_items) + "</svg>"
     )
 
 
@@ -173,6 +240,34 @@ def html_to_pdf(html_str: str, ctx: dict, base_url: Optional[str] = None) -> byt
         return make_types_bars_svg(types)
 
     doc = re.sub(r"<canvas[^>]*>", lambda m: _svg_for(m.group(0)), doc, flags=re.I)
+
+    # Для серверного PDF отключаем print-CSS шаблона (@media print с
+    # .print-page { height: 297mm; overflow: hidden } и пр., рассчитанный
+    # на браузерную печать) и включаем свой листовой режим WeasyPrint:
+    # @page margin 15/14/16mm — контент никогда не пересекает границу листа,
+    # колонтитулов браузера тут нет по определению, ничего не прилипает.
+    override_css = (
+        "<style>"
+        "@page { size: A4; margin: 15mm 14mm 16mm; }"
+        "html, body { background: #fff !important; color: #1a1a1a !important;"
+        " -webkit-print-color-adjust: exact; print-color-adjust: exact; }"
+        ".page { box-shadow: none !important; margin: 0 !important;"
+        " max-width: 100% !important; padding: 0 !important; }"
+        ".toolbar { display: none !important; }"
+        ".print-page { height: auto !important; overflow: visible !important;"
+        " page-break-after: always; break-after: page;"
+        " page-break-inside: avoid; break-inside: avoid; }"
+        ".print-page.last-page { page-break-after: auto; break-after: auto; }"
+        ".chart-canvas canvas { display: none !important; }"
+        ".chart-box svg, .types-section svg,"
+        " .chart-layout svg { max-width: 100%; height: auto; }"
+        "</style>"
+    )
+    if "</head>" in doc:
+        doc = doc.replace("</head>", override_css + "</head>", 1)
+    else:
+        doc = override_css + doc
+
     doc = _TOOLBAR_RE.sub("", doc)
     doc = _SCRIPT_RE.sub("", doc)
 
