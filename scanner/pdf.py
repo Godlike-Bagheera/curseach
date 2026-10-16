@@ -85,13 +85,13 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
     total = sum(v for _, v, _ in parts)
     # Кольцо крупное, целиком в левой части холста; легенда — в правой.
     # Правый край кольца (cx + r_out) жёстко меньше левого края легенды.
-    cx = size * 0.34                # центр круга (крупный, слева)
+    cx = size * 0.30                # центр круга (крупный, слева)
     cy = size / 2.0
-    r_out = size * 0.33             # радиус кольца — больше чем было
-    r_in = size * 0.20
-    ring_right = cx + r_out         # ≈ 201 при size=300
-    legend_x = int(ring_right + size * 0.22)  # большой зазор от кольца (~66px)
-    width = legend_x + int(size * 0.95)       # легенда занимает всю правую половину
+    r_out = size * 0.30             # радиус кольца
+    r_in = size * 0.18
+    ring_right = cx + r_out         # ≈ 180 при size=300
+    legend_x = int(ring_right + size * 0.45)  # очень большой зазор от кольца (~135px)
+    width = legend_x + int(size * 0.85)       # легенда занимает всю правую половину
     height = size
     segs: List[str] = []
 
