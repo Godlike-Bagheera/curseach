@@ -81,13 +81,15 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
         ("MEDIUM", medium), ("LOW", low),
     ]
     total = sum(v for _, v in parts)
-    width = size
-    cx = size / 2.0
+    # Круг справа, легенда слева — текст никогда не выходит за рамки SVG
+    circle_x = size * 0.72          # центр круга (правая часть)
+    legend_x = 8                    # левый край легенды
+    cx = circle_x
     cy = size / 2.0
-    r_out = size * 0.34
-    r_in = size * 0.21
-    legend_h = 96  # место под легенду снизу (4 строки по ~22px + отступы)
-    height = size + legend_h
+    r_out = size * 0.32
+    r_in = size * 0.19
+    width = int(size * 1.55)
+    height = size
     segs: List[str] = []
 
     if total == 0:
@@ -142,10 +144,12 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
         f'всего</text>'
     )
 
-    # легенда: одна колонка, 4 строки — заведомо без наложения текста
-    lx0 = size * 0.08
-    ly0 = size + 16
-    row_h = 21
+    # легенда: слева от круга, по вертикали по центру — текст гарантированно
+    # внутри рамок SVG и никогда не перекрывает диаграмму
+    lx0 = float(legend_x)
+    row_h = 30
+    rows = len(parts)
+    ly0 = cy - (rows - 1) * row_h / 2.0 + 4
     legend_items = []
     for i, (name, val) in enumerate(parts):
         pct = round(100.0 * val / total) if total else 0
@@ -153,9 +157,9 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
         label = _LEVEL_RU[name]
         value_part = f"{val} ({pct}%)" if val else "0"
         legend_items.append(
-            f'<rect x="{lx0:.0f}" y="{y - 9:.0f}" width="11" height="11" rx="2.5" '
+            f'<rect x="{lx0:.0f}" y="{y - 10:.0f}" width="12" height="12" rx="3" '
             f'fill="{_LEVEL_COLORS[name]}"/>'
-            f'<text x="{lx0 + 17:.0f}" y="{y + 1:.0f}" fill="#1a1a1a" font-size="12" '
+            f'<text x="{lx0 + 20:.0f}" y="{y + 1:.0f}" fill="#1a1a1a" font-size="13" '
             f'font-family="DejaVu Sans, Arial, sans-serif">'
             f'{label}: <tspan font-weight="bold">{value_part}</tspan></text>'
         )
