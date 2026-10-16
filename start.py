@@ -21,9 +21,9 @@ import socket
 import importlib.util
 
 # ---------- Конфигурация ----------
-API_HOST = "127.0.0.1"
+API_HOST = os.environ.get("API_HOST", "127.0.0.1")
 API_PORT_DEFAULT = 8000
-SCANNER_HOST = "127.0.0.1"
+SCANNER_HOST = os.environ.get("SCANNER_HOST", "127.0.0.1")
 SCANNER_PORT_DEFAULT = 8001
 
 START_MAX_RETRIES = 5
