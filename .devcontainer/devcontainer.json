@@ -1,0 +1,17 @@
+{
+  "name": "DevSecOps Scanner",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {},
+  "postCreateCommand": "pip install -r requirements.txt",
+  "postAttachCommand": "SCANNER_HOST=0.0.0.0 API_HOST=0.0.0.0 nohup python start.py > scanner.log 2>&1 &",
+  "forwardPorts": [8000, 8001],
+  "portsAttributes": {
+    "8000": { "label": "Vulnerable API" },
+    "8001": { "label": "Scanner UI", "onAutoForward": "openBrowser" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"]
+    }
+  }
+}

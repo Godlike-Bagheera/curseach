@@ -1,12 +1,13 @@
 """
 Launcher: запускает уязвимое API и DevSecOps Scanner одной командой.
 - Автоматически устанавливает зависимости
-- Автоматически ставит Chromium для Playwright ВНУТРЬ venv
-  (папка <venv>/.playwright-browsers, ничего не летит в систему)
 - Автоматически находит свободные порты, если стандартные заняты
 - Повторяет попытку запуска, если порт был перехвачен между проверкой и стартом
 - Показывает цветные логи и корректно останавливает всё по Ctrl+C
 - Работает из любой рабочей директории (делает chdir в папку скрипта)
+
+Примечание: Playwright/Chromium больше не нужны — экспорт PDF выполнен
+на клиентскую печать браузера (кнопка «Скачать PDF» -> window.print()).
 """
 
 import subprocess
@@ -35,12 +36,7 @@ REQUIRED_PACKAGES = {
     "pydantic": "pydantic",
     "multipart": "python-multipart",
     "openpyxl": "openpyxl",
-    "playwright": "playwright",
 }
-
-# Chromium ставим внутрь venv, чтобы при удалении окружения
-# всё уходило вместе с ним.
-PLAYWRIGHT_BROWSERS_DIR = os.path.join(sys.prefix, ".playwright-browsers")
 
 # ---------- Цветной вывод ----------
 if os.name == "nt":
@@ -113,60 +109,6 @@ def ensure_dependencies():
     print(f"{C_GREEN}[✓]{C_RESET} Зависимости успешно установлены")
 
 
-def _playwright_env() -> dict:
-    """Окружение, в котором Playwright ищет браузеры внутри venv."""
-    env = os.environ.copy()
-    env["PLAYWRIGHT_BROWSERS_PATH"] = PLAYWRIGHT_BROWSERS_DIR
-    return env
-
-
-def ensure_playwright_browser():
-    """
-    Проверяет, установлен ли Chromium для Playwright.
-    Если нет — ставит его ВНУТРЬ venv (в <venv>/.playwright-browsers).
-    В системную папку пользователя ничего не качается.
-    """
-    if not is_package_installed("playwright"):
-        return
-
-    # Быстрая проверка: пробуем запустить Chromium из venv-папки.
-    try:
-        from playwright.sync_api import sync_playwright
-        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = PLAYWRIGHT_BROWSERS_DIR
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            browser.close()
-        print(f"{C_GREEN}[✓]{C_RESET} Playwright Chromium найден (в venv)")
-        return
-    except Exception:
-        pass
-
-    print(f"\n{C_BLUE}[*] Установка Chromium для Playwright в venv (одноразово, ~150 МБ)...{C_RESET}")
-    print(f"{C_CYAN}    Куда: {PLAYWRIGHT_BROWSERS_DIR}{C_RESET}")
-
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
-            check=False,
-            env=_playwright_env(),
-        )
-    except Exception as e:
-        print(f"{C_YELLOW}[!] Не удалось запустить установку Chromium: {e}{C_RESET}")
-        return
-
-    if result.returncode != 0:
-        print(f"{C_YELLOW}[!] Chromium не установлен.{C_RESET}")
-        print(f"{C_YELLOW}    Экспорт PDF с сервера будет недоступен.{C_RESET}")
-        print(f"{C_YELLOW}    Ручная установка:{C_RESET}")
-        print(f"{C_YELLOW}    set PLAYWRIGHT_BROWSERS_PATH={PLAYWRIGHT_BROWSERS_DIR}{C_RESET}")
-        print(f"{C_YELLOW}    python -m playwright install chromium{C_RESET}")
-        if sys.platform.startswith("linux"):
-            print(f"{C_YELLOW}    Если не хватает системных библиотек:{C_RESET}")
-            print(f"{C_YELLOW}    sudo python -m playwright install-deps chromium{C_RESET}")
-    else:
-        print(f"{C_GREEN}[✓]{C_RESET} Chromium для Playwright установлен в venv")
-
-
 # ---------- Порты ----------
 def is_port_free(host: str, port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -212,16 +154,13 @@ def start_process(module, port, host):
         "--port", str(port),
         "--log-level", "warning",
     ]
-    # Пробрасываем путь к браузерам внутрь дочернего процесса,
-    # иначе серверный рендер PDF не найдёт Chromium.
-    env = _playwright_env()
     return subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
-        env=env,
+        env=os.environ.copy(),
         cwd=os.path.dirname(os.path.abspath(__file__)),
     )
 
@@ -276,7 +215,6 @@ def main():
 
     banner()
     ensure_dependencies()
-    ensure_playwright_browser()
 
     print(f"\n{C_BLUE}[*] Запуск уязвимого API...{C_RESET}")
     api_port, api_proc = start_process_with_retry("main", API_HOST, API_PORT_DEFAULT, "API")

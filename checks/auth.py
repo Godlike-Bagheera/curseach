@@ -20,6 +20,85 @@ from .descriptions import get_vuln_info
 _ID_RANGE = list(range(1, 11))
 
 
+def _b64url_nopad(data: bytes) -> str:
+    import base64
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+# ================== JWT alg=none / подделка токена ==================
+async def check_jwt_none(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+    """
+    Пытается создать токен с alg=none (без подписи) и получить доступ
+    к защищённому эндпоинту из OpenAPI. Если сервер принимает поддельный
+    токен — это критическое нарушение аутентификации (CWE-347).
+    """
+    findings = []
+    # Приоритетные цели: пути, где в спецификации есть 401/403 (требуют auth)
+    try:
+        spec = await ctx.client.get(f"{ctx.target_url}/openapi.json")
+        paths = spec.json().get("paths", {}) if spec.status_code == 200 else {}
+    except Exception:
+        paths = {}
+
+    def _needs_auth(item: dict) -> bool:
+        for method, op in item.items():
+            if not isinstance(op, dict) or method.lower() != "get":
+                continue
+            if op.get("security") is not None:
+                return True
+            if any(code in ("401", "403") for code in op.get("responses", {})):
+                return True
+        return False
+
+    prioritized = [p for p, item in paths.items() if _needs_auth(item)]
+    # GET-эндпоинты с параметром пути — безопасно подставлять id=1.
+    # Сортировка: сначала пути со словами auth/reports/orders/me/admin (обычно
+    # требуют токен), затем остальные; /api/users/... в конец — он публичный.
+    all_get_params = [p for p, item in paths.items() if "get" in item and "{" in p]
+
+    def _rank(p: str) -> int:
+        low = p.lower()
+        if any(k in low for k in ("auth", "report", "order", "/me", "admin")):
+            return 0
+        return 1
+
+    ordered = sorted(dict.fromkeys(
+        prioritized + all_get_params + [p for p in endpoints if "{" in p]
+    ), key=_rank)
+    candidates = list(ordered)
+
+    forged = "%s.%s." % (
+        _b64url_nopad(b'{"alg":"none","typ":"JWT"}'),
+        _b64url_nopad(b'{"uid":1,"role":"admin","exp":9999999999}'),
+    )
+    headers = {"Authorization": f"Bearer {forged}"}
+
+    tried = 0
+    for ep in candidates:
+        if tried >= 8:
+            break
+        if "{" not in ep:
+            continue
+        tried += 1
+        param = ep[ep.find("{") + 1: ep.find("}")]
+        path = ep.replace(f"{{{param}}}", "1")
+        r = await _safe_get(ctx.anon_client, f"{ctx.target_url}{path}",
+                            headers=headers)
+        if r is not None and r.status_code == 200:
+            findings.append({
+                "level": "CRITICAL",
+                "type": "JWT alg=none",
+                "endpoint": ep,
+                "desc": (
+                    f"Сервер принял JWT с alg=none (HTTP 200) — подпись не проверяется, "
+                    "токен любого пользователя можно подделать"
+                ),
+                "details": get_vuln_info("JWT alg=none"),
+            })
+            break
+    return findings
+
+
 async def _collect_200(
     client, target_url: str, ep: str, param_name: str
 ) -> Dict[int, httpx.Response]:

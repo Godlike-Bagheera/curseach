@@ -323,7 +323,7 @@
         <div class="toolbar-buttons">
             {% if scan_id is not none %}
                 <button class="btn-bundle" onclick="window.location.href='/history/{{ scan_id }}/bundle'">Скачать всё (ZIP)</button>
-                <button class="btn-download-pdf" onclick="window.location.href='/history/{{ scan_id }}/view/pdf'">Скачать PDF</button>
+                <button class="btn-download-pdf" onclick="window.print()" title="Откроется диалог печати браузера — выберите «Сохранить как PDF»">Скачать PDF</button>
                 <button class="btn-back" onclick="window.open('/history/{{ scan_id }}/full', '_blank')">С диаграммой</button>
             {% else %}
                 <button class="btn-print" onclick="window.print()">Печать / Сохранить в PDF</button>

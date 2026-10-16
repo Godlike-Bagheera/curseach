@@ -120,6 +120,7 @@ def _new_scan():
         "bfla_enabled": rng.random() < 0.80,           # /api/admin/users: без проверки роли
         "sensitive_enabled": rng.random() < 0.75,
         "business_enabled": rng.random() < 0.75,
+        "jwt_none_enabled": rng.random() < 0.80,   # /api/reports/{id}: JWT alg=none
         "global_bias": rng.uniform(0.7, 1.3),
     }
 
@@ -333,3 +334,84 @@ def get_keys(authorization: str = Header(None)):
     if profile.get("sensitive_enabled", True) and _maybe(0.9):
         return {"aws_key": "AKIAIOSFODNN7EXAMPLE", "db_pass": "qwerty"}
     return {"status": "ok"}
+
+
+# ---------- УЯЗВИМОСТЬ: JWT с alg=none ----------
+@app.post("/api/auth/login-jwt")
+def login_jwt(body: LoginRequest):
+    """
+    Логин, возвращающий «JWT».
+
+    УЯЗВИМОСТЬ (Broken Authentication / CVE-2018-0114 style): сервер принимает
+    токены с алгоритмом alg=none — атакующий может подделать токен любого
+    пользователя, убрав подпись. Если jwt_none_enabled в профиле — проверка
+    подписи фактически отсутствует.
+    """
+    import base64 as _b64
+    import json as _json
+
+    for uid, info in _USERS.items():
+        if info["username"] == body.username and info["password"] == body.password:
+            header = _b64.urlsafe_b64encode(
+                _json.dumps({"alg": "HS256", "typ": "JWT"}).encode()
+            ).rstrip(b"=").decode()
+            payload = _b64.urlsafe_b64encode(
+                _json.dumps({"uid": uid, "role": info["role"]}).encode()
+            ).rstrip(b"=").decode()
+            sig = _b64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode()
+            return {"token": f"{header}.{payload}.{sig}"}
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
+
+def _resolve_jwt(authorization: Optional[str]) -> Optional[int]:
+    """Разбирает 'JWT'-токен. УЯЗВИМОСТЬ: принимает alg=none без проверки подписи."""
+    if not authorization:
+        return None
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    token = parts[1]
+    seg = token.split(".")
+    if len(seg) != 3:
+        return None
+    try:
+        import base64 as _b64
+        import json as _json
+
+        pad = lambda s: s + "=" * (-len(s) % 4)
+        header = _json.loads(_b64.urlsafe_b64decode(pad(seg[0])))
+        if header.get("alg") == "none":
+            # УЯЗВИМОСТЬ: подпись не проверяется вовсе
+            if not _profile().get("jwt_none_enabled", True):
+                return None
+            payload = _json.loads(_b64.urlsafe_b64decode(pad(seg[1])))
+            return int(payload.get("uid"))
+        # «Нормальный» путь: сверка с фиксированным списком токенов
+        return _TOKENS.get(token)
+    except Exception:
+        return None
+
+
+@app.get("/api/reports/{report_id}")
+def get_report(report_id: str, authorization: str = Header(None)):
+    """
+    Отчёт пользователя. Должен быть доступен только владельцу.
+
+    УЯЗВИМОСТЬ (BOLA через поддельный JWT): если jwt_none_enabled, любой,
+    кто собрал токен вида header.payload.(пусто) с alg=none, читает чужие отчёты.
+    """
+    user_id = _resolve_jwt(authorization)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    owner = ((int(report_id) - 1) % 3) + 1 if report_id.isdigit() else 1
+    if _profile().get("jwt_none_enabled", True):
+        # УЯЗВИМОСТЬ: владелец отчёта не сверяется с uid из токена
+        return {
+            "id": report_id,
+            "owner_id": owner,
+            "finance": {"revenue": 125000, "tax_id": "7712345678"},
+        }
+    if owner != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return {"id": report_id, "owner_id": owner}

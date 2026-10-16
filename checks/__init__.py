@@ -19,7 +19,7 @@ from .access import (
     check_cors,
     check_captcha,
 )
-from .auth import check_cross_user_idor, check_bfla
+from .auth import check_cross_user_idor, check_bfla, check_jwt_none
 from .headers import (
     check_security_headers,
     check_tls_version,
@@ -51,6 +51,7 @@ ALL_CHECKS: List[Callable[..., Awaitable[List[Dict]]]] = [
     check_idor_auth,
     check_cross_user_idor,      # новое
     check_bfla,                 # новое
+    check_jwt_none,             # новое: JWT alg=none / подделка токена
     check_security_headers,
     check_sensitive_data,
     check_cors,
@@ -79,6 +80,7 @@ CHECK_METADATA = {
     "check_idor_auth":               {"name": "IDOR: auth vs аноним",       "quick": True,  "level": "CRITICAL"},
     "check_cross_user_idor":         {"name": "Cross-user IDOR (BOLA)",     "quick": True,  "level": "CRITICAL"},
     "check_bfla":                    {"name": "BFLA (admin без роли)",      "quick": True,  "level": "CRITICAL"},
+    "check_jwt_none":                {"name": "JWT alg=none / подделка",    "quick": True,  "level": "CRITICAL"},
     "check_security_headers":        {"name": "Заголовки безопасности",     "quick": True,  "level": "MEDIUM"},
     "check_sensitive_data":          {"name": "Утечка данных",              "quick": True,  "level": "HIGH"},
     "check_cors":                    {"name": "Открытый CORS",              "quick": True,  "level": "MEDIUM"},
