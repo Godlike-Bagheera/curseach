@@ -65,8 +65,31 @@ def is_package_installed(import_name: str) -> bool:
     return importlib.util.find_spec(import_name) is not None
 
 
+def _pip_available():
+    """Проверяет, что в текущем интерпретаторе есть pip."""
+    if importlib.util.find_spec("pip"):
+        return True
+    # Попытка self-heal (PEP 538/454 окружения без pip)
+    try:
+        r = subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"],
+                           capture_output=True, text=True)
+        if r.returncode == 0 and importlib.util.find_spec("pip"):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def install_packages(pip_names):
     print(f"{C_BLUE}[*] Установка зависимостей: {', '.join(pip_names)}{C_RESET}")
+    if not _pip_available():
+        print(f"{C_RED}[!] В интерпретаторе {sys.executable} нет модуля pip.{C_RESET}")
+        print("    Запустите через настроенное окружение:")
+        print("      python3 -m venv .venv && . .venv/bin/activate && "
+              "pip install -r requirements.txt")
+        print("    (в Codespaces достаточно просто `python start.py` — "
+              "зависимости ставятся при сборке контейнера)")
+        sys.exit(1)
     try:
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "--upgrade", "pip"],
