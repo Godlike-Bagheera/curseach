@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Вход — DevSecOps Сканер</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            background: #050505;
+            color: #00ff41;
+            font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", "Courier New", monospace;
+            min-height: 100vh;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .login-wrap {
+            width: 100%;
+            max-width: 520px;
+            border: 3px solid #00ff41;
+            padding: 50px 40px;
+            background: rgba(0, 20, 0, 0.35);
+            box-shadow: 0 0 40px rgba(0, 255, 65, 0.25);
+        }
+
+        .login-wrap h1 {
+            font-size: 22px;
+            letter-spacing: 4px;
+            font-weight: 900;
+            margin-bottom: 10px;
+            text-align: center;
+            text-shadow: 0 0 14px rgba(0, 255, 65, 0.6);
+        }
+
+        .subtitle {
+            text-align: center;
+            font-size: 12px;
+            letter-spacing: 3px;
+            color: #7fbf80;
+            margin-bottom: 40px;
+            font-weight: 700;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            letter-spacing: 3px;
+            color: #7fbf80;
+            margin-bottom: 8px;
+            font-weight: 800;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            background: #000;
+            border: 2px solid #1f5f1f;
+            color: #00ff41;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: 700;
+            padding: 14px 18px;
+            outline: none;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            transition: all 0.15s;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            border-color: #00ff41;
+            box-shadow: 0 0 14px rgba(0, 255, 65, 0.6);
+        }
+
+        button {
+            width: 100%;
+            background: transparent;
+            color: #00ff41;
+            border: 3px solid #00ff41;
+            padding: 16px;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 900;
+            letter-spacing: 5px;
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-top: 10px;
+            text-shadow: 0 0 6px rgba(0, 255, 65, 0.4);
+        }
+
+        button:hover {
+            background: #00ff41;
+            color: #050505;
+            text-shadow: none;
+            box-shadow: 0 0 24px rgba(0, 255, 65, 0.8);
+        }
+
+        .error {
+            border: 2px solid #ff0044;
+            color: #ff0044;
+            background: #1f0008;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            letter-spacing: 1px;
+            text-align: center;
+            font-weight: 800;
+        }
+
+        .hint {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px dashed #1f5f1f;
+            font-size: 12px;
+            color: #7fbf80;
+            letter-spacing: 1px;
+            line-height: 1.8;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .hint strong {
+            color: #00ff41;
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-wrap">
+        <h1>DEVSECOPS // ВХОД</h1>
+        <div class="subtitle">СКАНЕР REST API</div>
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/login">
+            <label for="username">ЛОГИН</label>
+            <input type="text" id="username" name="username" required autofocus autocomplete="username">
+
+            <label for="password">ПАРОЛЬ</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password">
+
+            <button type="submit">ВОЙТИ</button>
+        </form>
+
+        <div class="hint">
+            <strong>GUEST / GUEST</strong> — только просмотр
+        </div>
+    </div>
+</body>
+</html>
