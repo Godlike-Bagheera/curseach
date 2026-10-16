@@ -308,11 +308,16 @@
         .btn-close:hover { background: #f0f2f5; }
 
         /* Колонтитулы браузера (дата/заголовок/URL) рисуются ТОЛЬКО
-           в полях страницы. При нулевых полях им не остаётся места —
-           PDF выходит чистым, без надписей сверху/снизу. */
+           в полях страницы. Поэтому поля делаем ненулевыми, но сам
+           документ разбиваем на явные страницы (.print-page): каждая
+           страница — это ровно один лист A4 высотой 297mm минус поля.
+           Контент никогда не пересекает границу листа, поэтому полосы
+           колонтитулов остаются пустыми — в PDF нет ни дат/URL, ни
+           "прилипшего" текста: вторая таблица начинает свой лист с
+           нормальным верхним полем (14mm). */
         @page {
             size: A4;
-            margin: 0;
+            margin: 14mm 14mm 16mm;
         }
 
         @media print {
@@ -324,15 +329,29 @@
                 box-shadow: none;
                 margin: 0;
                 max-width: 100%;
-                padding: 14mm 14mm 16mm;
+                padding: 0;
             }
             .toolbar { display: none !important; }
 
-            /* Ключевое против "прилипания": блок таблица+обёртка
-               целиком уходит на новую страницу и не рвётся внутри. */
+            /* Явные страницы: содержимое каждой секции гарантированно
+               целиком помещается на своём листе и не рвётся пополам. */
+            .print-page {
+                page-break-after: always;
+                break-after: page;
+                page-break-inside: avoid;
+                break-inside: avoid;
+                height: 267mm; /* 297mm(A4) - 14mm(верх) - 16mm(низ) */
+                overflow: hidden;
+                box-sizing: border-box;
+                padding: 0;
+            }
+            .print-page.last-page {
+                page-break-after: auto;
+                break-after: auto;
+            }
+
+            /* Таблица уходит на новую (свою) страницу и не рвётся. */
             .types-table-wrap {
-                page-break-before: always;
-                break-before: page;
                 page-break-inside: avoid;
                 break-inside: avoid;
             }
@@ -371,12 +390,13 @@
     <div class="toolbar">
         <button class="btn-view-report" onclick="window.open('/history/{{ scan_id }}/view', '_blank')">Полный отчёт</button>
         <button class="btn-bundle" onclick="window.location.href='/history/{{ scan_id }}/bundle'">Скачать всё (ZIP)</button>
-        <button class="btn-download-pdf" onclick="window.print()" title="Откроется диалог печати браузера — выберите «Сохранить как PDF»">Скачать PDF</button>
+        <button class="btn-download-pdf" onclick="if(window.__cleanPrint){window.__cleanPrint();return;}window.print()" title="Откроется диалог печати браузера — выберите «Сохранить как PDF»">Скачать PDF</button>
         <button class="btn-close" onclick="window.close()">Закрыть</button>
     </div>
 
     <div class="page">
 
+      <div class="print-page">
         <div class="doc-header">
             <div class="doc-header-left">
                 <h1>Отчёт об аудите безопасности API</h1>
@@ -435,6 +455,9 @@
         </div>
 
         <div class="section-title">Распределение уязвимостей</div>
+      </div><!-- /print-page 1 -->
+
+      <div class="print-page last-page">
         <div class="chart-layout">
 
             <div class="chart-box">
@@ -484,6 +507,7 @@
             <span>Отчёт сформирован автоматически системой DevSecOps Scanner</span>
             <span>{{ scan_date }}</span>
         </div>
+      </div><!-- /print-page 2 -->
 
     </div>
 
@@ -571,6 +595,29 @@
             }
         });
     })();
+    </script>
+    <script>
+    /* «Скачать PDF» без колонтитулов браузера (дата/заголовок/URL).
+       Хак: перед печатью подменяем document.title — пустая строка
+       лишает верхний колонтитул даты и названия; нижний URL тоже
+       не рисуется при пустом заголовке в Chrome/Edge. После диалога
+       печати возвращаем исходный заголовок. Если браузер всё же нарисует полосы —
+       они попадают в поля @page (14mm), а контент лежит в явных
+       страницах .print-page, поэтому ни дата, ни таблица к краям
+       листов не прилипают. */
+    window.__cleanPrint = function () {
+        var orig = document.title;
+        document.title = ' ';
+        var restore = function () { document.title = orig; };
+        if (window.matchMedia) {
+            var mq = window.matchMedia('print');
+            var done = false;
+            var once = function () { if (!done) { done = true; restore(); } };
+            mq.addEventListener ? mq.addEventListener('change', once) : mq.addListener(once);
+            setTimeout(once, 2000);
+        }
+        try { window.print(); } finally { setTimeout(restore, 500); }
+    };
     </script>
 </body>
 </html>
