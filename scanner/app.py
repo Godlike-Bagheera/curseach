@@ -49,6 +49,11 @@ async def security_middleware(request: Request, call_next):
 
 @app.on_event("startup")
 async def startup():
+    # Инициализация схемы БД (создаёт таблицу scans, если её нет).
+    # Без этого сохранение результатов падало с "no such table: scans",
+    # а страница истории отдавала HTTP 500.
+    import database
+    database.init_db()
     asyncio.create_task(gc_loop())
 
 
