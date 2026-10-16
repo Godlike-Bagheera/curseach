@@ -311,9 +311,13 @@
            ПЕЧАТЬ / СОХРАНЕНИЕ В PDF
            margin у @page даёт поля КАЖДОЙ странице.
            ===================================================== */
+        /* margin: 0 — ОБЯЗАТЕЛЬНО: браузер рисует дату/заголовок/URL
+           (колонтитулы) именно в полях @page. При нулевых полях им
+           не остаётся места, и PDF выходит чистым. Поля документа
+           задаёт .page с внутренним padding. */
         @page {
             size: A4;
-            margin: 15mm 14mm;
+            margin: 0;
         }
 
         @media print {
@@ -325,9 +329,9 @@
                 box-shadow: none;
                 margin: 0;
                 max-width: 100%;
-                padding: 0;
+                padding: 14mm 14mm 16mm;
             }
-            .toolbar { display: none; }
+            .toolbar { display: none !important; }
 
             .doc-header,
             .doc-meta,

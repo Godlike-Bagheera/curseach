@@ -350,9 +350,11 @@
         /* =====================================================
            ПЕЧАТЬ / PDF
            ===================================================== */
+        /* margin: 0 — браузер рисует дату/заголовок/URL (колонтитулы)
+           только в полях @page. При нулевых полях PDF выходит чистым. */
         @page {
             size: A4;
-            margin: 15mm 14mm;
+            margin: 0;
         }
 
         @media print {
@@ -361,9 +363,9 @@
                 box-shadow: none;
                 margin: 0;
                 max-width: 100%;
-                padding: 0;
+                padding: 14mm 14mm 16mm;
             }
-            .toolbar { display: none; }
+            .toolbar { display: none !important; }
 
             /* Разрешаем разрыв между крупными секциями. */
             .doc-header,
