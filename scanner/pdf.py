@@ -74,16 +74,19 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
     под кругом — легенда с цветными маркерами и процентами. WeasyPrint
     рендерит SVG нативно, поэтому в PDF всё чётко и без Canvas.
     """
+    import math
+
     parts = [
         ("CRITICAL", critical), ("HIGH", high),
         ("MEDIUM", medium), ("LOW", low),
     ]
     total = sum(v for _, v in parts)
-    cx = size / 2
-    cy = size / 2
-    r_out = size * 0.36
-    r_in = size * 0.22
-    legend_h = 74  # место под легенду снизу
+    width = size
+    cx = size / 2.0
+    cy = size / 2.0
+    r_out = size * 0.34
+    r_in = size * 0.21
+    legend_h = 96  # место под легенду снизу (4 строки по ~22px + отступы)
     height = size + legend_h
     segs: List[str] = []
 
@@ -114,50 +117,51 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
                     f'<path d="{_donut_segment_path(cx, cy, r_out, r_in, a0, a1)}" '
                     f'fill="{_LEVEL_COLORS[name]}"/>'
                 )
-                # подпись внутри сегмента (число), если сектор достаточно широкий
+                # число внутри сегмента — только если сектор реально широкий,
+                # иначе надписи наслаиваются друг на друга
                 mid = (a0 + a1) / 2.0
-                import math
-                rr = (r_out + r_in) / 2.0
-                tx = cx + rr * math.cos(math.radians(mid - 90.0))
-                ty = cy + rr * math.sin(math.radians(mid - 90.0))
-                if sweep >= 18:
+                arc_len = math.radians(sweep) * (r_out + r_in) / 2.0
+                if sweep >= 30 and arc_len >= 16:
+                    rr = (r_out + r_in) / 2.0
+                    tx = cx + rr * math.cos(math.radians(mid - 90.0))
+                    ty = cy + rr * math.sin(math.radians(mid - 90.0))
                     segs.append(
                         f'<text x="{tx:.1f}" y="{ty + 4:.1f}" fill="#ffffff" '
-                        f'font-size="13" font-weight="bold" text-anchor="middle" '
+                        f'font-size="12" font-weight="bold" text-anchor="middle" '
                         f'font-family="DejaVu Sans, Arial, sans-serif">{val}</text>'
                     )
             angle += sweep
 
     # центр круга: итог
     center_text = (
-        f'<text x="{cx}" y="{cy - 2}" fill="#1a1a1a" font-size="30" '
+        f'<text x="{cx}" y="{cy - 2}" fill="#1a1a1a" font-size="28" '
         f'font-weight="bold" text-anchor="middle" '
         f'font-family="DejaVu Sans, Arial, sans-serif">{total}</text>'
-        f'<text x="{cx}" y="{cy + 16}" fill="#57606a" font-size="11" '
+        f'<text x="{cx}" y="{cy + 15}" fill="#57606a" font-size="10" '
         f'text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif">'
         f'всего</text>'
     )
 
-    # легенда: два столбца по две категории
-    lx0, ly0 = size * 0.06, size + 14
-    col_w = (size - lx0 * 2) / 2
+    # легенда: одна колонка, 4 строки — заведомо без наложения текста
+    lx0 = size * 0.08
+    ly0 = size + 16
+    row_h = 21
     legend_items = []
     for i, (name, val) in enumerate(parts):
         pct = round(100.0 * val / total) if total else 0
-        col, row = i % 2, i // 2
-        x = lx0 + col * col_w
-        y = ly0 + row * 26
+        y = ly0 + i * row_h
+        label = _LEVEL_RU[name]
+        value_part = f"{val} ({pct}%)" if val else "0"
         legend_items.append(
-            f'<rect x="{x:.0f}" y="{y - 9:.0f}" width="11" height="11" rx="2.5" '
+            f'<rect x="{lx0:.0f}" y="{y - 9:.0f}" width="11" height="11" rx="2.5" '
             f'fill="{_LEVEL_COLORS[name]}"/>'
-            f'<text x="{x + 17:.0f}" y="{y + 1:.0f}" fill="#1a1a1a" font-size="12" '
+            f'<text x="{lx0 + 17:.0f}" y="{y + 1:.0f}" fill="#1a1a1a" font-size="12" '
             f'font-family="DejaVu Sans, Arial, sans-serif">'
-            f'{_LEVEL_RU[name]}: <tspan font-weight="bold">{val}</tspan>'
-            f' <tspan fill="#57606a">({pct}%)</tspan></text>'
+            f'{label}: <tspan font-weight="bold">{value_part}</tspan></text>'
         )
 
     return (
-        f'<svg width="{size}" height="{height}" viewBox="0 0 {size} {height}" '
+        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
         f'xmlns="http://www.w3.org/2000/svg">'
         + "".join(segs) + center_text + "".join(legend_items) + "</svg>"
     )
