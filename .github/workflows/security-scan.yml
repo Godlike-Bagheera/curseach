@@ -32,7 +32,7 @@ jobs:
         run: python scripts/self_scan.py --out report.sarif
 
       - name: Upload SARIF -> GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: report.sarif
           category: devsecops-scanner

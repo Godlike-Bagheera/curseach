@@ -267,7 +267,7 @@ def results_to_sarif(target_url: str, scan_date: str, findings: List[dict]) -> d
                     "rules": list(rules.values()),
                 },
             },
-            "columnKind": "utf16Codes",
+            "columnKind": "utf16CodeUnits",
             "results": results,
             "automationDetails": {"id": f"devsecops/{scan_date}"},
         }],
