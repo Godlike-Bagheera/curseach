@@ -1,11 +1,19 @@
 """Общие обёртки над httpx, контекст скана и утилиты."""
 
+import asyncio
+import contextvars
 import hashlib
+import json as _json
+import re
+import threading
+import time
 import urllib.parse
 from dataclasses import dataclass
 from typing import List, Optional
 
 import httpx
+
+from .descriptions import get_vuln_info
 
 
 @dataclass
@@ -28,17 +36,129 @@ class ScanContext:
     secondary_client: Optional[httpx.AsyncClient] = None
     has_auth_secondary: bool = False
     openapi: Optional[dict] = None
+    # Инфраструктура скана (заполняется движком; в юнит-тестах может быть None):
+    semaphore: Optional[asyncio.Semaphore] = None      # лимит одновременных запросов
+    budget: Optional["RequestBudget"] = None           # общий бюджет запросов на скан
+    limiter: Optional["RateLimiter"] = None            # RPS-лимит («вежливое» сканирование)
+    cancel_event: Optional[threading.Event] = None     # кооперативная отмена скана
+    scan_seed: Optional[int] = None                    # детерминированный профиль цели
+
+
+class ScanCancelled(Exception):
+    """Скан отменён пользователем (кооперативная отмена через cancel_event)."""
+
+
+class RequestBudget:
+    """Общий бюджет HTTP-запросов на один скан (защита от «долбёжки» цели)."""
+
+    def __init__(self, max_requests: int):
+        self.max_requests = max(1, int(max_requests))
+        self.used = 0
+        self.exhausted = False
+
+    def take(self, n: int = 1) -> bool:
+        if self.used + n > self.max_requests:
+            self.exhausted = True
+            return False
+        self.used += n
+        return True
+
+
+class RateLimiter:
+    """Простейший интервальный RPS-лимит (asyncio, один event loop)."""
+
+    def __init__(self, rps: float):
+        self.min_interval = 1.0 / rps if rps and rps > 0 else 0.0
+        self._lock = asyncio.Lock()
+        self._next_slot = 0.0
+
+    async def wait(self):
+        if self.min_interval <= 0:
+            return
+        async with self._lock:
+            now = time.monotonic()
+            delay = self._next_slot - now
+            if delay > 0:
+                await asyncio.sleep(delay)
+                now = time.monotonic()
+            self._next_slot = now + self.min_interval
+
+
+# Контекст текущего скана и лог evidence — изолированы по asyncio-задачам
+# (каждая проверка выполняется в своей task через ContextVar).
+_SCAN_CTX: contextvars.ContextVar = contextvars.ContextVar("scan_ctx", default=None)
+_EVIDENCE_LOG: contextvars.ContextVar = contextvars.ContextVar("evidence_log", default=None)
+
+
+def _make_evidence(method: str, url: str, kwargs: dict, r: httpx.Response, elapsed_ms: int) -> dict:
+    req_body = None
+    if kwargs.get("json") is not None:
+        try:
+            req_body = _json.dumps(kwargs["json"], ensure_ascii=False)[:400]
+        except (TypeError, ValueError):
+            req_body = str(kwargs["json"])[:400]
+    elif kwargs.get("content") is not None:
+        c = kwargs["content"]
+        req_body = (c.decode("utf-8", "replace") if isinstance(c, bytes) else str(c))[:400]
+    try:
+        resp_body = r.text[:800]
+    except (UnicodeDecodeError, LookupError):
+        resp_body = "<binary>"
+    return {
+        "method": method.upper(),
+        "url": str(url),
+        "request_body": req_body,
+        "status": r.status_code,
+        "content_type": r.headers.get("content-type", ""),
+        "response_body": resp_body,
+        "elapsed_ms": elapsed_ms,
+    }
+
+
+async def _do_request(client, method: str, url: str, kwargs: dict) -> Optional[httpx.Response]:
+    t0 = time.perf_counter()
+    try:
+        r = await client.request(method, url, **kwargs)
+    except (httpx.HTTPError, ValueError, UnicodeError):
+        return None
+    elapsed_ms = int((time.perf_counter() - t0) * 1000)
+    try:
+        evd = _make_evidence(method, url, kwargs, r, elapsed_ms)
+        r.evidence = evd
+        log = _EVIDENCE_LOG.get(None)
+        if log is not None:
+            log.append(evd)
+    except Exception:
+        pass
+    return r
 
 
 async def _safe_request(
     client: httpx.AsyncClient, method: str, url: str, **kwargs
 ) -> Optional[httpx.Response]:
-    try:
-        return await client.request(method, url, **kwargs)
-    except httpx.HTTPError:
-        return None
-    except (ValueError, UnicodeError):
-        return None
+    """
+    Единая точка всех запросов проверок: семафор, бюджет, RPS-лимит,
+    отмена и сбор evidence. Вне движка (юнит-тесты) работает как раньше.
+    """
+    ctx = _SCAN_CTX.get(None)
+    sem = None
+    if ctx is not None:
+        if ctx.cancel_event is not None and ctx.cancel_event.is_set():
+            raise ScanCancelled()
+        if ctx.budget is not None and not ctx.budget.take():
+            return None
+        if ctx.limiter is not None:
+            await ctx.limiter.wait()
+        sem = ctx.semaphore
+    if sem is not None:
+        async with sem:
+            return await _do_request(client, method, url, kwargs)
+    return await _do_request(client, method, url, kwargs)
+
+
+def ev(r: Optional[httpx.Response]) -> Optional[dict]:
+    """Evidence, прикреплённый к ответу (если запрос шёл через _safe_request)."""
+    return getattr(r, "evidence", None)
 
 
 async def _safe_get(client, url, **kw) -> Optional[httpx.Response]:
@@ -154,3 +274,73 @@ def _endpoint_explicitly_public(ctx: "ScanContext", ep: str) -> bool:
     if not isinstance(ops, dict):
         return False
     return any(isinstance(op, dict) and op.get("security") == [] for op in ops.values())
+
+
+# ---------- Классификация / дедупликация / evidence ----------
+_LEVEL_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+_CONF_RANK = {"high": 0, "medium": 1, "low": 2}
+
+
+def default_confidence(f: dict) -> str:
+    meta = get_vuln_info(f.get("type", "")) or {}
+    return meta.get("confidence", "medium")
+
+
+def _template_regex(ep: str):
+    parts = re.split(r"\{[^}]+\}", ep)
+    return re.compile("^" + "[^/]+".join(re.escape(p) for p in parts) + "$")
+
+
+def pick_evidence(log: Optional[List[dict]], endpoint: str) -> Optional[dict]:
+    """Последний (самый релевантный) запрос к эндпоинту из лога проверки."""
+    if not log or not endpoint:
+        return None
+    rx = _template_regex(endpoint)
+    best = None
+    for e in log:
+        try:
+            path = urllib.parse.urlparse(e.get("url", "")).path
+        except (ValueError, AttributeError):
+            continue
+        if path == endpoint or rx.match(path):
+            best = e
+    return best
+
+
+def enrich_findings(findings: List[dict], log: Optional[List[dict]] = None) -> List[dict]:
+    """Проставляет confidence по умолчанию и evidence из лога запросов."""
+    for f in findings:
+        if not f.get("confidence"):
+            f["confidence"] = default_confidence(f)
+        if not f.get("evidence") and log:
+            picked = pick_evidence(log, f.get("endpoint", ""))
+            if picked:
+                f["evidence"] = picked
+    return findings
+
+
+def dedup_findings(findings: List[dict]) -> List[dict]:
+    """
+    Дедуп по (type, endpoint, param, method): IDOR ловится несколькими
+    проверками — в отчёте должна остаться одна, самая серьёзная/уверенная.
+    """
+    best = {}
+    for f in findings:
+        key = (
+            f.get("type", ""), f.get("endpoint", ""),
+            f.get("param", "") or "", f.get("method", "") or "",
+        )
+        cur = best.get(key)
+        if cur is None:
+            best[key] = f
+            continue
+        def rank(x):
+            return (
+                _LEVEL_RANK.get(x.get("level", "LOW"), 9),
+                _CONF_RANK.get(x.get("confidence", "medium"), 1),
+            )
+        if rank(f) < rank(cur):
+            best[key] = f
+    out = list(best.values())
+    out.sort(key=lambda x: (_LEVEL_RANK.get(x.get("level", "LOW"), 9), x.get("type", ""), x.get("endpoint", "")))
+    return out
