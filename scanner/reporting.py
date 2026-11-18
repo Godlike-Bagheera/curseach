@@ -1,8 +1,8 @@
-"""Рендер отчётов, SARIF-экспорт и сборка ZIP-бандла (без Playwright).
+"""Рендер отчётов, SARIF-экспорт и сборка ZIP-бандла.
 
-PDF больше не генерируется на сервере: вместо этого страницы отчётов
-печатаются браузером пользователя (Ctrl+P / «Скачать PDF» -> window.print()),
-что позволило убрать тяжёлую зависимость Playwright + Chromium (~400 МБ).
+PDF рендерится на сервере через WeasyPrint (без Chromium/Playwright).
+В ZIP кладётся настоящий report.pdf; если WeasyPrint недоступен —
+резервная инструкция по браузерной печати.
 """
 
 import io
@@ -235,10 +235,9 @@ def results_to_sarif(target_url: str, scan_date: str, findings: List[dict]) -> d
 # ---------- ZIP-бандл ----------
 def build_scan_bundle(scan: dict, host_part: str) -> tuple:
     """
-    Собирает ZIP со всеми форматами отчёта: HTML (с инлайн Chart.js),
-    JSON, CSV, XLSX, SARIF. PDF в бандле заменяется на print.html —
-    страницу с инструкцией печати (браузерный Ctrl+P сохраняет PDF).
-    Возвращает (zip_bytes, zip_filename).
+    Собирает ZIP: HTML (инлайн Chart.js), JSON, CSV, XLSX, SARIF и
+    серверный PDF (WeasyPrint). Если WeasyPrint недоступен — вместо PDF
+    кладётся инструкция по браузерной печати. Возвращает (zip_bytes, zip_filename).
     """
     # 1. HTML (полный — диаграмма + таблица)
     html_ctx = build_chart_context(scan, include_findings=True)
@@ -255,14 +254,24 @@ def build_scan_bundle(scan: dict, host_part: str) -> tuple:
     sarif = results_to_sarif(scan["target_url"], scan["scan_date"], scan.get("results") or [])
     sarif_bytes = _json.dumps(sarif, ensure_ascii=False, indent=2).encode("utf-8")
 
-    # 6. Инструкция по получению PDF через печать браузера
+    # 6. PDF: серверный (WeasyPrint), если доступен; иначе — инструкция печати
     scan_id = scan["id"]
+    pdf_bytes = None
+    try:
+        from . import pdf as pdf_mod
+        if pdf_mod.is_available():
+            pdf_ctx = build_chart_context(scan, include_findings=True)
+            pdf_html = templates.get_template("report_full.html").render(**pdf_ctx)
+            pdf_bytes = pdf_mod.html_to_pdf(pdf_html, pdf_ctx)
+    except Exception:
+        pdf_bytes = None
+
     print_html = (
         "<!doctype html><meta charset='utf-8'>"
         "<h1>Как сохранить PDF</h1>"
-        f"<p>Откройте <a href='/history/{scan_id}/full'>полный отчёт #{scan_id}</a> "
-        "и нажмите кнопку «Скачать PDF» (или Ctrl+P → «Сохранить как PDF»). "
-        "Серверная генерация PDF через Playwright упразднена.</p>"
+        f"<p>Серверный PDF недоступен (WeasyPrint не установлен). "
+        f"Откройте <a href='/history/{scan_id}/full'>полный отчёт #{scan_id}</a> "
+        "и нажмите «Печать (браузером)» (Ctrl+P → «Сохранить как PDF»).</p>"
     ).encode("utf-8")
 
     date_part = datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -276,6 +285,9 @@ def build_scan_bundle(scan: dict, host_part: str) -> tuple:
         if xlsx_bytes is not None:
             zf.writestr(f"scan_{scan_id}/report.xlsx", xlsx_bytes)
         zf.writestr(f"scan_{scan_id}/report.sarif", sarif_bytes)
-        zf.writestr(f"scan_{scan_id}/HOW_TO_PDF.html", print_html)
+        if pdf_bytes:
+            zf.writestr(f"scan_{scan_id}/report.pdf", pdf_bytes)
+        else:
+            zf.writestr(f"scan_{scan_id}/HOW_TO_PDF.html", print_html)
 
     return buf.getvalue(), zip_name

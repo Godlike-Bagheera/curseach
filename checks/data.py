@@ -1,4 +1,4 @@
-"""Утечка чувствительных данных и SCA (уязвимые зависимости)."""
+"""Утечка чувствительных данных и манифестов зависимостей."""
 
 import re
 from typing import Dict, List
@@ -49,11 +49,11 @@ async def check_sca(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
             continue
         if r.status_code == 200:
             findings.append({
-                "level": "CRITICAL",
-                "type": "Vulnerable Dependencies (SCA)",
+                "level": "MEDIUM",
+                "type": "Dependency Manifest Exposed",
                 "endpoint": path,
-                "desc": f"Обнаружен файл зависимостей {path}",
-                "details": get_vuln_info("Vulnerable Dependencies (SCA)"),
+                "desc": f"Файл зависимостей {path} доступен извне — раскрывает стек и версии библиотек",
+                "details": get_vuln_info("Dependency Manifest Exposed"),
             })
             break
     return findings

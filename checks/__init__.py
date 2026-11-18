@@ -91,11 +91,11 @@ CHECK_METADATA = {
     "check_csrf":                    {"name": "Защита от CSRF",             "quick": False, "level": "MEDIUM"},
     "check_unsafe_methods":          {"name": "Опасные HTTP-методы",        "quick": False, "level": "MEDIUM"},
     "check_content_type_validation": {"name": "Валидация Content-Type",     "quick": False, "level": "LOW"},
-    "check_sca":                     {"name": "Уязвимые зависимости",       "quick": False, "level": "CRITICAL"},
+    "check_sca":                     {"name": "Утечка манифеста зависимостей", "quick": False, "level": "MEDIUM"},
     "check_captcha":                 {"name": "Защита от брутфорса",        "quick": False, "level": "MEDIUM"},
     "check_business_logic":          {"name": "Бизнес-логика",              "quick": False, "level": "HIGH"},
     "check_pagination":              {"name": "Пагинация",                  "quick": False, "level": "LOW"},
-    "check_tls_version":             {"name": "Версия TLS",                 "quick": False, "level": "MEDIUM"},
+    "check_tls_version":             {"name": "TLS и сертификат",           "quick": False, "level": "HIGH"},
     "check_mass_assignment":         {"name": "Массовое присвоение",        "quick": False, "level": "HIGH"},
     "check_graphql_introspection":   {"name": "GraphQL-интроспекция",       "quick": False, "level": "MEDIUM"},
 }

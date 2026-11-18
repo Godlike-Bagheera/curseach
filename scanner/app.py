@@ -3,6 +3,8 @@
 import asyncio
 import os
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -14,7 +16,23 @@ from .tasks import gc_loop, tasks
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-app = FastAPI(title="DevSecOps Scanner", version="1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    import database
+    database.init_db()
+    gc_task = asyncio.create_task(gc_loop())
+    try:
+        yield
+    finally:
+        gc_task.cancel()
+        try:
+            await gc_task
+        except asyncio.CancelledError:
+            pass
+
+
+app = FastAPI(title="DevSecOps Scanner", version="1.0", lifespan=lifespan)
+
 
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
@@ -45,16 +63,6 @@ async def security_middleware(request: Request, call_next):
             "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"
         )
     return response
-
-
-@app.on_event("startup")
-async def startup():
-    # Инициализация схемы БД (создаёт таблицу scans, если её нет).
-    # Без этого сохранение результатов падало с "no such table: scans",
-    # а страница истории отдавала HTTP 500.
-    import database
-    database.init_db()
-    asyncio.create_task(gc_loop())
 
 
 # ---------- Роутеры ----------
