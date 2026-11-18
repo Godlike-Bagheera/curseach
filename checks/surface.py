@@ -91,13 +91,13 @@ class Surface:
 
 
 def _body_injectable_fields(body: Any) -> List[str]:
-    """Поля верхнего уровня, куда можно injecting строковый payload."""
+    """Поля верхнего уровня, куда можно внедрить строковый payload."""
     if not isinstance(body, dict):
         return []
     return [k for k, v in body.items() if isinstance(v, (str, int, float))][:_MAX_PARAMS_PER_SURFACE]
 
 
-def build_surfaces(ctx: ScanContext, limit: int = _MAX_SURFACES) -> List[Surface]:
+def build_surfaces(ctx: ScanContext, endpoints: Optional[List[str]] = None, limit: int = _MAX_SURFACES) -> List[Surface]:
     """
     Строит поверхности атаки по спеке. Без спеки — fallback: GET-поверхности
     из списка эндпоинтов с path-параметрами (старое поведение).
@@ -144,7 +144,7 @@ def build_surfaces(ctx: ScanContext, limit: int = _MAX_SURFACES) -> List[Surface
                     return surfaces
         return surfaces
     # fallback без спеки
-    for ep in ctx_endpoints_fallback(ctx):
+    for ep in (endpoints or []):
         s = Surface(path=ep, method="get")
         for part in ep.split("/"):
             if part.startswith("{") and part.endswith("}"):
@@ -155,11 +155,6 @@ def build_surfaces(ctx: ScanContext, limit: int = _MAX_SURFACES) -> List[Surface
         if len(surfaces) >= limit:
             break
     return surfaces
-
-
-def ctx_endpoints_fallback(ctx: ScanContext) -> List[str]:
-    """Эндпоинты без спеки берутся из переданного списка (см. scan_engine)."""
-    return list(getattr(ctx, "_endpoints", []) or [])
 
 
 def build_url_query_body(

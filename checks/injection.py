@@ -1,189 +1,185 @@
-"""Инъекции: SQL, OS command, утечка через ошибки."""
+"""Инъекции: SQL (error/boolean/time), OS command, утечка через ошибки.
 
+Полное покрытие OpenAPI: path/query/body-параметры, методы
+GET/POST/PUT/PATCH/DELETE. Поверхности строятся в checks.surface.
+"""
+
+import asyncio
+import hashlib
+import re
 import time
 from typing import Dict, List, Optional
 
-from .base import (
-    ScanContext,
-    _safe_get,
-    _body,
-    _content_hash,
-    _build_path,
-    SQL_ERROR_PATTERNS,
-)
+from .base import ScanContext, _body, ev, SQL_ERROR_PATTERNS
 from .descriptions import get_vuln_info
+from .surface import Surface, build_surfaces, probe
+
+_SQLI_ERROR_PAYLOADS = ["'", '"', "1'", '1"', "1')", "1'))"]
 
 
-# ================== SQL Injection ==================
-_SQLI_ERROR_PAYLOADS = ["'", "\"", "1'", "1\"", "1')", "1'))"]
+def _mk(s: Surface, kind: str, name: str, level: str, desc: str,
+        evidence: Optional[dict], confidence: str, vtype: str = "SQL Injection") -> Dict:
+    return {
+        "level": level,
+        "type": vtype,
+        "endpoint": s.path,
+        "method": s.method.upper(),
+        "param": f"{kind}:{name}",
+        "desc": desc,
+        "details": get_vuln_info(vtype),
+        "confidence": confidence,
+        "evidence": evidence,
+    }
 
 
-async def _sqli_error_based(
-    client, target_url: str, ep: str, param_name: str
-) -> Optional[Dict]:
+async def _probe_param(ctx: ScanContext, s: Surface, kind: str, name: str, value):
+    if kind == "path":
+        return await probe(ctx, s, path_over={name: value})
+    if kind == "query":
+        return await probe(ctx, s, query_over={name: value})
+    return await probe(ctx, s, body_over={name: value})
+
+
+def _norm_body(r) -> str:
+    """Нормализует динамику (timestamps/UUID/nonce) перед хеш-сравнением."""
+    try:
+        text = r.text
+    except (UnicodeDecodeError, LookupError):
+        return ""
+    text = re.sub(r"\b\d{10,13}\b", "<TS>", text)
+    text = re.sub(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "<UUID>", text)
+    text = re.sub(r'"(timestamp|ts|time|date|nonce|request_id|trace_id|expires?)"\s*:\s*("[^"]*"|\d+)',
+                  r'"\1":<DYN>', text, flags=re.IGNORECASE)
+    return text.lower()
+
+
+def _norm_hash(r) -> str:
+    return hashlib.md5(_norm_body(r).encode("utf-8", "replace")).hexdigest()
+
+
+# ---------- SQLi: error-based ----------
+async def _sqli_error_param(ctx, s, kind, name) -> Optional[Dict]:
     for payload in _SQLI_ERROR_PAYLOADS:
-        path = _build_path(ep, param_name, payload)
-        r = await _safe_get(client, f"{target_url}{path}")
+        r = await _probe_param(ctx, s, kind, name, payload)
         if r is None:
             continue
         body = _body(r)
-        if r.status_code == 500 or any(p in body for p in SQL_ERROR_PATTERNS):
-            return {
-                "level": "CRITICAL",
-                "type": "SQL Injection",
-                "endpoint": ep,
-                "desc": f"Error-based SQLi: параметр {param_name} (payload: {payload}, HTTP {r.status_code})",
-                "details": get_vuln_info("SQL Injection"),
-            }
+        if any(p in body for p in SQL_ERROR_PATTERNS):
+            return _mk(s, kind, name, "CRITICAL",
+                       f"Error-based SQLi: {kind}-параметр {name} (payload: {payload}, HTTP {r.status_code})",
+                       ev(r), "high")
+        if r.status_code == 500:
+            return _mk(s, kind, name, "CRITICAL",
+                       f"Подозрение на SQLi: {kind}-параметр {name} — HTTP 500 на SQL-подобном payload ({payload})",
+                       ev(r), "medium")
     return None
 
 
-async def _sqli_boolean_based(
-    client, target_url: str, ep: str, param_name: str
-) -> Optional[Dict]:
-    base_path = ep.replace(f"{{{param_name}}}", "1")
-    r_base = await _safe_get(client, f"{target_url}{base_path}")
+# ---------- SQLi: boolean-based ----------
+async def _sqli_boolean_param(ctx, s, kind, name) -> Optional[Dict]:
+    r_base = await _probe_param(ctx, s, kind, name, "1")
     if r_base is None or r_base.status_code != 200:
         return None
-
-    true_path = _build_path(ep, param_name, "1 AND 1=1")
-    r_true = await _safe_get(client, f"{target_url}{true_path}")
-    if r_true is None:
+    r_true = await _probe_param(ctx, s, kind, name, "1 AND 1=1")
+    r_false = await _probe_param(ctx, s, kind, name, "1 AND 1=2")
+    if r_true is None or r_false is None:
         return None
-
-    false_path = _build_path(ep, param_name, "1 AND 1=2")
-    r_false = await _safe_get(client, f"{target_url}{false_path}")
-    if r_false is None:
+    if r_true.status_code != 200 or r_false.status_code != 200:
         return None
-
-    base_hash = _content_hash(r_base)
-    true_hash = _content_hash(r_true)
-    false_hash = _content_hash(r_false)
-
-    if base_hash == true_hash and base_hash != false_hash:
-        return {
-            "level": "CRITICAL",
-            "type": "SQL Injection",
-            "endpoint": ep,
-            "desc": f"Boolean-based SQLi: параметр {param_name} (1 AND 1=1 vs 1 AND 1=2)",
-            "details": get_vuln_info("SQL Injection"),
-        }
+    bh, th, fh = _norm_hash(r_base), _norm_hash(r_true), _norm_hash(r_false)
+    if bh == th and bh != fh:
+        return _mk(s, kind, name, "CRITICAL",
+                   f"Boolean-based SQLi: {kind}-параметр {name} (1 AND 1=1 vs 1 AND 1=2, динамика нормализована)",
+                   ev(r_false), "high")
     return None
 
 
-async def _sqli_time_based(
-    client, target_url: str, ep: str, param_name: str
-) -> Optional[Dict]:
-    base_path = ep.replace(f"{{{param_name}}}", "1")
+# ---------- SQLi: time-based (с перепроверкой) ----------
+async def _sqli_time_param(ctx, s, kind, name) -> Optional[Dict]:
     t0 = time.perf_counter()
-    r_base = await _safe_get(client, f"{target_url}{base_path}")
-    baseline_time = time.perf_counter() - t0
+    r_base = await _probe_param(ctx, s, kind, name, "1")
+    baseline = time.perf_counter() - t0
     if r_base is None:
         return None
-
-    SLEEP_SECONDS = 3
-    THRESHOLD_REL = baseline_time * 2.0
-    THRESHOLD_ABS = baseline_time + 2.0
-    threshold = max(THRESHOLD_REL, THRESHOLD_ABS)
-
+    threshold = max(baseline * 2.0, baseline + 2.0)
     payloads = [
-        (f"1' AND SLEEP({SLEEP_SECONDS})--", "MySQL/MariaDB"),
-        (f"1'; SELECT pg_sleep({SLEEP_SECONDS})--", "PostgreSQL"),
-        (f"1'; WAITFOR DELAY '0:0:{SLEEP_SECONDS}'--", "MSSQL"),
+        ("1' AND SLEEP(3)--", "MySQL/MariaDB"),
+        ("1'; SELECT pg_sleep(3)--", "PostgreSQL"),
+        ("1'; WAITFOR DELAY '0:0:3'--", "MSSQL"),
     ]
-
     for payload, db_type in payloads:
-        path = _build_path(ep, param_name, payload)
         t0 = time.perf_counter()
-        r = await _safe_get(client, f"{target_url}{path}")
+        r = await _probe_param(ctx, s, kind, name, payload)
         elapsed = time.perf_counter() - t0
-        if r is None:
+        if r is None or r.status_code >= 500 or elapsed < threshold:
             continue
-        if r.status_code >= 500:
-            continue
-        if elapsed >= threshold:
-            return {
-                "level": "CRITICAL",
-                "type": "SQL Injection",
-                "endpoint": ep,
-                "desc": f"Time-based SQLi: параметр {param_name} ({db_type}, задержка {elapsed:.1f}s, baseline {baseline_time:.1f}s)",
-                "details": get_vuln_info("SQL Injection"),
-            }
+        # Перепроверка вторым запросом — отсекаем случайные тормоза сети.
+        t0 = time.perf_counter()
+        r2 = await _probe_param(ctx, s, kind, name, payload)
+        elapsed2 = time.perf_counter() - t0
+        if r2 is not None and elapsed2 >= threshold:
+            return _mk(s, kind, name, "CRITICAL",
+                       f"Time-based SQLi (подтверждено 2 запросами): {kind}-параметр {name}, {db_type}, "
+                       f"задержки {elapsed:.1f}s/{elapsed2:.1f}s (baseline {baseline:.1f}s)",
+                       ev(r2), "high")
     return None
 
 
 async def check_sqli(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
-    findings = []
-    param_endpoints = [p for p in endpoints if "{" in p and "}" in p]
+    surfaces = build_surfaces(ctx, endpoints)
 
-    for ep in param_endpoints:
-        param_name = ep[ep.find("{") + 1:ep.find("}")]
+    async def per_surface(s: Surface) -> List[Dict]:
+        for kind, name in s.injectable:
+            f = await _sqli_error_param(ctx, s, kind, name)
+            if f is None:
+                f = await _sqli_boolean_param(ctx, s, kind, name)
+            if f is None:
+                f = await _sqli_time_param(ctx, s, kind, name)
+            if f:
+                return [f]
+        return []
 
-        finding = await _sqli_error_based(ctx.client, ctx.target_url, ep, param_name)
-        if finding:
-            findings.append(finding)
-            continue
-
-        finding = await _sqli_boolean_based(ctx.client, ctx.target_url, ep, param_name)
-        if finding:
-            findings.append(finding)
-            continue
-
-        finding = await _sqli_time_based(ctx.client, ctx.target_url, ep, param_name)
-        if finding:
-            findings.append(finding)
-
-    return findings
+    results = await asyncio.gather(*(per_surface(s) for s in surfaces))
+    return [f for chunk in results for f in chunk]
 
 
-# ================== OS Command Injection ==================
+# ---------- OS Command Injection ----------
 async def check_command_injection(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
-    findings = []
-    param_endpoints = [p for p in endpoints if "{" in p and "}" in p]
+    surfaces = build_surfaces(ctx, endpoints)
     payloads = [";id", "|id", "&whoami", "$(id)", "`id`"]
-    for ep in param_endpoints:
-        param_name = ep[ep.find("{") + 1:ep.find("}")]
-        for payload in payloads:
-            path = _build_path(ep, param_name, payload)
-            r = await _safe_get(ctx.client, f"{ctx.target_url}{path}")
+
+    async def per_surface(s: Surface) -> List[Dict]:
+        for kind, name in s.injectable:
+            for payload in payloads:
+                r = await _probe_param(ctx, s, kind, name, payload)
+                if r is None:
+                    continue
+                body = _body(r)
+                if any(sig in body for sig in ("uid=", "gid=", "root:", "windows ip")):
+                    return [_mk(s, kind, name, "CRITICAL",
+                                f"Возможна инъекция команд ОС через {kind}-параметр {name} (payload: {payload})",
+                                ev(r), "high", "OS Command Injection")]
+        return []
+
+    results = await asyncio.gather(*(per_surface(s) for s in surfaces))
+    return [f for chunk in results for f in chunk]
+
+
+# ---------- Утечка через ошибки ----------
+async def check_error_leak(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+    surfaces = build_surfaces(ctx, endpoints)[:8]
+
+    async def per_surface(s: Surface) -> List[Dict]:
+        for kind, name in s.injectable[:1]:
+            r = await _probe_param(ctx, s, kind, name, "invalid'")
             if r is None:
                 continue
             body = _body(r)
-            if any(sig in body for sig in ["uid=", "gid=", "root:", "windows ip"]):
-                findings.append({
-                    "level": "CRITICAL",
-                    "type": "OS Command Injection",
-                    "endpoint": ep,
-                    "desc": f"Возможна команда ОС через параметр {param_name}",
-                    "details": get_vuln_info("OS Command Injection"),
-                })
-                break
-    return findings
+            if any(k in body for k in ("traceback", "stack trace", "at line", 'file "')):
+                return [_mk(s, kind, name, "MEDIUM",
+                            f"В ответе содержатся детали ошибки (stack trace) на {kind}-параметре {name}",
+                            ev(r), "high", "Information Leak via Errors")]
+        return []
 
-
-# ================== Error leak ==================
-async def check_error_leak(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
-    """
-    Проверяем до 5 param-эндпоинтов — не хочется долбить API десятками
-    «мусорных» запросов. Одного 500-ответа с traceback достаточно,
-    чтобы зафиксировать утечку.
-    """
-    findings = []
-    param_endpoints = [p for p in endpoints if "{" in p and "}" in p][:5]
-
-    for ep in param_endpoints:
-        param_name = ep[ep.find("{") + 1:ep.find("}")]
-        path = _build_path(ep, param_name, "invalid'")
-        r = await _safe_get(ctx.client, f"{ctx.target_url}{path}")
-        if r is None:
-            continue
-        body = _body(r)
-        if any(k in body for k in ["traceback", "stack trace", "at line", 'file "']):
-            findings.append({
-                "level": "MEDIUM",
-                "type": "Information Leak via Errors",
-                "endpoint": ep,
-                "desc": "В ответе содержатся детали ошибки (stack trace)",
-                "details": get_vuln_info("Information Leak via Errors"),
-            })
-    return findings
+    results = await asyncio.gather(*(per_surface(s) for s in surfaces))
+    return [f for chunk in results for f in chunk]
