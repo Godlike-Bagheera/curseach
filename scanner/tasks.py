@@ -282,7 +282,10 @@ async def scan_engine(task: ScanTask):
         if res.status_code == 200:
             try:
                 data = res.json()
-                endpoints = list(data.get("paths", {}).keys())
+                if isinstance(data, dict):
+                    ctx.openapi = data
+                    paths = data.get("paths")
+                    endpoints = list(paths.keys()) if isinstance(paths, dict) else []
                 task.add_log(f"[OK] Найдено эндпоинтов: {len(endpoints)}")
             except ValueError:
                 task.add_log("[ВНИМАНИЕ] Не удалось разобрать openapi.json")

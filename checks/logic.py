@@ -9,6 +9,7 @@ from .base import (
     _body,
     _method_not_supported,
     _is_auth_endpoint,
+    _writable_endpoints,
 )
 from .descriptions import get_vuln_info
 
@@ -112,33 +113,26 @@ async def check_mass_assignment(ctx: ScanContext, endpoints: List[str]) -> List[
     # это не «массовое присвоение», а нормальный контракт.
     # Тестировать его на mass-assignment бессмысленно: любой лишний
     # ключ просто игнорируется Pydantic-моделью.
-    post_endpoints = [
-        e for e in endpoints
-        if "{" not in e and "}" not in e
-        and e.startswith("/")
-        and not _is_auth_endpoint(e)
-    ]
+    post_endpoints = _writable_endpoints(ctx, endpoints)
     if not post_endpoints:
         return findings
 
-    test_path = post_endpoints[0]
-    r = await _safe_post(
-        ctx.client, f"{ctx.target_url}{test_path}",
-        json={"name": "test", "is_admin": True, "role": "admin"},
-    )
-    if _method_not_supported(r):
+    for test_path in post_endpoints[:3]:
+        r = await _safe_post(
+            ctx.client, f"{ctx.target_url}{test_path}",
+            json={"name": "test", "is_admin": True, "role": "admin"},
+        )
+        if r is None or _method_not_supported(r):
+            continue
+        if r.status_code in (200, 201):
+            findings.append({
+                "level": "HIGH",
+                "type": "Mass Assignment",
+                "endpoint": test_path,
+                "desc": "Эвристика: сервер принял лишние поля",
+                "details": get_vuln_info("Mass Assignment"),
+            })
         return findings
-    if r is None:
-        return findings
-
-    if r.status_code in (200, 201):
-        findings.append({
-            "level": "HIGH",
-            "type": "Mass Assignment",
-            "endpoint": test_path,
-            "desc": "Эвристика: сервер принял лишние поля",
-            "details": get_vuln_info("Mass Assignment"),
-        })
     return findings
 
 

@@ -13,6 +13,10 @@ from .base import (
     _body,
     _method_not_supported,
     _is_auth_endpoint,
+    _writable_endpoints,
+    _endpoint_requires_security,
+    _endpoint_explicitly_public,
+    _PUBLIC_PATHS,
 )
 from .descriptions import get_vuln_info
 
@@ -87,6 +91,10 @@ async def check_idor_auth(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
     for ep in endpoints:
         if "{" in ep or "}" in ep:
             continue
+        if ep in _PUBLIC_PATHS or _is_auth_endpoint(ep):
+            continue
+        if _endpoint_explicitly_public(ctx, ep):
+            continue
 
         r_auth = await _safe_get(ctx.client, f"{ctx.target_url}{ep}")
         r_anon = await _safe_get(ctx.anon_client, f"{ctx.target_url}{ep}")
@@ -97,11 +105,17 @@ async def check_idor_auth(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
             continue
 
         if _content_hash(r_auth) == _content_hash(r_anon):
+            if _endpoint_requires_security(ctx, ep):
+                level = "CRITICAL"
+                desc = "Эндпоинт требует авторизацию по спеке, но отдаёт идентичный ответ с токеном и без него"
+            else:
+                level = "MEDIUM"
+                desc = "Эвристика: идентичный ответ с токеном и без него — возможно, эндпоинт публичный; проверьте вручную"
             findings.append({
-                "level": "CRITICAL",
+                "level": level,
                 "type": "Broken Access Control",
                 "endpoint": ep,
-                "desc": "Эндпоинт возвращает идентичный ответ с токеном и без него — авторизация не проверяется",
+                "desc": desc,
                 "details": get_vuln_info("Broken Access Control"),
             })
     return findings
@@ -114,39 +128,28 @@ async def check_csrf(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
     # Логин / регистрация — не state-changing эндпоинты.
     # На них CSRF-токен не нужен, поэтому не проверяем их и не
     # считаем отсутствие токена уязвимостью.
-    post_endpoints = [
-        e for e in endpoints
-        if "{" not in e and "}" not in e
-        and e.startswith("/")
-        and not _is_auth_endpoint(e)
-    ]
+    post_endpoints = _writable_endpoints(ctx, endpoints)
     if not post_endpoints:
         return findings
 
-    test_path = post_endpoints[0]
-    r = await _safe_post(ctx.client, f"{ctx.target_url}{test_path}", json={})
-    if _method_not_supported(r):
+    for test_path in post_endpoints[:3]:
+        r = await _safe_post(ctx.client, f"{ctx.target_url}{test_path}", json={})
+        if r is None or _method_not_supported(r):
+            continue
+        if not (200 <= r.status_code < 300):
+            continue
+        has_csrf_header = "x-csrf-token" in r.headers
+        set_cookie = r.headers.get("set-cookie", "")
+        has_csrf_cookie = "csrf" in set_cookie.lower()
+        if not has_csrf_header and not has_csrf_cookie:
+            findings.append({
+                "level": "MEDIUM",
+                "type": "Missing CSRF Protection",
+                "endpoint": test_path,
+                "desc": "Эвристика: не обнаружен CSRF-токен",
+                "details": get_vuln_info("Missing CSRF Protection"),
+            })
         return findings
-    if r is None:
-        return findings
-
-    # Если сервер не обработал запрос (401/403/422/400) — мы не можем
-    # судить о наличии CSRF-защиты: нечего защищать, действие не выполнено.
-    if not (200 <= r.status_code < 300):
-        return findings
-
-    has_csrf_header = "x-csrf-token" in r.headers
-    set_cookie = r.headers.get("set-cookie", "")
-    has_csrf_cookie = "csrf" in set_cookie.lower()
-
-    if not has_csrf_header and not has_csrf_cookie:
-        findings.append({
-            "level": "MEDIUM",
-            "type": "Missing CSRF Protection",
-            "endpoint": test_path,
-            "desc": "Эвристика: не обнаружен CSRF-токен",
-            "details": get_vuln_info("Missing CSRF Protection"),
-        })
     return findings
 
 

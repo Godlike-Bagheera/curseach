@@ -1,17 +1,17 @@
-"""Роуты истории сканов: просмотр, экспорт (HTML/JSON/CSV/XLSX/SARIF/ZIP).
+"""Роуты истории сканов: просмотр, экспорт (HTML/JSON/CSV/XLSX/SARIF/ZIP/PDF).
 
-PDF-экспорт реализован через клиентскую печать: страницы отчётов
-(templates/report.html, chart.html, report_full.html) содержат кнопки
-«Скачать PDF», вызывающие window.print() с печатными CSS-стилями.
-Серверный рендер через Playwright упразднён.
+PDF рендерится на сервере через WeasyPrint (/history/{id}/pdf, /full/pdf,
+/view/pdf). Браузерная печать (window.print()) осталась как резерв.
 """
 
 import datetime
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 import database
+import report_xlsx
 
 from ..config import calculate_score
 from ..reporting import (
@@ -40,8 +40,6 @@ def _get_scan_or_404(scan_id: int) -> dict:
 @router.get("/history/export.xlsx")
 async def export_history_xlsx(user: str = Depends(require_admin)):
     """Сводный XLSX по всем сканам в истории."""
-    import report_xlsx
-
     if not report_xlsx.is_available():
         raise HTTPException(
             status_code=503,
@@ -91,7 +89,7 @@ async def delete_all_history(user: str = Depends(require_admin)):
     return {"status": "deleted", "count": count}
 
 
-# ---------- Страницы отчётов (печать/PDF — на клиенте) ----------
+# ---------- Страницы отчётов (HTML; серверный PDF — ниже) ----------
 @router.get("/history/{scan_id}/view", response_class=HTMLResponse)
 async def view_history_report(scan_id: int, request: Request, user: str = Depends(require_admin)):
     scan = _get_scan_or_404(scan_id)
@@ -213,7 +211,7 @@ async def download_history_sarif(scan_id: int, user: str = Depends(require_admin
     )
     filename = f"scan_{scan_id}.sarif"
     return Response(
-        content=__import__("json").dumps(sarif, ensure_ascii=False, indent=2),
+        content=json.dumps(sarif, ensure_ascii=False, indent=2),
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

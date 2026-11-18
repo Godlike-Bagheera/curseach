@@ -31,6 +31,11 @@ async def check_xss(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
             except (UnicodeDecodeError, LookupError):
                 continue
 
+            # Отражение в JSON/тексте — не XSS. Флагаем только HTML-ответы.
+            ctype = r.headers.get("content-type", "").lower()
+            if "text/html" not in ctype and "application/xhtml" not in ctype:
+                continue
+
             if payload in body:
                 findings.append({
                     "level": "MEDIUM",

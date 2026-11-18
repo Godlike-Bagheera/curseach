@@ -3,7 +3,7 @@
 import hashlib
 import urllib.parse
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, Optional
 
 import httpx
 
@@ -27,6 +27,7 @@ class ScanContext:
     has_auth: bool = False
     secondary_client: Optional[httpx.AsyncClient] = None
     has_auth_secondary: bool = False
+    openapi: Optional[dict] = None
 
 
 async def _safe_request(
@@ -105,3 +106,51 @@ SQL_ERROR_PATTERNS = [
     "sqlstate", "you have an error in your sql", "warning: mysql",
     "odbc", "jdbc",
 ]
+
+# ---------- Хелперы по OpenAPI-спеке ----------
+_HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
+_PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/favicon.ico", "/health", "/healthz", "/robots.txt"}
+
+
+def _spec_paths(ctx: "ScanContext") -> dict:
+    spec = ctx.openapi or {}
+    paths = spec.get("paths")
+    return paths if isinstance(paths, dict) else {}
+
+
+def _path_methods(ctx: "ScanContext", ep: str) -> set:
+    ops = _spec_paths(ctx).get(ep)
+    if not isinstance(ops, dict):
+        return set()
+    return {k.lower() for k in ops if k.lower() in _HTTP_METHODS}
+
+
+def _writable_endpoints(ctx: "ScanContext", endpoints: List[str]) -> List[str]:
+    """Статические не-auth эндпоинты, реально принимающие POST/PUT/PATCH (по спеке)."""
+    out = []
+    for e in endpoints:
+        if "{" in e or "}" in e or not e.startswith("/") or _is_auth_endpoint(e):
+            continue
+        methods = _path_methods(ctx, e)
+        if methods and not (methods & {"post", "put", "patch"}):
+            continue
+        out.append(e)
+    return out
+
+
+def _endpoint_requires_security(ctx: "ScanContext", ep: str) -> bool:
+    ops = _spec_paths(ctx).get(ep)
+    if not isinstance(ops, dict):
+        return False
+    return any(isinstance(op, dict) and op.get("security") for op in ops.values())
+
+
+def _endpoint_explicitly_public(ctx: "ScanContext", ep: str) -> bool:
+    spec = ctx.openapi or {}
+    has_schemes = bool((spec.get("components") or {}).get("securitySchemes")) or bool(spec.get("security"))
+    if not has_schemes:
+        return False
+    ops = _spec_paths(ctx).get(ep)
+    if not isinstance(ops, dict):
+        return False
+    return any(isinstance(op, dict) and op.get("security") == [] for op in ops.values())

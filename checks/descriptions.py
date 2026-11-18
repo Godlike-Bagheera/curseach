@@ -22,7 +22,7 @@ VULN_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
     },
     "Missing Security Headers": {
         "plain": "В ответе сервера отсутствуют важные заголовки, защищающие от атак.",
-        "recommendation": "Добавьте X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, CSP, HSTS."
+        "recommendation": "Добавьте X-Frame-Options, X-Content-Type-Options, CSP, HSTS. X-XSS-Protection устарел — ставьте 0 или не добавляйте."
     },
     "Missing CSP": {
         "plain": "Отсутствует Content-Security-Policy, снижающий риск XSS.",
@@ -85,7 +85,7 @@ VULN_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
         "recommendation": "Внедрите пагинацию и ограничьте максимальный размер ответа."
     },
     "Weak TLS Version": {
-        "plain": "Сервер может поддерживать устаревшие версии TLS.",
+        "plain": "Сервер согласовал устаревшую версию TLS (1.0/1.1) — такие соединения уязвимы к расшифровке.",
         "recommendation": "Отключите TLS 1.0 и 1.1, используйте только 1.2+."
     },
     "Mass Assignment": {
@@ -95,6 +95,22 @@ VULN_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
     "GraphQL Introspection": {
         "plain": "GraphQL API позволяет получить полную схему.",
         "recommendation": "Отключите интроспекцию в продакшене."
+    },
+    "Dependency Manifest Exposed": {
+        "plain": "Файл зависимостей доступен извне и раскрывает стек и версии библиотек — это помогает атакующему подобрать эксплойты.",
+        "recommendation": "Уберите манифесты из веб-рута. Для настоящего SCA сверяйте версии с базами уязвимостей (OSV.dev, GitHub Advisory)."
+    },
+    "TLS Certificate Expired": {
+        "plain": "Срок действия TLS-сертификата истёк — клиенты будут отклонять соединение.",
+        "recommendation": "Перевыпустите сертификат (например, Let's Encrypt) и настройте автопродление."
+    },
+    "TLS Certificate Expiring Soon": {
+        "plain": "TLS-сертификат скоро истекает — есть риск простоя HTTPS.",
+        "recommendation": "Настройте автопродление и мониторинг срока действия."
+    },
+    "TLS Certificate Untrusted": {
+        "plain": "Сертификат не проходит валидацию: самоподписанный, на другой хост или с битой цепочкой.",
+        "recommendation": "Используйте сертификат доверенного CA на корректное имя и отдавайте полную цепочку."
     },
     "JWT alg=none": {
         "plain": (

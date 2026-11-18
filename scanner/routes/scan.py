@@ -1,16 +1,19 @@
 """Роуты запуска сканирования, статуса и WebSocket-потока логов."""
 
 import asyncio
-from typing import Optional
+import datetime
+import time
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 
 import checks
+import report_csv
+import report_xlsx
 
-from ..config import SESSION_TTL_SECONDS, MODE_TITLES_REPORT
+from ..config import SESSION_TTL_SECONDS
 from ..reporting import render_report
-from ..security import get_current_user, require_admin, validate_target_url, origin_allowed
+from ..security import require_admin, validate_target_url, origin_allowed, safe_host_for_filename, sessions
 from ..tasks import ScanRequest, ScanTask, run_scan_in_thread, tasks
 
 router = APIRouter()
@@ -69,10 +72,9 @@ async def ws_scan(websocket: WebSocket, task_id: str):
     sid = websocket.cookies.get("session_id")
     user = None
     if sid:
-        entry = tasks and _session_entry(sid)
+        entry = sessions.get(sid)
         if entry:
             username, created_at = entry
-            import time
             if time.time() - created_at <= SESSION_TTL_SECONDS:
                 user = username
     if user != "admin":
@@ -129,16 +131,8 @@ async def ws_scan(websocket: WebSocket, task_id: str):
             pass
 
 
-def _session_entry(sid: str):
-    from ..security import sessions
-    return sessions.get(sid)
-
-
 @router.get("/report/html/{task_id}", response_class=HTMLResponse)
-async def get_html_report(task_id: str, request, user: str = Depends(require_admin)):
-    import datetime
-    import time
-
+async def get_html_report(task_id: str, request: Request, user: str = Depends(require_admin)):
     task = tasks.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -163,8 +157,6 @@ async def get_html_report(task_id: str, request, user: str = Depends(require_adm
 
 @router.get("/report/json/{task_id}")
 async def get_json_report(task_id: str, user: str = Depends(require_admin)):
-    import datetime
-
     task = tasks.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -188,14 +180,6 @@ async def get_json_report(task_id: str, user: str = Depends(require_admin)):
 
 @router.get("/report/csv/{task_id}")
 async def get_csv_report(task_id: str, user: str = Depends(require_admin)):
-    import datetime
-    import time
-
-    import report_csv
-    from fastapi import Response
-
-    from ..security import safe_host_for_filename
-
     task = tasks.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -228,14 +212,6 @@ async def get_csv_report(task_id: str, user: str = Depends(require_admin)):
 
 @router.get("/report/xlsx/{task_id}")
 async def get_xlsx_report(task_id: str, user: str = Depends(require_admin)):
-    import datetime
-    import time
-
-    import report_xlsx
-    from fastapi import Response
-
-    from ..security import safe_host_for_filename
-
     if not report_xlsx.is_available():
         raise HTTPException(
             status_code=503,

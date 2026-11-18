@@ -8,6 +8,7 @@ from .base import (
     _safe_post,
     _method_not_supported,
     _is_auth_endpoint,
+    _writable_endpoints,
 )
 from .descriptions import get_vuln_info
 
@@ -64,33 +65,26 @@ async def check_content_type_validation(ctx: ScanContext, endpoints: List[str]) 
     и его проверка на content-type — не про безопасность.
     """
     findings = []
-    post_endpoints = [
-        e for e in endpoints
-        if "{" not in e and "}" not in e
-        and e.startswith("/")
-        and not _is_auth_endpoint(e)
-    ]
+    post_endpoints = _writable_endpoints(ctx, endpoints)
     if not post_endpoints:
         return findings
 
-    test_path = post_endpoints[0]
-    r = await _safe_post(
-        ctx.client, f"{ctx.target_url}{test_path}",
-        content="test", headers={"Content-Type": "text/plain"},
-    )
-    if _method_not_supported(r):
+    for test_path in post_endpoints[:3]:
+        r = await _safe_post(
+            ctx.client, f"{ctx.target_url}{test_path}",
+            content="test", headers={"Content-Type": "text/plain"},
+        )
+        if r is None or _method_not_supported(r):
+            continue
+        if r.status_code in (200, 201, 202):
+            findings.append({
+                "level": "LOW",
+                "type": "Missing Content-Type Validation",
+                "endpoint": test_path,
+                "desc": "Сервер принял неподдерживаемый Content-Type и обработал данные",
+                "details": get_vuln_info("Missing Content-Type Validation"),
+            })
         return findings
-    if r is None:
-        return findings
-
-    if r.status_code in (200, 201, 202):
-        findings.append({
-            "level": "LOW",
-            "type": "Missing Content-Type Validation",
-            "endpoint": test_path,
-            "desc": "Сервер принял неподдерживаемый Content-Type и обработал данные",
-            "details": get_vuln_info("Missing Content-Type Validation"),
-        })
     return findings
 
 
