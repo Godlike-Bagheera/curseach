@@ -100,9 +100,16 @@ _state = {
 }
 
 
-def _new_scan():
-    """Генерирует новый профиль уязвимостей для одного скана."""
-    rng = random.Random(time.time_ns() ^ int.from_bytes(os.urandom(4), "big"))
+def _new_scan(seed: Optional[int] = None):
+    """
+    Генерирует новый профиль уязвимостей для одного скана.
+    С seed (заголовок X-Scan-Seed) профиль детерминирован — для
+    воспроизводимых e2e-тестов и self-scan в CI.
+    """
+    if seed is not None:
+        rng = random.Random(seed)
+    else:
+        rng = random.Random(time.time_ns() ^ int.from_bytes(os.urandom(4), "big"))
 
     # Сколько заголовков ПРИСУТСТВУЕТ в этом скане (0-5)
     n_present = rng.choices(
@@ -121,7 +128,8 @@ def _new_scan():
         "sensitive_enabled": rng.random() < 0.75,
         "business_enabled": rng.random() < 0.75,
         "jwt_none_enabled": rng.random() < 0.80,   # /api/reports/{id}: JWT alg=none
-        "global_bias": rng.uniform(0.7, 1.3),
+        "global_bias": 1.0 if seed is not None else rng.uniform(0.7, 1.3),
+        "seeded": seed is not None,
     }
 
 
@@ -134,10 +142,13 @@ def _profile() -> dict:
 
 def _maybe(prob: float) -> bool:
     """Бросок кубика с учётом глобального bias-а текущего скана."""
-    rng = _state["rng"]
     bias = _state["profile"].get("global_bias", 1.0)
     adjusted = min(1.0, max(0.0, prob * bias))
-    return rng.random() < adjusted
+    if _state["profile"].get("seeded"):
+        # Детерминированный режим: результат не зависит от порядка запросов
+        # (сканер ходит параллельно), высокие вероятности всегда срабатывают.
+        return adjusted >= 0.5
+    return _state["rng"].random() < adjusted
 
 
 def _is_suspicious_input(value: str) -> bool:
@@ -153,7 +164,9 @@ def _is_suspicious_input(value: str) -> bool:
 async def randomized_middleware(request, call_next):
     # Новый скан стартует только по явному заголовку X-Scan-Start: 1.
     if request.url.path == "/openapi.json" and request.headers.get("x-scan-start") == "1":
-        _new_scan()
+        seed_hdr = request.headers.get("x-scan-seed", "")
+        seed = int(seed_hdr) if seed_hdr.lstrip("-").isdigit() else None
+        _new_scan(seed)
 
     response = await call_next(request)
 
