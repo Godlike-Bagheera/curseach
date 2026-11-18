@@ -23,6 +23,11 @@ from .config import (
     TASK_TTL_SECONDS,
     GC_INTERVAL_SECONDS,
     MODE_TITLES_RU,
+    SCAN_CONCURRENCY,
+    SCAN_MAX_REQUESTS,
+    SCAN_RPS,
+    SCAN_TOTAL_TIMEOUT,
+    MAX_CONCURRENT_SCANS,
     calculate_score,
 )
 from .security import sessions
@@ -46,6 +51,7 @@ class ScanRequest(BaseModel):
     checks: Optional[List[str]] = None
     account1: Optional[AccountConfig] = None
     account2: Optional[AccountConfig] = None
+    seed: Optional[int] = None  # детерминированный профиль учебной цели (X-Scan-Seed)
 
 
 async def login_and_get_token(
@@ -82,8 +88,11 @@ class ScanTask:
         selected_checks: Optional[List[str]] = None,
         account1: Optional[AccountConfig] = None,
         account2: Optional[AccountConfig] = None,
+        seed: Optional[int] = None,
     ):
         self.id = str(uuid.uuid4())
+        self.seed = seed
+        self.cancel_event = threading.Event()
         self.target_url = target_url
         self.mode = mode
         self.selected_checks = selected_checks or []
@@ -119,10 +128,10 @@ class ScanTask:
         self.status = status
         if status == "running" and self.started_at is None:
             self.started_at = time.time()
-        if status in ("completed", "failed") and self.finished_at is None:
+        if status in ("completed", "failed", "cancelled") and self.finished_at is None:
             self.finished_at = time.time()
         self._push_status()
-        if status in ("completed", "failed"):
+        if status in ("completed", "failed", "cancelled"):
             self._push({"type": "complete", "status": status})
 
     def update_metrics(self):
@@ -269,9 +278,12 @@ async def scan_engine(task: ScanTask):
         task.add_log("[ИНФО] Получение спецификации OpenAPI...")
         endpoints: List[str] = []
         try:
+            spec_headers = {"X-Scan-Start": "1"}
+            if task.seed is not None:
+                spec_headers["X-Scan-Seed"] = str(task.seed)
             res = await ctx.client.get(
                 f"{task.target_url}/openapi.json",
-                headers={"X-Scan-Start": "1"},
+                headers=spec_headers,
             )
         except httpx.HTTPError as e:
             task.add_log(f"[ОШИБКА] Сетевая ошибка: {e}")
@@ -294,24 +306,78 @@ async def scan_engine(task: ScanTask):
 
         task.set_progress(0.1)
         total = len(check_list)
-        for idx, check_func in enumerate(check_list):
+
+        # Инфраструктура: параллелизм, бюджет, RPS, отмена.
+        ctx.semaphore = asyncio.Semaphore(SCAN_CONCURRENCY)
+        ctx.budget = checks.RequestBudget(SCAN_MAX_REQUESTS)
+        ctx.limiter = checks.RateLimiter(SCAN_RPS) if SCAN_RPS > 0 else None
+        ctx.cancel_event = task.cancel_event
+        ctx.scan_seed = task.seed
+        task.add_log(
+            f"[ИНФО] Параллелизм: {SCAN_CONCURRENCY} запросов, бюджет {SCAN_MAX_REQUESTS}, "
+            f"RPS {SCAN_RPS:g}, таймаут {SCAN_TOTAL_TIMEOUT}s"
+        )
+
+        done = 0
+
+        async def run_one(check_func):
+            nonlocal done
             meta = checks.CHECK_METADATA.get(check_func.__name__, {})
             name = meta.get("name", check_func.__name__)
-            task.add_log(f"[*] [{idx+1}/{total}] {name}")
+            task.add_log(f"[*] {name} — старт")
+            evidence_log: List[dict] = []
+            tok_ctx = checks._SCAN_CTX.set(ctx)
+            tok_log = checks._EVIDENCE_LOG.set(evidence_log)
             try:
                 findings = await check_func(ctx, endpoints)
+            except checks.ScanCancelled:
+                raise
             except Exception as e:
                 task.add_log(f"[ОШИБКА] Проверка {name} упала: {e}")
                 findings = []
+            finally:
+                checks._SCAN_CTX.reset(tok_ctx)
+                checks._EVIDENCE_LOG.reset(tok_log)
+            findings = checks.enrich_findings(findings or [], evidence_log)
             if findings:
                 task.scan_results.extend(findings)
-                task.add_log(f"[!] Найдено уязвимостей: {len(findings)}")
+                task.add_log(f"[!] {name}: найдено {len(findings)}")
                 for f in findings:
                     task.add_log(f"    {f['level']}: {f['desc']}")
             else:
-                task.add_log("[OK] Уязвимостей не обнаружено")
+                task.add_log(f"[OK] {name}: уязвимостей не обнаружено")
+            done += 1
             task.update_metrics()
-            task.set_progress(0.1 + (idx + 1) / total * 0.85)
+            task.set_progress(0.1 + done / total * 0.85)
+            return findings
+
+        cancelled = False
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*(run_one(fn) for fn in check_list), return_exceptions=True),
+                timeout=SCAN_TOTAL_TIMEOUT,
+            )
+            for r in results:
+                if isinstance(r, checks.ScanCancelled):
+                    cancelled = True
+        except asyncio.TimeoutError:
+            task.add_log(f"[ВНИМАНИЕ] Общий таймаут скана ({SCAN_TOTAL_TIMEOUT}s) — сохраняем частичные результаты")
+        except asyncio.CancelledError:
+            cancelled = True
+
+        if ctx.budget is not None and ctx.budget.exhausted:
+            task.add_log(f"[ВНИМАНИЕ] Бюджет запросов исчерпан ({SCAN_MAX_REQUESTS}) — часть запросов пропущена")
+
+        before = len(task.scan_results)
+        task.scan_results = checks.dedup_findings(task.scan_results)
+        if before != len(task.scan_results):
+            task.add_log(f"[ИНФО] Дедупликация: {before} → {len(task.scan_results)} находок")
+        task.update_metrics()
+
+        if cancelled:
+            task.add_log("=== СКАН ОТМЕНЁН ПОЛЬЗОВАТЕЛЕМ ===")
+            task.set_status("cancelled")
+            return
 
         task.set_progress(1.0)
         task.add_log(f"=== СКАНИРОВАНИЕ ЗАВЕРШЕНО (Score: {task.score}) ===")
@@ -349,7 +415,17 @@ async def scan_engine(task: ScanTask):
         task.set_status("completed")
 
 
+# Лимит одновременных сканов на процесс (thread-per-scan без потолка был DoS-риском).
+_scan_slots = threading.BoundedSemaphore(MAX_CONCURRENT_SCANS)
+
+
 def run_scan_in_thread(task: ScanTask):
+    if not _scan_slots.acquire(blocking=False):
+        task.error = f"Достигнут лимит одновременных сканов ({MAX_CONCURRENT_SCANS}) — попробуйте позже"
+        task.add_log(f"[ОШИБКА] {task.error}")
+        task.set_status("failed")
+        return
+
     def target():
         try:
             asyncio.run(scan_engine(task))
@@ -360,6 +436,9 @@ def run_scan_in_thread(task: ScanTask):
                 task.set_status("failed")
             except Exception:
                 pass
+        finally:
+            _scan_slots.release()
+
     threading.Thread(target=target, daemon=True).start()
 
 
