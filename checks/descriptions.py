@@ -129,8 +129,49 @@ VULN_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
 }
 
 
-def get_vuln_info(vuln_type: str) -> Dict[str, str]:
-    return VULN_DESCRIPTIONS.get(vuln_type, {
+# Классификация: CWE + OWASP API Security Top 10 (2023) + OWASP Top 10 (2021)
+# и confidence по умолчанию для эвристик vs сигнатурных проверок.
+VULN_META: Dict[str, Dict] = {
+    "SQL Injection":                    {"cwe": ["CWE-89"],  "owasp_api": ["API8:2023"], "owasp_top10": "A03:2021", "confidence": "high"},
+    "OS Command Injection":             {"cwe": ["CWE-78"],  "owasp_api": ["API8:2023"], "owasp_top10": "A03:2021", "confidence": "high"},
+    "Reflected XSS":                    {"cwe": ["CWE-79"],  "owasp_api": ["API8:2023"], "owasp_top10": "A03:2021", "confidence": "high"},
+    "Broken Access Control":            {"cwe": ["CWE-639", "CWE-862"], "owasp_api": ["API1:2023", "API5:2023"], "owasp_top10": "A01:2021", "confidence": "medium"},
+    "JWT alg=none":                     {"cwe": ["CWE-347"], "owasp_api": ["API2:2023"], "owasp_top10": "A07:2021", "confidence": "high"},
+    "Missing Security Headers":         {"cwe": ["CWE-693"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "high"},
+    "Missing CSP":                      {"cwe": ["CWE-693"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "high"},
+    "Missing HSTS":                     {"cwe": ["CWE-693"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "high"},
+    "Weak TLS Version":                 {"cwe": ["CWE-326"], "owasp_api": ["API8:2023"], "owasp_top10": "A02:2021", "confidence": "high"},
+    "TLS Certificate Expired":          {"cwe": ["CWE-295"], "owasp_api": ["API8:2023"], "owasp_top10": "A02:2021", "confidence": "high"},
+    "TLS Certificate Expiring Soon":    {"cwe": ["CWE-295"], "owasp_api": ["API8:2023"], "owasp_top10": "A02:2021", "confidence": "high"},
+    "TLS Certificate Untrusted":        {"cwe": ["CWE-295"], "owasp_api": ["API8:2023"], "owasp_top10": "A02:2021", "confidence": "high"},
+    "Sensitive Data Exposure":          {"cwe": ["CWE-200"], "owasp_api": ["API3:2023"], "owasp_top10": "A01:2021", "confidence": "high"},
+    "Open CORS":                        {"cwe": ["CWE-942"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "high"},
+    "Lack of Rate Limiting":            {"cwe": ["CWE-770"], "owasp_api": ["API4:2023"], "owasp_top10": "A04:2021", "confidence": "medium"},
+    "Lack of CAPTCHA":                  {"cwe": ["CWE-307"], "owasp_api": ["API2:2023"], "owasp_top10": "A07:2021", "confidence": "medium"},
+    "Information Leak via Errors":      {"cwe": ["CWE-209"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "high"},
+    "HTTP without HTTPS":               {"cwe": ["CWE-319"], "owasp_api": ["API8:2023"], "owasp_top10": "A02:2021", "confidence": "high"},
+    "Missing CSRF Protection":          {"cwe": ["CWE-352"], "owasp_api": ["API8:2023"], "owasp_top10": "A01:2021", "confidence": "low"},
+    "Unsafe HTTP Methods":              {"cwe": ["CWE-650"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "medium"},
+    "Missing Content-Type Validation":  {"cwe": ["CWE-20"],  "owasp_api": ["API8:2023"], "owasp_top10": "A04:2021", "confidence": "low"},
+    "Dependency Manifest Exposed":      {"cwe": ["CWE-200"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "high"},
+    "Vulnerable Dependency (OSV)":      {"cwe": ["CWE-1104"], "owasp_api": ["API8:2023"], "owasp_top10": "A06:2021", "confidence": "high"},
+    "Business Logic Error":             {"cwe": ["CWE-840"], "owasp_api": ["API4:2023"], "owasp_top10": "A04:2021", "confidence": "low"},
+    "Missing Pagination":               {"cwe": ["CWE-770"], "owasp_api": ["API4:2023"], "owasp_top10": "A04:2021", "confidence": "medium"},
+    "Mass Assignment":                  {"cwe": ["CWE-915"], "owasp_api": ["API3:2023"], "owasp_top10": "A04:2021", "confidence": "low"},
+    "GraphQL Introspection":            {"cwe": ["CWE-200"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "medium"},
+    "Hidden Path":                      {"cwe": ["CWE-200"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "low"},
+}
+
+
+def get_vuln_info(vuln_type: str) -> Dict:
+    """Описание + рекомендация + классификация (CWE/OWASP/confidence)."""
+    info = dict(VULN_DESCRIPTIONS.get(vuln_type, {
         "plain": "Уязвимость без дополнительного описания.",
         "recommendation": "Проверьте документацию по безопасности."
-    })
+    }))
+    meta = VULN_META.get(vuln_type, {})
+    info.setdefault("cwe", meta.get("cwe", []))
+    info.setdefault("owasp_api", meta.get("owasp_api", []))
+    info.setdefault("owasp_top10", meta.get("owasp_top10", ""))
+    info.setdefault("confidence", meta.get("confidence", "medium"))
+    return info
