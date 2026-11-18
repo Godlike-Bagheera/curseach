@@ -9,7 +9,6 @@ from contextlib import AsyncExitStack
 from typing import Dict, List, Optional
 
 import httpx
-from urllib.parse import urlparse
 
 import checks
 import database

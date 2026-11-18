@@ -1,18 +1,37 @@
 # curseach — DevSecOps-сканер API
 
-Учебный сканер безопасности API + намеренно уязвимая цель («Damn Vulnerable API»)
-в одном репозитории. Сканер ходит по OpenAPI-спеке цели, прогоняет ~25 проверок
-(SQLi, XSS, IDOR/BOLA/BFLA, JWT alg=none, заголовки, TLS, CORS, rate-limit и др.)
-и собирает отчёты: HTML, PDF (WeasyPrint), CSV, XLSX, SARIF, ZIP.
+[![CI](https://github.com/Godlike-Bagheera/curseach/actions/workflows/ci.yml/badge.svg)](https://github.com/Godlike-Bagheera/curseach/actions/workflows/ci.yml)
+[![Security Scan](https://github.com/Godlike-Bagheera/curseach/actions/workflows/security-scan.yml/badge.svg)](https://github.com/Godlike-Bagheera/curseach/actions/workflows/security-scan.yml)
+
+Учебный DAST-сканер безопасности API + намеренно уязвимая цель («Damn Vulnerable API»)
+в одном репозитории. Сканер читает OpenAPI-спеку цели и прогоняет **26 проверок**
+(SQLi, XSS, IDOR/BOLA/BFLA, JWT alg=none, заголовки, TLS/сертификат, CORS, rate-limit,
+SCA через OSV.dev и др.), показывая live-логи по WebSocket и собирая отчёты
+HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ), CWE и OWASP API Top 10**.
 
 > ⚠️ Только для учебных целей и сканирования СВОИХ сервисов. Не используйте
 > против чужих систем без письменного разрешения.
+
+## Возможности
+
+- **Полное покрытие OpenAPI**: path-, query- и body-параметры, методы GET/POST/PUT/PATCH/DELETE
+  (тела генерируются из JSON-схем requestBody).
+- **Параллельное сканирование**: `asyncio.gather` + семафор, общий бюджет запросов,
+  RPS-лимит и таймаут — быстро и «вежливо» к цели.
+- **Evidence + классификация**: каждая находка несёт запрос/ответ, уверенность (confidence),
+  CWE и OWASP API Top 10 / OWASP Top 10; дубликаты схлопываются.
+- **Настоящий SCA**: пиннутые версии из манифестов сверяются с базой [OSV.dev](https://osv.dev) (CVE/GHSA).
+- **Отмена скана** кнопкой «Остановить», лимит одновременных сканов.
+- **SARIF → GitHub Security tab**: workflow self-scan сканирует учебную цель и грузит SARIF.
+- **Детерминированная цель**: заголовок `X-Scan-Seed` фиксирует профиль уязвимостей (воспроизводимые тесты).
+- Anti-SSRF (включая пиннинг проверенного IP от DNS-rebinding), CSRF-Origin-политика, CSP,
+  PBKDF2-пароли, HttpOnly-cookie, rate-limit логина.
 
 ## Быстрый старт
 
     python start.py
 
-Поднимет уязвимую цель (http://127.0.0.1:8000, Swagger — /docs) и сканер
+Поднимет уязвимую цель (http://127.0.0.1:8000, Swagger — `/docs`) и сканер
 (http://127.0.0.1:8001). Зависимости доустановятся автоматически.
 
 ### Docker
@@ -27,35 +46,59 @@
 | admin | admin | admin  | сканирование, история, отчёты |
 | guest | guest | guest  | только просмотр «О проекте»   |
 
-Креды учебные, захардкожены в scanner/config.py — для публичного деплоя
-обязательно поменяйте их и настройте ALLOWED_HOSTS.
+Креды учебные. Для публичного деплоя **обязательно** переопределите их через env
+(`SCANNER_ADMIN_PASSWORD`, `SCANNER_GUEST_PASSWORD`) и настройте `ALLOWED_HOSTS`.
 
 ## Как сканировать
 
 1. Войдите как admin.
-2. Укажите URL цели (для встроенной цели — http://127.0.0.1:8000).
-3. Для проверок контроля доступа задайте два аккаунта цели: alice / alice123 и bob / bob123.
-4. Выберите режим (quick / full / custom) и запустите — логи идут live по WebSocket.
+2. Укажите URL цели (для встроенной — `http://127.0.0.1:8000`).
+3. Для проверок контроля доступа задайте два аккаунта цели: `alice / alice123` и `bob / bob123`.
+4. Выберите режим (quick / full / custom) и запустите. Логи идут live, скан можно остановить.
+
+## Переменные окружения
+
+| Переменная | По умолчанию | Назначение |
+|---|---|---|
+| `SCANNER_ADMIN_PASSWORD` / `SCANNER_GUEST_PASSWORD` | admin / guest | пароли входа в сканер |
+| `SCAN_CONCURRENCY` | 8 | одновременных запросов внутри скана |
+| `SCAN_MAX_REQUESTS` | 1500 | бюджет запросов на скан |
+| `SCAN_RPS` | 20 | запросов в секунду (0 — без лимита) |
+| `SCAN_TOTAL_TIMEOUT` | 300 | общий таймаут скана, сек |
+| `MAX_CONCURRENT_SCANS` | 3 | одновременных сканов на процесс |
+| `SCAN_PIN_DNS` | 1 | пиннить проверенный IP (anti-DNS-rebinding) |
+| `SCANNER_ALLOW_PRIVATE_TARGETS` | 1 | разрешить private/loopback цели (учебный стенд) |
+| `ALLOWED_HOSTS` | localhost + Codespaces | разрешённые Origin/хосты |
+| `SCANNER_DB_PATH` | scans.db | файл истории (SQLite, WAL) |
+
+**Важно:** сессии и задачи хранятся в памяти процесса — запускайте сканер
+в **один воркер** (`uvicorn --workers 1`, как в `start.py`/Docker).
 
 ## Отчёты
 
-- HTML-отчёт по задаче и по записи истории
-- PDF на сервере (WeasyPrint, без колонтитулов браузера)
-- CSV / XLSX / JSON / SARIF (для GitHub Code Scanning) / ZIP-бандл
+HTML (с evidence и классификацией), PDF на сервере (WeasyPrint, без колонтитулов),
+CSV / XLSX (колонки confidence/CWE/OWASP/evidence), JSON, SARIF 2.1.0
+(теги CWE/OWASP, security-severity) и ZIP-бандл со всем сразу.
 
-## Тесты
+## Тесты и CI
 
     pip install -r requirements-dev.txt
     pytest -q
 
+Юнит-тесты проверок (httpx.MockTransport, без сети) + **e2e-тест**: поднимается
+учебная цель и сканируется движком с фиксированным seed. В CI: ruff, mypy,
+coverage, smoke-import. Отдельный workflow **Security Scan** сканирует цель
+и загружает SARIF во вкладку **Security** репозитория.
+
 ## Структура
 
-- main.py — уязвимая цель (FastAPI), профиль уязвимостей рандомизируется на скан
-- scanner/ — веб-приложение сканера (app, config, security, tasks, reporting, routes)
-- checks/ — проверки безопасности
-- templates/, static/ — UI
-- database.py — история сканов (SQLite, WAL)
+- `main.py` — уязвимая цель (FastAPI), профиль уязвимостей рандомизируется на скан (или фиксируется seed-ом)
+- `scanner/` — веб-приложение сканера (app, config, security, tasks, reporting, routes)
+- `checks/` — 26 проверок + поверхности атаки из OpenAPI (`surface.py`)
+- `scripts/self_scan.py` — self-scan для CI (SARIF)
+- `templates/`, `static/` — UI
+- `database.py` — история сканов (SQLite, WAL)
 
 ## Лицензия
 
-MIT (учебный проект).
+MIT — см. [LICENSE](LICENSE).
