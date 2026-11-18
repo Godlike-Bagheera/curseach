@@ -185,7 +185,8 @@ def generate_xlsx(
     ws.append(["НАЙДЕННЫЕ УЯЗВИМОСТИ"])
     ws.cell(row=ws.max_row, column=1).font = h1_font
 
-    headers = ["№", "Уровень", "Тип", "Эндпоинт", "Описание", "Рекомендация"]
+    headers = ["№", "Уровень", "Тип", "Метод", "Эндпоинт", "Параметр",
+               "Уверенность", "CWE", "OWASP API", "Описание", "Рекомендация", "Evidence"]
     ws.append(headers)
     tbl_header_row = ws.max_row
     for col_idx in range(1, len(headers) + 1):
@@ -205,20 +206,34 @@ def generate_xlsx(
     )
 
     if not sorted_findings:
-        ws.append(["-", "-", "-", "-", "Уязвимостей не обнаружено", "-"])
+        ws.append(["-", "-", "-", "-", "-", "-", "-", "-", "-",
+                   "Уязвимостей не обнаружено", "-", "-"])
         for col_idx in range(1, len(headers) + 1):
             ws.cell(row=ws.max_row, column=col_idx).border = border
     else:
         for idx, f in enumerate(sorted_findings, start=1):
             details = f.get("details") or {}
             level = f.get("level", "")
+            evd = f.get("evidence") or {}
+            if evd.get("osv_id"):
+                ev_short = f"{evd.get('osv_id')} ({evd.get('package')}=={evd.get('version')})"
+            elif evd.get("url"):
+                ev_short = f"{evd.get('method', '')} {evd['url']} -> {evd.get('status', '')}"
+            else:
+                ev_short = ""
             ws.append([
                 idx,
                 _LEVEL_RU.get(level, level),
                 f.get("type", ""),
+                f.get("method", ""),
                 f.get("endpoint", ""),
+                f.get("param", ""),
+                f.get("confidence", ""),
+                ", ".join(details.get("cwe") or []),
+                ", ".join(details.get("owasp_api") or []),
                 f.get("desc", ""),
                 details.get("recommendation", ""),
+                ev_short,
             ])
             row = ws.max_row
             for col_idx in range(1, len(headers) + 1):

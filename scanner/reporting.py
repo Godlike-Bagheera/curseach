@@ -182,36 +182,78 @@ _SEVERITY_TO_SARIF = {
 }
 
 
+_SECURITY_SEVERITY = {"CRITICAL": "9.5", "HIGH": "8.0", "MEDIUM": "5.5", "LOW": "2.0"}
+
+
+def _sarif_tags(details) -> list:
+    tags = ["security"]
+    if isinstance(details, dict):
+        tags += list(details.get("cwe") or [])
+        tags += list(details.get("owasp_api") or [])
+        if details.get("owasp_top10"):
+            tags.append(details["owasp_top10"])
+    return tags
+
+
+def _evidence_text(f: dict) -> str:
+    evd = f.get("evidence") or {}
+    if not isinstance(evd, dict):
+        return ""
+    if evd.get("osv_id"):
+        fixed = ", ".join(evd.get("fixed") or []) or "—"
+        return f"\n\nOSV: {evd.get('osv_id')} · {evd.get('package')}=={evd.get('version')} · fixed: {fixed}"
+    if not evd.get("url"):
+        return ""
+    parts = [f"\n\nEvidence: {evd.get('method', '')} {evd.get('url', '')} → HTTP {evd.get('status', '')}"]
+    if evd.get("request_body"):
+        parts.append(f"→ {str(evd['request_body'])[:200]}")
+    if evd.get("response_body"):
+        parts.append(f"← {str(evd['response_body'])[:300]}")
+    return "\n".join(parts)
+
+
 def results_to_sarif(target_url: str, scan_date: str, findings: List[dict]) -> dict:
-    """Конвертирует находки сканера в формат SARIF 2.1.0."""
+    """Конвертирует находки сканера в SARIF 2.1.0 (CWE/OWASP-теги, evidence, confidence)."""
     rules = {}
     results = []
     for f in findings:
         vtype = f.get("type", "Unknown")
         level = f.get("level", "LOW")
-        sarif_level, confidence = _SEVERITY_TO_SARIF.get(level, ("note", 0.1))
+        sarif_level, _ = _SEVERITY_TO_SARIF.get(level, ("note", 0.1))
+        details = f.get("details") if isinstance(f.get("details"), dict) else {}
         if vtype not in rules:
             rules[vtype] = {
                 "id": vtype,
                 "name": vtype,
                 "shortDescription": {"text": vtype},
-                "fullDescription": {
-                    "text": (f.get("details") or {}).get("description", vtype)
-                    if isinstance(f.get("details"), dict) else vtype,
-                },
+                "fullDescription": {"text": details.get("plain", vtype)},
                 "defaultConfiguration": {"level": sarif_level},
-                "properties": {"security-severity": str(round(confidence * 10, 1))},
+                "properties": {
+                    "tags": _sarif_tags(details),
+                    "security-severity": _SECURITY_SEVERITY.get(level, "2.0"),
+                },
             }
+        props = {
+            "confidence": f.get("confidence", "medium"),
+            "tags": _sarif_tags(details),
+            "security-severity": _SECURITY_SEVERITY.get(level, "2.0"),
+        }
+        if f.get("method"):
+            props["method"] = f["method"]
+        if f.get("param"):
+            props["param"] = f["param"]
+        if f.get("evidence"):
+            props["evidence"] = f["evidence"]
         results.append({
             "ruleId": vtype,
             "level": sarif_level,
-            "message": {"text": f.get("desc", "")},
+            "message": {"text": f.get("desc", "") + _evidence_text(f)},
             "locations": [{
                 "physicalLocation": {
                     "artifactLocation": {"uri": target_url},
                 },
             }],
-            "properties": {"confidence": confidence},
+            "properties": props,
         })
 
     return {
@@ -221,7 +263,7 @@ def results_to_sarif(target_url: str, scan_date: str, findings: List[dict]) -> d
             "tool": {
                 "driver": {
                     "name": "DevSecOps Scanner",
-                    "version": "1.0",
+                    "version": "1.1",
                     "rules": list(rules.values()),
                 },
             },
