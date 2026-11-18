@@ -21,8 +21,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Run tests
-        run: pytest -q
+      - name: Lint (ruff — критические ошибки)
+        run: ruff check .
+
+      - name: Type check (mypy, пока не блокирует)
+        continue-on-error: true
+        run: mypy checks scanner database.py main.py
+
+      - name: Run tests + coverage
+        run: pytest -q --cov=checks --cov=scanner --cov-report=term-missing --cov-report=xml
 
       - name: Smoke — import app
         run: python -c "import web_app; print('app OK')"

@@ -30,3 +30,10 @@ scans.db
 .DS_Store
 Thumbs.db
 desktop.ini
+# CI / self-scan артефакты
+report.sarif
+coverage.xml
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/

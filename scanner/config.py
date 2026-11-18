@@ -23,8 +23,10 @@ def _hash_password(password: str) -> str:
     ).hex()
 
 
-ADMIN_PASSWORD_HASH = _hash_password("admin")
-GUEST_PASSWORD_HASH = _hash_password("guest")
+# Пароли можно переопределить через env (для публичного деплоя — обязательно):
+#   SCANNER_ADMIN_PASSWORD=...  SCANNER_GUEST_PASSWORD=...
+ADMIN_PASSWORD_HASH = _hash_password(os.environ.get("SCANNER_ADMIN_PASSWORD", "admin"))
+GUEST_PASSWORD_HASH = _hash_password(os.environ.get("SCANNER_GUEST_PASSWORD", "guest"))
 
 
 def authenticate(username: str, password: str):
@@ -82,6 +84,14 @@ def origin_allowed(origin: str) -> bool:
                 return True
     return False
 
+
+# ---------- Параметры сканирования (настраиваются через env) ----------
+SCAN_CONCURRENCY = int(os.environ.get("SCAN_CONCURRENCY", "8"))        # одновременных запросов внутри скана
+SCAN_MAX_REQUESTS = int(os.environ.get("SCAN_MAX_REQUESTS", "1500"))   # общий бюджет запросов на скан
+SCAN_RPS = float(os.environ.get("SCAN_RPS", "20"))                     # запросов в секунду (0 = без лимита)
+SCAN_TOTAL_TIMEOUT = int(os.environ.get("SCAN_TOTAL_TIMEOUT", "300"))  # общий таймаут скана, сек
+MAX_CONCURRENT_SCANS = int(os.environ.get("MAX_CONCURRENT_SCANS", "3"))# одновременных сканов на процесс
+SCAN_PIN_DNS = os.environ.get("SCAN_PIN_DNS", "1") == "1"              # пиннить проверенный IP (anti-DNS-rebinding)
 
 # ---------- SSRF ----------
 SSRF_ALLOW_PRIVATE = os.environ.get("SCANNER_ALLOW_PRIVATE_TARGETS", "1") == "1"

@@ -1,0 +1,27 @@
+# Инструментальная конфигурация (ruff/mypy/coverage).
+# Зависимости проекта по-прежнему в requirements.txt / requirements-dev.txt.
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = ["static", "templates", ".git", "about.html"]
+
+[tool.ruff.lint]
+# Пока только критические ошибки (синтаксис, undefined names).
+# Позже можно ужесточить: добавить F401, E501, I и т.д.
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+allow_untyped_defs = true
+allow_untyped_globals = true
+no_strict_optional = true
+exclude = ["static", "templates"]
+
+[tool.coverage.run]
+source = ["checks", "scanner"]
+omit = ["tests/*", "scanner/pdf.py"]
+
+[tool.coverage.report]
+show_missing = true

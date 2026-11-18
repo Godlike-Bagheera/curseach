@@ -8,6 +8,7 @@ import datetime
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 import database
@@ -27,8 +28,9 @@ from . import common
 router = APIRouter()
 
 
-def _get_scan_or_404(scan_id: int) -> dict:
-    scan = database.get_scan(scan_id)
+async def _get_scan_or_404(scan_id: int) -> dict:
+    # Синхронный SQLite не должен блокировать event loop.
+    scan = await run_in_threadpool(database.get_scan, scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
     return scan
@@ -46,7 +48,7 @@ async def export_history_xlsx(user: str = Depends(require_admin)):
             detail="openpyxl не установлен. Выполните: pip install openpyxl",
         )
 
-    scans = database.get_all_scans()
+    scans = await run_in_threadpool(database.get_all_scans)
     content = report_xlsx.generate_history_xlsx(scans)
     if content is None:
         raise HTTPException(
@@ -67,32 +69,32 @@ async def export_history_xlsx(user: str = Depends(require_admin)):
 # ---------- История (JSON) ----------
 @router.get("/history")
 async def get_history(user: str = Depends(require_admin)):
-    return JSONResponse(database.get_all_scans())
+    return JSONResponse(await run_in_threadpool(database.get_all_scans))
 
 
 @router.get("/history/{scan_id}")
 async def get_history_item(scan_id: int, user: str = Depends(require_admin)):
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     return JSONResponse(scan)
 
 
 @router.delete("/history/{scan_id}")
 async def delete_history_item(scan_id: int, user: str = Depends(require_admin)):
     _get_scan_or_404(scan_id)
-    database.delete_scan(scan_id)
+    await run_in_threadpool(database.delete_scan, scan_id)
     return {"status": "deleted"}
 
 
 @router.delete("/history")
 async def delete_all_history(user: str = Depends(require_admin)):
-    count = database.delete_all_scans()
+    count = await run_in_threadpool(database.delete_all_scans)
     return {"status": "deleted", "count": count}
 
 
 # ---------- Страницы отчётов (HTML; серверный PDF — ниже) ----------
 @router.get("/history/{scan_id}/view", response_class=HTMLResponse)
 async def view_history_report(scan_id: int, request: Request, user: str = Depends(require_admin)):
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     score = calculate_score(scan["critical"], scan["high"], scan["medium"], scan["low"])
     return common.templates.TemplateResponse(request, "report.html", {
         "target_url": scan["target_url"],
@@ -111,7 +113,7 @@ async def view_history_report(scan_id: int, request: Request, user: str = Depend
 
 @router.get("/history/{scan_id}/chart", response_class=HTMLResponse)
 async def view_history_chart(scan_id: int, request: Request, user: str = Depends(require_admin)):
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     ctx = build_chart_context(scan)
     return common.templates.TemplateResponse(request, "chart.html", ctx)
 
@@ -119,7 +121,7 @@ async def view_history_chart(scan_id: int, request: Request, user: str = Depends
 @router.get("/history/{scan_id}/full", response_class=HTMLResponse)
 async def view_history_full(scan_id: int, request: Request, user: str = Depends(require_admin)):
     """Страница с объединённым отчётом: диаграмма + таблица находок."""
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     ctx = build_chart_context(scan, include_findings=True)
     return common.templates.TemplateResponse(request, "report_full.html", ctx)
 
@@ -148,7 +150,7 @@ def _render_pdf(template_name: str, ctx: dict, filename: str) -> Response:
 @router.get("/history/{scan_id}/pdf")
 async def download_history_pdf(scan_id: int, user: str = Depends(require_admin)):
     """PDF страницы «Диаграмма» (SVG-диаграммы вместо Canvas)."""
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     ctx = build_chart_context(scan)
     return _render_pdf("chart.html", ctx, f"scan_{scan_id}_chart.pdf")
 
@@ -156,7 +158,7 @@ async def download_history_pdf(scan_id: int, user: str = Depends(require_admin))
 @router.get("/history/{scan_id}/full/pdf")
 async def download_history_full_pdf(scan_id: int, user: str = Depends(require_admin)):
     """PDF полного объединённого отчёта."""
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     ctx = build_chart_context(scan, include_findings=True)
     return _render_pdf("report_full.html", ctx, f"scan_{scan_id}_full_report.pdf")
 
@@ -164,7 +166,7 @@ async def download_history_full_pdf(scan_id: int, user: str = Depends(require_ad
 @router.get("/history/{scan_id}/view/pdf")
 async def download_history_view_pdf(scan_id: int, user: str = Depends(require_admin)):
     """PDF классического отчёта по находкам."""
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     score = calculate_score(scan["critical"], scan["high"], scan["medium"], scan["low"])
     ctx = {
         "target_url": scan["target_url"],
@@ -185,7 +187,7 @@ async def download_history_view_pdf(scan_id: int, user: str = Depends(require_ad
 # ---------- Экспорт ----------
 @router.get("/history/{scan_id}/json")
 async def download_history_json(scan_id: int, user: str = Depends(require_admin)):
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     return Response(
         content=scan_json_payload(scan),
         media_type="application/json",
@@ -195,7 +197,7 @@ async def download_history_json(scan_id: int, user: str = Depends(require_admin)
 
 @router.get("/history/{scan_id}/csv")
 async def download_history_csv(scan_id: int, user: str = Depends(require_admin)):
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     return Response(
         content=scan_csv_bytes(scan),
         media_type="text/csv; charset=utf-8",
@@ -205,7 +207,7 @@ async def download_history_csv(scan_id: int, user: str = Depends(require_admin))
 
 @router.get("/history/{scan_id}/sarif")
 async def download_history_sarif(scan_id: int, user: str = Depends(require_admin)):
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     sarif = results_to_sarif(
         scan["target_url"], scan["scan_date"], scan.get("results") or []
     )
@@ -220,7 +222,7 @@ async def download_history_sarif(scan_id: int, user: str = Depends(require_admin
 # ---------- ZIP-архив со всеми форматами ----------
 @router.get("/history/{scan_id}/bundle")
 async def download_history_bundle(scan_id: int, user: str = Depends(require_admin)):
-    scan = _get_scan_or_404(scan_id)
+    scan = await _get_scan_or_404(scan_id)
     host_part = safe_host_for_filename(scan["target_url"])
     zip_bytes, zip_name = build_scan_bundle(scan, host_part)
     return Response(

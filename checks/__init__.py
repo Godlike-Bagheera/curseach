@@ -25,7 +25,7 @@ from .headers import (
     check_tls_version,
     check_unsafe_methods,
 )
-from .data import check_sensitive_data, check_sca
+from .data import check_sensitive_data, check_sca, check_osv_sca
 from .logic import (
     check_business_logic,
     check_pagination,
@@ -40,7 +40,18 @@ from .misc import (
 )
 
 from .descriptions import VULN_DESCRIPTIONS, get_vuln_info
-from .base import ScanContext
+from .base import (
+    ScanContext,
+    ScanCancelled,
+    RequestBudget,
+    RateLimiter,
+    _SCAN_CTX,
+    _EVIDENCE_LOG,
+    enrich_findings,
+    dedup_findings,
+    ev,
+)
+from .surface import Surface, build_surfaces, sample_from_schema
 
 
 ALL_CHECKS: List[Callable[..., Awaitable[List[Dict]]]] = [
@@ -69,6 +80,7 @@ ALL_CHECKS: List[Callable[..., Awaitable[List[Dict]]]] = [
     check_tls_version,
     check_mass_assignment,
     check_graphql_introspection,
+    check_osv_sca,
 ]
 
 
@@ -98,6 +110,7 @@ CHECK_METADATA = {
     "check_tls_version":             {"name": "TLS и сертификат",           "quick": False, "level": "HIGH"},
     "check_mass_assignment":         {"name": "Массовое присвоение",        "quick": False, "level": "HIGH"},
     "check_graphql_introspection":   {"name": "GraphQL-интроспекция",       "quick": False, "level": "MEDIUM"},
+    "check_osv_sca":                 {"name": "SCA: уязвимые зависимости (OSV)", "quick": False, "level": "CRITICAL"},
 }
 
 

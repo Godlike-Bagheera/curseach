@@ -16,6 +16,12 @@ async def about_page():
     return FileResponse(os.path.join(BASE_DIR, "about.html"), media_type="text/html")
 
 
+@router.get("/healthz")
+async def healthz():
+    """Liveness probe без авторизации — для Docker HEALTHCHECK и балансировщика."""
+    return {"status": "ok"}
+
+
 @router.get("/favicon.ico")
 async def favicon():
     return Response(status_code=204)
