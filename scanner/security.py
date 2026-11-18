@@ -8,11 +8,13 @@ import time
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import Cookie, HTTPException
 
 from .config import (
     SESSION_TTL_SECONDS,
     SSRF_ALLOW_PRIVATE,
+    SCAN_PIN_DNS,
     LOGIN_WINDOW_SECONDS,
     LOGIN_MAX_ATTEMPTS,
     authenticate,
@@ -193,10 +195,84 @@ def check_login_rate(client_ip: str) -> bool:
     return True
 
 
+# ---------- Anti-DNS-rebinding: пиннинг проверенного IP ----------
+def resolve_target_ip(host: str) -> Optional[str]:
+    """
+    Возвращает проверенный (не запрещённый SSRF-политикой) IP для хоста.
+    Если host — уже IP-литерал, возвращает его как есть.
+    """
+    try:
+        ipaddress.ip_address(host)
+        return host
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError):
+        return None
+    for info in infos:
+        ip = info[4][0]
+        if not _is_blocked_ip(ip):
+            return ip
+    return None
+
+
+def _pin_request(request: httpx.Request, host: str, ip: str) -> httpx.Request:
+    """Подменяет хост на проверенный IP, сохраняя Host-заголовок и SNI."""
+    host_header = request.headers.get("host", host)
+    raw = [(k, v) for k, v in request.headers.raw if k.lower() != b"host"]
+    raw.append((b"host", host_header.encode("utf-8")))
+    extensions = dict(request.extensions)
+    extensions["sni_hostname"] = host
+    return httpx.Request(
+        request.method,
+        request.url.copy_with(host=ip),
+        headers=raw,
+        content=request.content,
+        extensions=extensions,
+    )
+
+
+class PinnedTransport(httpx.AsyncHTTPTransport):
+    """
+    Транспорт, пиннящий проверенный IP: DNS резолвится один раз при
+    валидации цели, все соединения идут на этот IP (Host/SNI сохраняются).
+    Закрывает TOCTOU/DNS-rebinding между SSRF-проверкой и запросом.
+    """
+
+    def __init__(self, host: str, ip: str, **kwargs):
+        super().__init__(**kwargs)
+        self._pin_host = host
+        self._pin_ip = ip
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        if request.url.host == self._pin_host and self._pin_host != self._pin_ip:
+            await request.aread()
+            request = _pin_request(request, self._pin_host, self._pin_ip)
+        return await super().handle_async_request(request)
+
+
+def pinned_client_kwargs(target_url: str) -> dict:
+    """kwargs для httpx.AsyncClient с пиннингом IP (если включён SCAN_PIN_DNS)."""
+    if not SCAN_PIN_DNS:
+        return {}
+    try:
+        host = urlparse(target_url).hostname
+    except ValueError:
+        return {}
+    if not host:
+        return {}
+    ip = resolve_target_ip(host)
+    if ip and ip != host:
+        return {"transport": PinnedTransport(host, ip)}
+    return {}
+
+
 __all__ = [
     "authenticate", "origin_allowed",
     "sessions", "create_session", "destroy_session",
     "get_current_user", "require_user", "require_admin",
     "ssrf_check_host", "validate_target_url", "safe_host_for_filename",
     "check_login_rate",
+    "resolve_target_ip", "PinnedTransport", "pinned_client_kwargs",
 ]

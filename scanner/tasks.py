@@ -9,6 +9,7 @@ from contextlib import AsyncExitStack
 from typing import Dict, List, Optional
 
 import httpx
+from urllib.parse import urlparse
 
 import checks
 import database
@@ -30,7 +31,7 @@ from .config import (
     MAX_CONCURRENT_SCANS,
     calculate_score,
 )
-from .security import sessions
+from .security import sessions, pinned_client_kwargs
 
 # Реестр активных/завершённых задач (очистка — в _gc_loop)
 tasks: Dict[str, "ScanTask"] = {}
@@ -61,7 +62,8 @@ async def login_and_get_token(
         return None
     url = f"{target_url.rstrip('/')}{LOGIN_PATH}"
     try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as c:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False,
+                                     **pinned_client_kwargs(target_url)) as c:
             r = await c.post(url, json={
                 "username": account.username,
                 "password": account.password,
@@ -254,16 +256,17 @@ async def scan_engine(task: ScanTask):
     task.add_log(f"[ИНФО] Всего проверок: {len(check_list)}")
 
     async with AsyncExitStack() as stack:
+        pin_kw = pinned_client_kwargs(task.target_url)
         anon_client = await stack.enter_async_context(
-            httpx.AsyncClient(timeout=10.0, follow_redirects=False)
+            httpx.AsyncClient(timeout=10.0, follow_redirects=False, **pin_kw)
         )
         auth_client = await stack.enter_async_context(
-            httpx.AsyncClient(timeout=10.0, headers=auth_headers, follow_redirects=False)
+            httpx.AsyncClient(timeout=10.0, headers=auth_headers, follow_redirects=False, **pin_kw)
         )
         auth2_client: Optional[httpx.AsyncClient] = None
         if auth2_headers:
             auth2_client = await stack.enter_async_context(
-                httpx.AsyncClient(timeout=10.0, headers=auth2_headers, follow_redirects=False)
+                httpx.AsyncClient(timeout=10.0, headers=auth2_headers, follow_redirects=False, **pin_kw)
             )
 
         ctx = checks.ScanContext(
