@@ -195,6 +195,16 @@ def _sarif_tags(details) -> list:
     return tags
 
 
+def _sarif_uri(endpoint: str) -> str:
+    """
+    GitHub Code Scanning требует относительный путь (scheme file), а не
+    http-URL цели. Маппим эндпоинт в псевдо-путь: /api/users/{id} -> api/users/id.
+    Реальные target/endpoint/method лежат в properties находки.
+    """
+    ep = (endpoint or "/").lstrip("/").replace("{", "").replace("}", "")
+    return ep or "root"
+
+
 def _evidence_text(f: dict) -> str:
     evd = f.get("evidence") or {}
     if not isinstance(evd, dict):
@@ -244,13 +254,15 @@ def results_to_sarif(target_url: str, scan_date: str, findings: List[dict]) -> d
             props["param"] = f["param"]
         if f.get("evidence"):
             props["evidence"] = f["evidence"]
+        props["targetUrl"] = target_url
+        props["endpoint"] = f.get("endpoint", "")
         results.append({
             "ruleId": vtype,
             "level": sarif_level,
             "message": {"text": f.get("desc", "") + _evidence_text(f)},
             "locations": [{
                 "physicalLocation": {
-                    "artifactLocation": {"uri": target_url},
+                    "artifactLocation": {"uri": _sarif_uri(f.get("endpoint", ""))},
                 },
             }],
             "properties": props,
