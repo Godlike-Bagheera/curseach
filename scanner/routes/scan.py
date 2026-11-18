@@ -41,6 +41,7 @@ async def start_scan(req: ScanRequest, user: str = Depends(require_admin)):
         selected_checks=req.checks,
         account1=req.account1,
         account2=req.account2,
+        seed=req.seed,
     )
     task.loop = asyncio.get_running_loop()
     tasks[task.id] = task
@@ -54,6 +55,19 @@ async def get_status(task_id: str, user: str = Depends(require_admin)):
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task.to_dict()
+
+
+@router.post("/scan/{task_id}/cancel")
+async def cancel_scan(task_id: str, user: str = Depends(require_admin)):
+    """Кооперативная отмена: движок проверяет cancel_event перед каждым запросом."""
+    task = tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.status in ("completed", "failed", "cancelled"):
+        raise HTTPException(status_code=400, detail="Scan already finished")
+    task.cancel_event.set()
+    task.add_log("[SYS] Получен сигнал отмены — останавливаем проверки...")
+    return {"status": "cancelling"}
 
 
 @router.websocket("/ws/scan/{task_id}")

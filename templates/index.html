@@ -63,6 +63,7 @@
             <div class="input-row">
                 <input type="text" id="urlInput" value="http://127.0.0.1:8000" spellcheck="false" autocomplete="off" {% if is_guest %}disabled{% endif %}>
                 <button id="scanBtn" class="exec-btn" {% if is_guest %}disabled{% endif %}>ЗАПУСТИТЬ</button>
+            <button id="cancelBtn" class="exec-btn hidden" style="background:#7a2e2e;" {% if is_guest %}disabled{% endif %}>ОСТАНОВИТЬ</button>
             </div>
         </div>
 

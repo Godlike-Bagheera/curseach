@@ -117,6 +117,7 @@ const $ = id => document.getElementById(id);
 const urlInput = $('urlInput');
 const scanBtn = $('scanBtn');
 const progressBar = $('progressBar');
+const cancelBtn = $('cancelBtn');
 const critCount = $('critCount');
 const highCount = $('highCount');
 const medCount = $('medCount');
@@ -270,6 +271,7 @@ const STATUS_MAP = {
     running:   'СКАНИРОВАНИЕ',
     completed: 'ГОТОВО',
     failed:    'ОШИБКА',
+    cancelled: 'ОТМЕНЕНО',
 };
 
 function applyScoreStyle(score) {
@@ -337,6 +339,7 @@ function handleWsEvent(data) {
             setStatus({ status: data.status });
             scanBtn.disabled = false;
             scanBtn.textContent = 'ЗАПУСТИТЬ';
+            if (cancelBtn) cancelBtn.classList.add('hidden');
             htmlBtn.disabled = false;
             jsonBtn.disabled = false;
             csvBtn.disabled = false;
@@ -391,6 +394,7 @@ async function startScan() {
     xlsxBtn.disabled = true;
     scanBtn.disabled = true;
     scanBtn.textContent = 'ВЫПОЛНЯЕТСЯ';
+    if (cancelBtn) { cancelBtn.classList.remove('hidden'); cancelBtn.disabled = false; }
 
     try {
         const body = { url, mode };
@@ -423,7 +427,25 @@ async function startScan() {
         appendTerminal('[ОШИБКА] ' + e.message);
         scanBtn.disabled = false;
         scanBtn.textContent = 'ЗАПУСТИТЬ';
+        if (cancelBtn) cancelBtn.classList.add('hidden');
         statusValue.textContent = 'ОШИБКА';
+    }
+}
+
+async function cancelScan() {
+    if (!taskId || !cancelBtn) return;
+    cancelBtn.disabled = true;
+    appendTerminal('[SYS] Отмена скана...');
+    try {
+        const resp = await fetch(`/scan/${taskId}/cancel`, { method: 'POST' });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            appendTerminal('[ОШИБКА] Отмена: ' + (err.detail || ('HTTP ' + resp.status)));
+            cancelBtn.disabled = false;
+        }
+    } catch (e) {
+        appendTerminal('[ОШИБКА] Отмена: ' + e.message);
+        cancelBtn.disabled = false;
     }
 }
 
@@ -702,6 +724,7 @@ function exportHistory() {
 // ---------- Wire up ----------
 if (!isGuest) {
     scanBtn.addEventListener('click', startScan);
+    if (cancelBtn) cancelBtn.addEventListener('click', cancelScan);
     urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') startScan(); });
     htmlBtn.addEventListener('click', () => exportReport('html'));
     jsonBtn.addEventListener('click', () => exportReport('json'));
