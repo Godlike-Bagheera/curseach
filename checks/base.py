@@ -340,7 +340,7 @@ def dedup_findings(findings: list[dict]) -> list[dict]:
     Дедуп по (type, endpoint, param, method): IDOR ловится несколькими
     проверками — в отчёте должна остаться одна, самая серьёзная/уверенная.
     """
-    best = {}
+    best: dict = {}
     for f in findings:
         key = (
             f.get("type", ""),

@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from .config import origin_allowed
 from .routes import auth, common, history, misc, scan
 from .tasks import gc_loop
+from .vuln_guide import slugify
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -38,6 +39,7 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 common.init_templates(templates)
+templates.env.filters["vuln_slug"] = slugify
 
 
 # ---------- Middleware: CSRF-Origin + security headers ----------

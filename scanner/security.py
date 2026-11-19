@@ -107,7 +107,7 @@ def ssrf_check_host(host: str) -> str | None:
         return None  # не резолвится — пусть дальше упадёт сам запрос
     seen = set()
     for info in infos:
-        ip = info[4][0]
+        ip = str(info[4][0])
         if ip in seen:
             continue
         seen.add(ip)
@@ -207,7 +207,7 @@ def resolve_target_ip(host: str) -> str | None:
     except (socket.gaierror, UnicodeError):
         return None
     for info in infos:
-        ip = info[4][0]
+        ip = str(info[4][0])
         if not _is_blocked_ip(ip):
             return ip
     return None

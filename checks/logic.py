@@ -13,7 +13,7 @@ from .descriptions import get_vuln_info
 
 # ================== Business logic (эвристика) ==================
 async def check_business_logic(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    findings = []
+    findings: list = []
     param_endpoints = [p for p in endpoints if "{" in p and "}" in p]
 
     # Ограничиваем, чтобы не долбить API десятками запросов.
@@ -79,7 +79,7 @@ def _count_items(node) -> int:
 
 
 async def check_pagination(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    findings = []
+    findings: list = []
     static = [e for e in endpoints if "{" not in e and "}" not in e and e.startswith("/")]
     test_path = static[0] if static else "/"
     r = await _safe_get(ctx.client, f"{ctx.target_url}{test_path}?limit=10000")
@@ -108,8 +108,7 @@ async def check_pagination(ctx: ScanContext, endpoints: list[str]) -> list[dict]
 
 # ================== Mass Assignment (эвристика) ==================
 async def check_mass_assignment(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    findings = []
-
+    findings: list = []
     # Логин принимает фиксированный набор полей (username/password) —
     # это не «массовое присвоение», а нормальный контракт.
     # Тестировать его на mass-assignment бессмысленно: любой лишний
@@ -142,7 +141,7 @@ async def check_mass_assignment(ctx: ScanContext, endpoints: list[str]) -> list[
 
 # ================== GraphQL Introspection ==================
 async def check_graphql_introspection(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    findings = []
+    findings: list = []
     r = await _safe_post(
         ctx.client,
         f"{ctx.target_url}/graphql",

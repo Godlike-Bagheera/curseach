@@ -11,7 +11,7 @@ from .descriptions import get_vuln_info
 
 
 async def check_security_headers(ctx: ScanContext, endpoints: list[str] | None = None) -> list[dict]:
-    findings = []
+    findings: list = []
     # X-XSS-Protection намеренно НЕ проверяем: заголовок устарел (OWASP: 0 или не ставить).
     required = {
         "x-frame-options": ("Отсутствует X-Frame-Options", "Missing Security Headers"),
@@ -54,7 +54,7 @@ def _tls_probe(host: str, port: int) -> dict:
             with c.wrap_socket(sock, server_hostname=host) as tls:
                 cert = tls.getpeercert()
         not_after = (cert or {}).get("notAfter")
-        if not_after:
+        if isinstance(not_after, str):
             out["expires_ts"] = ssl.cert_time_to_seconds(not_after)
         out["trusted"] = True
     except ssl.SSLCertVerificationError:
@@ -66,7 +66,7 @@ def _tls_probe(host: str, port: int) -> dict:
 
 async def check_tls_version(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     """Реальная проверка TLS (протокол + сертификат), а не дубль HSTS."""
-    findings = []
+    findings: list = []
     if not ctx.target_url.startswith("https://"):
         return findings
     parsed = urlparse(ctx.target_url)
@@ -124,7 +124,7 @@ async def check_tls_version(ctx: ScanContext, endpoints: list[str]) -> list[dict
 
 
 async def check_unsafe_methods(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    findings = []
+    findings: list = []
     test_path = endpoints[0] if endpoints else "/"
     r = await _safe_options(ctx.client, f"{ctx.target_url}{test_path}")
     if r is None:

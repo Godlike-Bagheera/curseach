@@ -12,7 +12,7 @@ from .descriptions import get_vuln_info
 
 # ================== Скрытые пути ==================
 async def check_hidden_paths(ctx: ScanContext, endpoints: list[str] | None = None) -> list[dict]:
-    findings = []
+    findings: list = []
     hidden_paths = [
         "/admin",
         "/backup",
@@ -66,7 +66,7 @@ async def check_content_type_validation(ctx: ScanContext, endpoints: list[str]) 
     Логин пропускаем: он принимает form-data или json по контракту,
     и его проверка на content-type — не про безопасность.
     """
-    findings = []
+    findings: list = []
     post_endpoints = _writable_endpoints(ctx, endpoints)
     if not post_endpoints:
         return findings
@@ -96,7 +96,7 @@ async def check_content_type_validation(ctx: ScanContext, endpoints: list[str]) 
 
 # ================== Rate Limiting ==================
 async def check_rate_limiting(ctx: ScanContext, endpoints: list[str] | None = None) -> list[dict]:
-    findings = []
+    findings: list = []
     test_path = "/"
     if endpoints:
         static = [e for e in endpoints if "{" not in e and "}" not in e]

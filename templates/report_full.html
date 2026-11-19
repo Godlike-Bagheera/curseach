@@ -426,7 +426,9 @@
             .doc-header { flex-direction: column; gap: 10px; }
             .doc-header-right { text-align: left; }
         }
-    </style>
+    .vuln-link{color:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:help}
+.vuln-link:hover{text-decoration-style:solid}
+</style>
 </head>
 <body>
 
@@ -563,7 +565,7 @@
             {% for item in findings %}
                 <tr>
                     <td><span class="level-badge {{ item.level }}">{{ item.level }}</span></td>
-                    <td>{{ item.type }}</td>
+                    <td><a class="vuln-link" href="/vulns#{{ item.type|vuln_slug }}" target="_blank" rel="noopener" title="Что это за уязвимость? Открыть справочник">{{ item.type }}</a></td>
                     <td><code>{{ item.endpoint }}</code></td>
                     <td>
                         {{ item.desc }}
