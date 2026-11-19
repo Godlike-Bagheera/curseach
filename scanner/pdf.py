@@ -101,7 +101,7 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int, size: int = 
     else:
         angle = 0.0
         gap = 1.2 if len([p for p in parts if p[1] > 0]) > 1 else 0.0
-        for name, val, color in parts:
+        for _name, val, color in parts:
             if val == 0:
                 continue
             sweep = 360.0 * val / total

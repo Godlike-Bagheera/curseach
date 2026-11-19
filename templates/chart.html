@@ -390,10 +390,10 @@
 <body>
 
     <div class="toolbar">
-        <button class="btn-view-report" onclick="window.open('/history/{{ scan_id }}/view', '_blank')">Полный отчёт</button>
-        <button class="btn-bundle" onclick="window.location.href='/history/{{ scan_id }}/bundle'">Скачать всё (ZIP)</button>
-        <button class="btn-download-pdf" onclick="window.location.href='/history/{{ scan_id }}/pdf'" title="Серверный PDF: без дат/URL сверху и снизу, таблицы с нормальными полями">Скачать PDF</button>
-        <button class="btn-close" onclick="window.close()">Закрыть</button>
+        <button class="btn-view-report" data-action="open" data-url="/history/{{ scan_id }}/view">Полный отчёт</button>
+        <button class="btn-bundle" data-action="navigate" data-url="/history/{{ scan_id }}/bundle">Скачать всё (ZIP)</button>
+        <button class="btn-download-pdf" data-action="navigate" data-url="/history/{{ scan_id }}/pdf" title="Серверный PDF: без дат/URL сверху и снизу, таблицы с нормальными полями">Скачать PDF</button>
+        <button class="btn-close" data-action="close">Закрыть</button>
     </div>
 
     <div class="page">
@@ -514,7 +514,7 @@
 
     </div>
 
-    <script id="chart-data" type="application/json">
+    <script id="chart-data" type="application/json" nonce="{{ csp_nonce }}">
     {{ {
         "critical": critical,
         "high": high,
@@ -525,7 +525,7 @@
     </script>
 
     <script src="/static/chart.umd.min.js"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function () {
         var dataEl = document.getElementById('chart-data');
         if (!dataEl) return;
@@ -599,7 +599,7 @@
         });
     })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     /* «Скачать PDF» без колонтитулов браузера (дата/заголовок/URL).
        Хак: перед печатью подменяем document.title — пустая строка
        лишает верхний колонтитул даты и названия; нижний URL тоже
@@ -622,5 +622,6 @@
         try { window.print(); } finally { setTimeout(restore, 500); }
     };
     </script>
+<script src="/static/report.js"></script>
 </body>
 </html>

@@ -3,6 +3,7 @@
 import time
 
 import pytest
+from fastapi import HTTPException
 
 from scanner import security
 
@@ -64,9 +65,9 @@ def test_require_admin_and_user():
     sid = security.create_session("admin")
     assert security.require_admin(sid) == "admin"
     guest = security.create_session("guest")
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         security.require_admin(guest)
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         security.require_user(None)
     security.destroy_session(sid)
     security.destroy_session(guest)

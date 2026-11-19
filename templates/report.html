@@ -343,13 +343,13 @@
     <div class="toolbar">
         <div class="toolbar-buttons">
             {% if scan_id is not none %}
-                <button class="btn-bundle" onclick="window.location.href='/history/{{ scan_id }}/bundle'">Скачать всё (ZIP)</button>
-                <button class="btn-download-pdf" onclick="window.location.href='/history/{{ scan_id }}/view/pdf'" title="Серверный PDF: без дат/URL сверху и снизу">Скачать PDF</button>
-                <button class="btn-back" onclick="window.open('/history/{{ scan_id }}/full', '_blank')">С диаграммой</button>
+                <button class="btn-bundle" data-action="navigate" data-url="/history/{{ scan_id }}/bundle">Скачать всё (ZIP)</button>
+                <button class="btn-download-pdf" data-action="navigate" data-url="/history/{{ scan_id }}/view/pdf" title="Серверный PDF: без дат/URL сверху и снизу">Скачать PDF</button>
+                <button class="btn-back" data-action="open" data-url="/history/{{ scan_id }}/full">С диаграммой</button>
             {% else %}
-                <button class="btn-print" onclick="window.print()">Печать (браузером)</button>
+                <button class="btn-print" data-action="print">Печать (браузером)</button>
             {% endif %}
-            <button class="btn-back" onclick="window.close()">Закрыть</button>
+            <button class="btn-back" data-action="close">Закрыть</button>
         </div>
     </div>
 
@@ -471,5 +471,6 @@
 
     </div>
 
+<script src="/static/report.js"></script>
 </body>
 </html>
