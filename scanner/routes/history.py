@@ -86,6 +86,66 @@ async def export_history_xlsx(
     )
 
 
+# ---------- Diff двух сканов ----------
+# Объявлено ДО /history/{scan_id}, иначе "diff" парсился бы как scan_id.
+def _finding_key(f: dict) -> tuple:
+    return (f.get("type", ""), f.get("endpoint", ""), f.get("method", "") or "", f.get("param", "") or "")
+
+
+def _build_diff(sa: dict, sb: dict) -> dict:
+    """Сравнение находок: added — новые в B (регресс), fixed — исчезли из B (починено)."""
+    ka = {_finding_key(f): f for f in (sa.get("results") or [])}
+    kb = {_finding_key(f): f for f in (sb.get("results") or [])}
+    added = [kb[k] for k in kb if k not in ka]
+    fixed = [ka[k] for k in ka if k not in kb]
+    unchanged = sum(1 for k in ka if k in kb)
+
+    def meta(s: dict) -> dict:
+        return {
+            "id": s["id"],
+            "target_url": s["target_url"],
+            "scan_date": s["scan_date"],
+            "critical": s["critical"],
+            "high": s["high"],
+            "medium": s["medium"],
+            "low": s["low"],
+            "score": calculate_score(s["critical"], s["high"], s["medium"], s["low"]),
+        }
+
+    return {
+        "a": meta(sa),
+        "b": meta(sb),
+        "added": added,
+        "fixed": fixed,
+        "added_count": len(added),
+        "fixed_count": len(fixed),
+        "unchanged": unchanged,
+        "same_target": sa["target_url"] == sb["target_url"],
+    }
+
+
+@router.get("/history/diff")
+async def diff_history(a: int = Query(...), b: int = Query(...), user: str = Depends(require_admin)):
+    """JSON-diff двух сканов: новые/исправленные находки."""
+    if a == b:
+        raise HTTPException(status_code=400, detail="Выберите два разных скана")
+    sa = await _get_scan_or_404(a)
+    sb = await _get_scan_or_404(b)
+    return JSONResponse(_build_diff(sa, sb))
+
+
+@router.get("/history/diff/view", response_class=HTMLResponse)
+async def diff_history_view(
+    request: Request, a: int = Query(...), b: int = Query(...), user: str = Depends(require_admin)
+):
+    """Страница сравнения двух сканов (документный стиль, печать)."""
+    if a == b:
+        raise HTTPException(status_code=400, detail="Выберите два разных скана")
+    sa = await _get_scan_or_404(a)
+    sb = await _get_scan_or_404(b)
+    return common.templates.TemplateResponse(request, "diff.html", _build_diff(sa, sb))
+
+
 # ---------- История (JSON) ----------
 @router.get("/history")
 async def get_history(

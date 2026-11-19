@@ -111,6 +111,7 @@ class ScanTask:
         self.error: str | None = None
         self.finished_at: float | None = None
         self.started_at: float | None = None
+        self.budget: checks.RequestBudget | None = None
 
         self.queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=QUEUE_MAXSIZE)
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -195,6 +196,8 @@ class ScanTask:
                 "medium_count": self.medium_count,
                 "low_count": self.low_count,
                 "score": self.score,
+                "requests_used": self.budget.used if self.budget else 0,
+                "requests_max": self.budget.max_requests if self.budget else SCAN_MAX_REQUESTS,
             }
         )
 
@@ -212,6 +215,8 @@ class ScanTask:
             "medium_count": self.medium_count,
             "low_count": self.low_count,
             "score": self.score,
+            "requests_used": self.budget.used if self.budget else 0,
+            "requests_max": self.budget.max_requests if self.budget else SCAN_MAX_REQUESTS,
             "scan_results": self.scan_results,
             "error": self.error,
         }
@@ -314,6 +319,7 @@ async def scan_engine(task: ScanTask):
         # Инфраструктура: параллелизм, бюджет, RPS, отмена.
         ctx.semaphore = asyncio.Semaphore(SCAN_CONCURRENCY)
         ctx.budget = checks.RequestBudget(SCAN_MAX_REQUESTS)
+        task.budget = ctx.budget
         ctx.limiter = checks.RateLimiter(SCAN_RPS) if SCAN_RPS > 0 else None
         ctx.cancel_event = task.cancel_event
         ctx.scan_seed = task.seed

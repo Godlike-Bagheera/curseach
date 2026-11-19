@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сравнение сканов — DevSecOps Scanner</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:#e8eaed;color:#1a1a1a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:13px;line-height:1.5}
+  .page{max-width:900px;margin:30px auto;background:#fff;padding:45px 50px 55px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  .doc-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a1a1a;padding-bottom:16px;margin-bottom:24px;gap:20px}
+  .doc-header h1{font-size:20px;font-weight:700;color:#111;margin-bottom:4px}
+  .org{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+  .doc-id{font-size:12px;color:#555;text-align:right;white-space:nowrap}
+  .toolbar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+  .toolbar a,.toolbar button{font:inherit;font-size:13px;font-weight:600;padding:8px 18px;border-radius:3px;border:1px solid #d0d4d9;background:#fff;color:#333;cursor:pointer;text-decoration:none}
+  .toolbar a:hover,.toolbar button:hover{background:#f0f2f5}
+  .toolbar .primary{background:#1a73e8;border-color:#1a73e8;color:#fff}
+  .toolbar .primary:hover{background:#1558b0}
+  .warn{background:#fff4e5;border:1px solid #f0c36d;border-left:4px solid #e8a33d;padding:10px 14px;border-radius:4px;margin-bottom:18px;font-size:12.5px}
+  .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}
+  .meta-card{border:1px solid #d0d4d9;border-top:3px solid #1a1a1a;padding:14px 16px}
+  .meta-card h2{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:#666;margin-bottom:8px}
+  .meta-card .target{font-family:"JetBrains Mono",Consolas,monospace;font-size:12px;word-break:break-all;margin-bottom:6px}
+  .meta-card .row{display:flex;justify-content:space-between;font-size:12px;color:#444;padding:2px 0}
+  .meta-card .score{font-weight:700;font-size:15px}
+  .summary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:26px}
+  .sum-box{flex:1;min-width:150px;border:1px solid #d0d4d9;border-radius:4px;padding:12px 14px;text-align:center}
+  .sum-box .n{font-size:24px;font-weight:700}
+  .sum-box .l{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#666}
+  .sum-added .n{color:#c0392b}.sum-fixed .n{color:#1e7e34}.sum-same .n{color:#555}
+  section{margin-bottom:28px}
+  section h3{font-size:14px;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #d0d4d9;padding-bottom:6px;margin-bottom:12px}
+  .added h3{color:#c0392b}.fixed h3{color:#1e7e34}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{border:1px solid #e0e3e7;padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:#f5f6f8;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#555}
+  td code{font-family:"JetBrains Mono",Consolas,monospace;font-size:11px}
+  .level-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;color:#fff;letter-spacing:.4px}
+  .level-badge.CRITICAL{background:#8e1b1b}.level-badge.HIGH{background:#c0392b}.level-badge.MEDIUM{background:#e8a33d}.level-badge.LOW{background:#3a7bd5}.level-badge.INFO{background:#777}
+  .empty{color:#777;font-style:italic;padding:10px 0}
+  .vuln-link{color:inherit;text-decoration:underline dotted;text-underline-offset:3px}
+  .vuln-link:hover{text-decoration-style:solid}
+  @media (max-width:700px){.page{padding:24px 18px}.meta-grid{grid-template-columns:1fr}}
+  @media print{html,body{background:#fff}.toolbar{display:none}.page{box-shadow:none;margin:0;padding:0;max-width:100%}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="doc-header">
+    <div>
+      <h1>Сравнение сканов</h1>
+      <div class="org">DevSecOps Scanner · динамика находок</div>
+    </div>
+    <div class="doc-id">А #{{ a.id }} → Б #{{ b.id }}<br>{{ b.scan_date.replace('T', ' ')[:19] }}</div>
+  </div>
+
+  <div class="toolbar">
+    <a href="/">← К сканеру</a>
+    <a href="/history/{{ a.id }}/view" target="_blank">Отчёт А</a>
+    <a href="/history/{{ b.id }}/view" target="_blank">Отчёт Б</a>
+    <button type="button" id="diffPrint" class="primary">Печать / Сохранить в PDF</button>
+  </div>
+
+  {% if not same_target %}
+  <div class="warn">Внимание: сканы выполнены по разным целям — сравнение может быть некорректным.</div>
+  {% endif %}
+
+  <div class="meta-grid">
+    <div class="meta-card">
+      <h2>А · базовый скан #{{ a.id }}</h2>
+      <div class="target">{{ a.target_url }}</div>
+      <div class="row"><span>Дата</span><span>{{ a.scan_date.replace('T', ' ')[:19] }}</span></div>
+      <div class="row"><span>Оценка</span><span class="score">{{ a.score }}</span></div>
+      <div class="row"><span>Крит / Выс / Сред / Низк</span><span>{{ a.critical }} / {{ a.high }} / {{ a.medium }} / {{ a.low }}</span></div>
+    </div>
+    <div class="meta-card">
+      <h2>Б · новый скан #{{ b.id }}</h2>
+      <div class="target">{{ b.target_url }}</div>
+      <div class="row"><span>Дата</span><span>{{ b.scan_date.replace('T', ' ')[:19] }}</span></div>
+      <div class="row"><span>Оценка</span><span class="score">{{ b.score }}</span></div>
+      <div class="row"><span>Крит / Выс / Сред / Низк</span><span>{{ b.critical }} / {{ b.high }} / {{ b.medium }} / {{ b.low }}</span></div>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="sum-box sum-added"><div class="n">{{ added_count }}</div><div class="l">Новые (регресс)</div></div>
+    <div class="sum-box sum-fixed"><div class="n">{{ fixed_count }}</div><div class="l">Исправлено</div></div>
+    <div class="sum-box sum-same"><div class="n">{{ unchanged }}</div><div class="l">Без изменений</div></div>
+  </div>
+
+  <section class="added">
+    <h3>Новые находки в скане Б ({{ added_count }})</h3>
+    {% if added %}
+    <table>
+      <thead><tr><th style="width:90px">Уровень</th><th style="width:180px">Тип</th><th>Эндпоинт</th><th>Описание</th></tr></thead>
+      <tbody>
+      {% for item in added %}
+        <tr>
+          <td><span class="level-badge {{ item.level }}">{{ item.level }}</span></td>
+          <td><a class="vuln-link" href="/vulns#{{ item.type|vuln_slug }}" target="_blank" rel="noopener">{{ item.type }}</a></td>
+          <td><code>{{ item.endpoint }}</code>{% if item.method %} · {{ item.method }}{% endif %}{% if item.param %} · {{ item.param }}{% endif %}</td>
+          <td>{{ item.desc }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">Новых находок нет — регрессий не обнаружено.</div>{% endif %}
+  </section>
+
+  <section class="fixed">
+    <h3>Исправлено (исчезло в скане Б) ({{ fixed_count }})</h3>
+    {% if fixed %}
+    <table>
+      <thead><tr><th style="width:90px">Уровень</th><th style="width:180px">Тип</th><th>Эндпоинт</th><th>Описание</th></tr></thead>
+      <tbody>
+      {% for item in fixed %}
+        <tr>
+          <td><span class="level-badge {{ item.level }}">{{ item.level }}</span></td>
+          <td><a class="vuln-link" href="/vulns#{{ item.type|vuln_slug }}" target="_blank" rel="noopener">{{ item.type }}</a></td>
+          <td><code>{{ item.endpoint }}</code>{% if item.method %} · {{ item.method }}{% endif %}{% if item.param %} · {{ item.param }}{% endif %}</td>
+          <td>{{ item.desc }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">Исправленных находок нет.</div>{% endif %}
+  </section>
+</div>
+<script src="/static/diff.js"></script>
+</body>
+</html>
