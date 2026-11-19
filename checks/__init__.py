@@ -8,7 +8,7 @@
 """
 
 from collections.abc import Awaitable, Callable
-from typing import Dict, List, Optional
+from typing import Optional
 
 from .access import (
     check_captcha,
