@@ -1,6 +1,8 @@
 """Юнит-тесты anti-DNS-rebinding пиннинга."""
+
 import httpx
-from scanner.security import _pin_request, resolve_target_ip, pinned_client_kwargs
+
+from scanner.security import _pin_request, pinned_client_kwargs, resolve_target_ip
 
 
 def test_pin_request_preserves_host_and_sni():

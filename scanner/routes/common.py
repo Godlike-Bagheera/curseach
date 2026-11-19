@@ -10,4 +10,5 @@ def init_templates(tmpl: Jinja2Templates) -> None:
     templates = tmpl
     # Синхронизируем модуль reporting (рендер вне контекста запроса: ZIP)
     from .. import reporting
+
     reporting.init_templates(tmpl)

@@ -1,4 +1,5 @@
 """Экспорт истории уважает фильтр дат (?from=&to=)."""
+
 from fastapi.testclient import TestClient
 
 import database
@@ -21,8 +22,7 @@ def test_filter_scans_by_date():
 
 
 def _login(client):
-    return client.post("/login", data={"username": "admin", "password": "admin"},
-                       follow_redirects=False)
+    return client.post("/login", data={"username": "admin", "password": "admin"}, follow_redirects=False)
 
 
 def test_export_xlsx_requires_auth():

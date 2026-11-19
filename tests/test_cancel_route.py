@@ -1,4 +1,5 @@
 """Роут отмены скана и /healthz."""
+
 import time
 
 import pytest

@@ -1,4 +1,5 @@
 """Юнит-тесты хранилища сканов."""
+
 import database
 
 
@@ -29,7 +30,6 @@ def test_delete():
 
 def test_corrupt_json_returns_empty():
     """Битый JSON в БД не должен ронять приложение."""
-    import sqlite3
     database.init_db()
     with database._db() as conn:
         conn.execute(

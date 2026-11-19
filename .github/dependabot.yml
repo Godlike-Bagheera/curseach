@@ -19,3 +19,8 @@ updates:
     groups:
       actions-all:
         patterns: ["*"]
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

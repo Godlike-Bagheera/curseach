@@ -9,7 +9,7 @@ import threading
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 import httpx
 
@@ -29,19 +29,20 @@ class ScanContext:
     has_auth           — True, если задан основной auth.
     has_auth_secondary — True, если задан второй auth.
     """
+
     target_url: str
     client: httpx.AsyncClient
     anon_client: httpx.AsyncClient
     has_auth: bool = False
-    secondary_client: Optional[httpx.AsyncClient] = None
+    secondary_client: httpx.AsyncClient | None = None
     has_auth_secondary: bool = False
-    openapi: Optional[dict] = None
+    openapi: dict | None = None
     # Инфраструктура скана (заполняется движком; в юнит-тестах может быть None):
-    semaphore: Optional[asyncio.Semaphore] = None      # лимит одновременных запросов
-    budget: Optional["RequestBudget"] = None           # общий бюджет запросов на скан
-    limiter: Optional["RateLimiter"] = None            # RPS-лимит («вежливое» сканирование)
-    cancel_event: Optional[threading.Event] = None     # кооперативная отмена скана
-    scan_seed: Optional[int] = None                    # детерминированный профиль цели
+    semaphore: asyncio.Semaphore | None = None  # лимит одновременных запросов
+    budget: Optional["RequestBudget"] = None  # общий бюджет запросов на скан
+    limiter: Optional["RateLimiter"] = None  # RPS-лимит («вежливое» сканирование)
+    cancel_event: threading.Event | None = None  # кооперативная отмена скана
+    scan_seed: int | None = None  # детерминированный профиль цели
 
 
 class ScanCancelled(Exception):
@@ -115,7 +116,7 @@ def _make_evidence(method: str, url: str, kwargs: dict, r: httpx.Response, elaps
     }
 
 
-async def _do_request(client, method: str, url: str, kwargs: dict) -> Optional[httpx.Response]:
+async def _do_request(client, method: str, url: str, kwargs: dict) -> httpx.Response | None:
     t0 = time.perf_counter()
     try:
         r = await client.request(method, url, **kwargs)
@@ -133,9 +134,7 @@ async def _do_request(client, method: str, url: str, kwargs: dict) -> Optional[h
     return r
 
 
-async def _safe_request(
-    client: httpx.AsyncClient, method: str, url: str, **kwargs
-) -> Optional[httpx.Response]:
+async def _safe_request(client: httpx.AsyncClient, method: str, url: str, **kwargs) -> httpx.Response | None:
     """
     Единая точка всех запросов проверок: семафор, бюджет, RPS-лимит,
     отмена и сбор evidence. Вне движка (юнит-тесты) работает как раньше.
@@ -156,24 +155,24 @@ async def _safe_request(
     return await _do_request(client, method, url, kwargs)
 
 
-def ev(r: Optional[httpx.Response]) -> Optional[dict]:
+def ev(r: httpx.Response | None) -> dict | None:
     """Evidence, прикреплённый к ответу (если запрос шёл через _safe_request)."""
     return getattr(r, "evidence", None)
 
 
-async def _safe_get(client, url, **kw) -> Optional[httpx.Response]:
+async def _safe_get(client, url, **kw) -> httpx.Response | None:
     return await _safe_request(client, "GET", url, **kw)
 
 
-async def _safe_post(client, url, **kw) -> Optional[httpx.Response]:
+async def _safe_post(client, url, **kw) -> httpx.Response | None:
     return await _safe_request(client, "POST", url, **kw)
 
 
-async def _safe_options(client, url, **kw) -> Optional[httpx.Response]:
+async def _safe_options(client, url, **kw) -> httpx.Response | None:
     return await _safe_request(client, "OPTIONS", url, **kw)
 
 
-def _body(resp: Optional[httpx.Response]) -> str:
+def _body(resp: httpx.Response | None) -> str:
     if resp is None:
         return ""
     try:
@@ -182,7 +181,7 @@ def _body(resp: Optional[httpx.Response]) -> str:
         return ""
 
 
-def _content_hash(resp: Optional[httpx.Response]) -> str:
+def _content_hash(resp: httpx.Response | None) -> str:
     if resp is None:
         return ""
     try:
@@ -191,14 +190,14 @@ def _content_hash(resp: Optional[httpx.Response]) -> str:
         return ""
 
 
-def _method_not_supported(resp: Optional[httpx.Response]) -> bool:
+def _method_not_supported(resp: httpx.Response | None) -> bool:
     if resp is None:
         return True
     return resp.status_code in (404, 405, 501)
 
 
 def _build_path(ep: str, param_name: str, payload: str) -> str:
-    encoded = urllib.parse.quote(payload, safe='')
+    encoded = urllib.parse.quote(payload, safe="")
     return ep.replace(f"{{{param_name}}}", encoded)
 
 
@@ -208,8 +207,12 @@ def _build_path(ep: str, param_name: str, payload: str) -> str:
 # ввод без CSRF-токена и не является state-changing операцией,
 # требующей CSRF-защиты.
 _AUTH_PATH_MARKERS = (
-    "/auth", "/login", "/logout",
-    "/signin", "/signup", "/register",
+    "/auth",
+    "/login",
+    "/logout",
+    "/signin",
+    "/signup",
+    "/register",
 )
 
 
@@ -220,11 +223,24 @@ def _is_auth_endpoint(path: str) -> bool:
 
 
 SQL_ERROR_PATTERNS = [
-    "sqlite3", "sqlite error", "syntax error", "unrecognized token",
-    "sql syntax", "mysql", "postgresql", "psql", "pg_query",
-    "ora-", "oracle", "unclosed quotation mark", "unterminated string",
-    "sqlstate", "you have an error in your sql", "warning: mysql",
-    "odbc", "jdbc",
+    "sqlite3",
+    "sqlite error",
+    "syntax error",
+    "unrecognized token",
+    "sql syntax",
+    "mysql",
+    "postgresql",
+    "psql",
+    "pg_query",
+    "ora-",
+    "oracle",
+    "unclosed quotation mark",
+    "unterminated string",
+    "sqlstate",
+    "you have an error in your sql",
+    "warning: mysql",
+    "odbc",
+    "jdbc",
 ]
 
 # ---------- Хелперы по OpenAPI-спеке ----------
@@ -245,7 +261,7 @@ def _path_methods(ctx: "ScanContext", ep: str) -> set:
     return {k.lower() for k in ops if k.lower() in _HTTP_METHODS}
 
 
-def _writable_endpoints(ctx: "ScanContext", endpoints: List[str]) -> List[str]:
+def _writable_endpoints(ctx: "ScanContext", endpoints: list[str]) -> list[str]:
     """Статические не-auth эндпоинты, реально принимающие POST/PUT/PATCH (по спеке)."""
     out = []
     for e in endpoints:
@@ -291,7 +307,7 @@ def _template_regex(ep: str):
     return re.compile("^" + "[^/]+".join(re.escape(p) for p in parts) + "$")
 
 
-def pick_evidence(log: Optional[List[dict]], endpoint: str) -> Optional[dict]:
+def pick_evidence(log: list[dict] | None, endpoint: str) -> dict | None:
     """Последний (самый релевантный) запрос к эндпоинту из лога проверки."""
     if not log or not endpoint:
         return None
@@ -307,7 +323,7 @@ def pick_evidence(log: Optional[List[dict]], endpoint: str) -> Optional[dict]:
     return best
 
 
-def enrich_findings(findings: List[dict], log: Optional[List[dict]] = None) -> List[dict]:
+def enrich_findings(findings: list[dict], log: list[dict] | None = None) -> list[dict]:
     """Проставляет confidence по умолчанию и evidence из лога запросов."""
     for f in findings:
         if not f.get("confidence"):
@@ -319,7 +335,7 @@ def enrich_findings(findings: List[dict], log: Optional[List[dict]] = None) -> L
     return findings
 
 
-def dedup_findings(findings: List[dict]) -> List[dict]:
+def dedup_findings(findings: list[dict]) -> list[dict]:
     """
     Дедуп по (type, endpoint, param, method): IDOR ловится несколькими
     проверками — в отчёте должна остаться одна, самая серьёзная/уверенная.
@@ -327,18 +343,22 @@ def dedup_findings(findings: List[dict]) -> List[dict]:
     best = {}
     for f in findings:
         key = (
-            f.get("type", ""), f.get("endpoint", ""),
-            f.get("param", "") or "", f.get("method", "") or "",
+            f.get("type", ""),
+            f.get("endpoint", ""),
+            f.get("param", "") or "",
+            f.get("method", "") or "",
         )
         cur = best.get(key)
         if cur is None:
             best[key] = f
             continue
+
         def rank(x):
             return (
                 _LEVEL_RANK.get(x.get("level", "LOW"), 9),
                 _CONF_RANK.get(x.get("confidence", "medium"), 1),
             )
+
         if rank(f) < rank(cur):
             best[key] = f
     out = list(best.values())

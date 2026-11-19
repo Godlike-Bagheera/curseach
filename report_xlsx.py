@@ -5,14 +5,14 @@ openpyxl — опциональная зависимость: если её не
 
 import datetime
 import io
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # Проверяем, установлен ли openpyxl, но сами модули не импортируем на верхнем уровне.
 # Импорты — внутри generate_*(), чтобы Pylance не ругался на "possibly unbound".
 _AVAILABLE = False
 try:
     import openpyxl  # noqa: F401
+
     _AVAILABLE = True
 except ImportError:
     pass
@@ -20,23 +20,23 @@ except ImportError:
 
 _LEVEL_RU = {
     "CRITICAL": "Критично",
-    "HIGH":     "Высоко",
-    "MEDIUM":   "Средне",
-    "LOW":      "Низко",
+    "HIGH": "Высоко",
+    "MEDIUM": "Средне",
+    "LOW": "Низко",
 }
 
 _LEVEL_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
 
 _LEVEL_COLORS = {
     "CRITICAL": ("FBE9E7", "B3261E"),
-    "HIGH":     ("F4E6F8", "7A1FA2"),
-    "MEDIUM":   ("FDF0DC", "B87300"),
-    "LOW":      ("E6F3EA", "1B6E2F"),
+    "HIGH": ("F4E6F8", "7A1FA2"),
+    "MEDIUM": ("FDF0DC", "B87300"),
+    "LOW": ("E6F3EA", "1B6E2F"),
 }
 
 _MODE_TITLES = {
-    "quick":  "Быстрая проверка",
-    "full":   "Полная проверка",
+    "quick": "Быстрая проверка",
+    "full": "Полная проверка",
     "custom": "Выборочная проверка",
 }
 
@@ -60,8 +60,8 @@ def generate_xlsx(
     high: int,
     medium: int,
     low: int,
-    findings: List[Dict[str, Any]],
-) -> Optional[bytes]:
+    findings: list[dict[str, Any]],
+) -> bytes | None:
     """
     Формирует XLSX-отчёт по одному скану.
     Возвращает bytes или None, если openpyxl недоступен.
@@ -132,7 +132,10 @@ def generate_xlsx(
         c2 = ws.cell(row=row, column=2)
         c2.alignment = left_top
         ws.merge_cells(
-            start_row=row, start_column=2, end_row=row, end_column=6,
+            start_row=row,
+            start_column=2,
+            end_row=row,
+            end_column=6,
         )
 
     ws.append([])
@@ -185,8 +188,20 @@ def generate_xlsx(
     ws.append(["НАЙДЕННЫЕ УЯЗВИМОСТИ"])
     ws.cell(row=ws.max_row, column=1).font = h1_font
 
-    headers = ["№", "Уровень", "Тип", "Метод", "Эндпоинт", "Параметр",
-               "Уверенность", "CWE", "OWASP API", "Описание", "Рекомендация", "Evidence"]
+    headers = [
+        "№",
+        "Уровень",
+        "Тип",
+        "Метод",
+        "Эндпоинт",
+        "Параметр",
+        "Уверенность",
+        "CWE",
+        "OWASP API",
+        "Описание",
+        "Рекомендация",
+        "Evidence",
+    ]
     ws.append(headers)
     tbl_header_row = ws.max_row
     for col_idx in range(1, len(headers) + 1):
@@ -206,8 +221,7 @@ def generate_xlsx(
     )
 
     if not sorted_findings:
-        ws.append(["-", "-", "-", "-", "-", "-", "-", "-", "-",
-                   "Уязвимостей не обнаружено", "-", "-"])
+        ws.append(["-", "-", "-", "-", "-", "-", "-", "-", "-", "Уязвимостей не обнаружено", "-", "-"])
         for col_idx in range(1, len(headers) + 1):
             ws.cell(row=ws.max_row, column=col_idx).border = border
     else:
@@ -221,20 +235,22 @@ def generate_xlsx(
                 ev_short = f"{evd.get('method', '')} {evd['url']} -> {evd.get('status', '')}"
             else:
                 ev_short = ""
-            ws.append([
-                idx,
-                _LEVEL_RU.get(level, level),
-                f.get("type", ""),
-                f.get("method", ""),
-                f.get("endpoint", ""),
-                f.get("param", ""),
-                f.get("confidence", ""),
-                ", ".join(details.get("cwe") or []),
-                ", ".join(details.get("owasp_api") or []),
-                f.get("desc", ""),
-                details.get("recommendation", ""),
-                ev_short,
-            ])
+            ws.append(
+                [
+                    idx,
+                    _LEVEL_RU.get(level, level),
+                    f.get("type", ""),
+                    f.get("method", ""),
+                    f.get("endpoint", ""),
+                    f.get("param", ""),
+                    f.get("confidence", ""),
+                    ", ".join(details.get("cwe") or []),
+                    ", ".join(details.get("owasp_api") or []),
+                    f.get("desc", ""),
+                    details.get("recommendation", ""),
+                    ev_short,
+                ]
+            )
             row = ws.max_row
             for col_idx in range(1, len(headers) + 1):
                 c = ws.cell(row=row, column=col_idx)
@@ -271,7 +287,7 @@ def generate_xlsx(
     return buf.getvalue()
 
 
-def generate_history_xlsx(scans: List[Dict[str, Any]]) -> Optional[bytes]:
+def generate_history_xlsx(scans: list[dict[str, Any]]) -> bytes | None:
     """
     Сводный XLSX по всей истории сканирований.
     Колонки: ID / Дата / Цель / Оценка / Критично / Высоко / Средне / Низко / Всего.
@@ -291,7 +307,7 @@ def generate_history_xlsx(scans: List[Dict[str, Any]]) -> Optional[bytes]:
     ws.title = "История"
 
     title_font = Font(name="Calibri", bold=True, size=14, color="111111")
-    bold_font = Font(name="Calibri", bold=True)
+    Font(name="Calibri", bold=True)
     header_font = Font(name="Calibri", bold=True, color="FFFFFF")
     header_fill = PatternFill(fill_type="solid", fgColor="1A1A1A")
     center = Alignment(horizontal="center", vertical="center")
@@ -321,8 +337,15 @@ def generate_history_xlsx(scans: List[Dict[str, Any]]) -> Optional[bytes]:
 
     # ---- Шапка таблицы ----
     headers = [
-        "ID", "Дата", "Цель", "Оценка",
-        "Критично", "Высоко", "Средне", "Низко", "Всего",
+        "ID",
+        "Дата",
+        "Цель",
+        "Оценка",
+        "Критично",
+        "Высоко",
+        "Средне",
+        "Низко",
+        "Всего",
     ]
     ws.append(headers)
     header_row = ws.max_row
@@ -348,13 +371,19 @@ def generate_history_xlsx(scans: List[Dict[str, Any]]) -> Optional[bytes]:
             score = calculate_score(crit, high, med, low)
 
             date_str = (s.get("scan_date") or "").replace("T", " ")[:19]
-            ws.append([
-                s.get("id", ""),
-                date_str,
-                s.get("target_url", ""),
-                score,
-                crit, high, med, low, total,
-            ])
+            ws.append(
+                [
+                    s.get("id", ""),
+                    date_str,
+                    s.get("target_url", ""),
+                    score,
+                    crit,
+                    high,
+                    med,
+                    low,
+                    total,
+                ]
+            )
             row = ws.max_row
             for col_idx in range(1, len(headers) + 1):
                 c = ws.cell(row=row, column=col_idx)
@@ -375,15 +404,15 @@ def generate_history_xlsx(scans: List[Dict[str, Any]]) -> Optional[bytes]:
 
     # ---- Ширина колонок ----
     widths = {
-        "A": 8,   # ID
+        "A": 8,  # ID
         "B": 20,  # Дата
         "C": 42,  # Цель
         "D": 10,  # Оценка
         "E": 12,  # Критично
         "F": 10,  # Высоко
         "G": 10,  # Средне
-        "H": 8,   # Низко
-        "I": 8,   # Всего
+        "H": 8,  # Низко
+        "I": 8,  # Всего
     }
     for col_letter, width in widths.items():
         ws.column_dimensions[col_letter].width = width

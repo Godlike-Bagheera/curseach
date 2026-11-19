@@ -1,25 +1,24 @@
 """Отражённый XSS: path/query/body-параметры, все методы из OpenAPI."""
 
 import asyncio
-from typing import Dict, List
 
 from .base import ScanContext, ev
 from .descriptions import get_vuln_info
 from .surface import Surface, build_surfaces, probe
 
 _XSS_PAYLOADS = [
-    ("<script>alert(1)</script>",      "HTML-контекст"),
-    ("\"><script>alert(1)</script>",   "атрибут (двойные кавычки)"),
-    ("'><script>alert(1)</script>",    "атрибут (одинарные кавычки)"),
-    ("<img src=x onerror=alert(1)>",   "обработчик события"),
-    ("<svg/onload=alert(1)>",          "SVG-контекст"),
+    ("<script>alert(1)</script>", "HTML-контекст"),
+    ('"><script>alert(1)</script>', "атрибут (двойные кавычки)"),
+    ("'><script>alert(1)</script>", "атрибут (одинарные кавычки)"),
+    ("<img src=x onerror=alert(1)>", "обработчик события"),
+    ("<svg/onload=alert(1)>", "SVG-контекст"),
 ]
 
 
-async def check_xss(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_xss(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     surfaces = build_surfaces(ctx, endpoints)
 
-    async def per_surface(s: Surface) -> List[Dict]:
+    async def per_surface(s: Surface) -> list[dict]:
         for kind, name in s.injectable:
             for payload, ctx_label in _XSS_PAYLOADS:
                 if kind == "path":
@@ -40,17 +39,19 @@ async def check_xss(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
                 except (UnicodeDecodeError, LookupError):
                     continue
                 if payload in body:
-                    return [{
-                        "level": "MEDIUM",
-                        "type": "Reflected XSS",
-                        "endpoint": s.path,
-                        "method": s.method.upper(),
-                        "param": f"{kind}:{name}",
-                        "desc": f"{kind}-параметр {name} отражает payload без экранирования ({ctx_label})",
-                        "details": get_vuln_info("Reflected XSS"),
-                        "confidence": "high",
-                        "evidence": ev(r),
-                    }]
+                    return [
+                        {
+                            "level": "MEDIUM",
+                            "type": "Reflected XSS",
+                            "endpoint": s.path,
+                            "method": s.method.upper(),
+                            "param": f"{kind}:{name}",
+                            "desc": f"{kind}-параметр {name} отражает payload без экранирования ({ctx_label})",
+                            "details": get_vuln_info("Reflected XSS"),
+                            "confidence": "high",
+                            "evidence": ev(r),
+                        }
+                    ]
         return []
 
     results = await asyncio.gather(*(per_surface(s) for s in surfaces))

@@ -1,4 +1,5 @@
 """Тести безопасности веб-приложения сканера."""
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -42,8 +43,7 @@ def test_security_headers_present(client):
 
 
 def test_forbidden_origin_blocked(client):
-    r = client.post("/scan", json={"url": "http://localhost:8000"},
-                    headers={"Origin": "https://evil.example.com"})
+    r = client.post("/scan", json={"url": "http://localhost:8000"}, headers={"Origin": "https://evil.example.com"})
     assert r.status_code == 403
 
 
@@ -77,7 +77,8 @@ def test_score_calculation():
 
 def test_sarif_export_shape():
     sarif = web_app._results_to_sarif(
-        "http://t", "2026-01-01",
+        "http://t",
+        "2026-01-01",
         [{"level": "CRITICAL", "type": "SQLi", "desc": "d"}],
     )
     assert sarif["version"] == "2.1.0"
@@ -89,8 +90,13 @@ def test_sarif_export_shape():
 # ---------- Серверный PDF (WeasyPrint) ----------
 def _make_scan():
     import database
+
     database.save_scan(
-        "http://127.0.0.1:8000", 1, 1, 1, 1,
+        "http://127.0.0.1:8000",
+        1,
+        1,
+        1,
+        1,
         [
             {"type": "SQLi", "level": "CRITICAL", "description": "d1"},
             {"type": "IDOR", "level": "HIGH", "description": "d2"},

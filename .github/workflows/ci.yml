@@ -5,6 +5,10 @@ on:
     branches: [main, master]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,8 +25,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Lint (ruff — критические ошибки)
+      - name: JS syntax (node --check)
+        run: |
+          node --check static/script.js
+          node --check static/history_filter.js
+          node --check static/vulns.js
+
+      - name: Lint (ruff)
         run: ruff check .
+
+      - name: Format check (ruff format)
+        run: ruff format --check .
 
       - name: Type check (mypy, пока не блокирует)
         continue-on-error: true
@@ -32,7 +45,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libharfbuzz-subset0
 
       - name: Run tests + coverage
-        run: pytest -q --cov=checks --cov=scanner --cov-report=term-missing --cov-report=xml
+        run: pytest -q --cov=checks --cov=scanner --cov-report=term-missing --cov-report=xml --cov-fail-under=70
 
       - name: Smoke — import app
         run: python -c "import web_app; print('app OK')"

@@ -13,7 +13,7 @@ import report_xlsx
 
 from ..config import SESSION_TTL_SECONDS
 from ..reporting import render_report
-from ..security import require_admin, validate_target_url, origin_allowed, safe_host_for_filename, sessions
+from ..security import origin_allowed, require_admin, safe_host_for_filename, sessions, validate_target_url
 from ..tasks import ScanRequest, ScanTask, run_scan_in_thread, tasks
 
 router = APIRouter()
@@ -108,17 +108,19 @@ async def ws_scan(websocket: WebSocket, task_id: str):
             pass
         return
 
-    await websocket.send_json({
-        "type": "init",
-        "logs": list(task.logs),
-        "status": task.status,
-        "progress": task.progress,
-        "critical_count": task.critical_count,
-        "high_count": task.high_count,
-        "medium_count": task.medium_count,
-        "low_count": task.low_count,
-        "score": task.score,
-    })
+    await websocket.send_json(
+        {
+            "type": "init",
+            "logs": list(task.logs),
+            "status": task.status,
+            "progress": task.progress,
+            "critical_count": task.critical_count,
+            "high_count": task.high_count,
+            "medium_count": task.medium_count,
+            "low_count": task.low_count,
+            "score": task.score,
+        }
+    )
 
     if task.status in ("completed", "failed"):
         await websocket.send_json({"type": "complete", "status": task.status})
@@ -176,20 +178,22 @@ async def get_json_report(task_id: str, user: str = Depends(require_admin)):
         raise HTTPException(status_code=404, detail="Task not found")
     if task.status not in ("completed", "failed"):
         raise HTTPException(status_code=400, detail="Scan not finished")
-    return JSONResponse({
-        "scan_date": datetime.datetime.now().isoformat(),
-        "target": task.target_url,
-        "mode": task.mode,
-        "selected_checks": task.selected_checks,
-        "metrics": {
-            "score": task.score,
-            "critical": task.critical_count,
-            "high": task.high_count,
-            "medium": task.medium_count,
-            "low": task.low_count,
-        },
-        "findings": task.scan_results,
-    })
+    return JSONResponse(
+        {
+            "scan_date": datetime.datetime.now().isoformat(),
+            "target": task.target_url,
+            "mode": task.mode,
+            "selected_checks": task.selected_checks,
+            "metrics": {
+                "score": task.score,
+                "critical": task.critical_count,
+                "high": task.high_count,
+                "medium": task.medium_count,
+                "low": task.low_count,
+            },
+            "findings": task.scan_results,
+        }
+    )
 
 
 @router.get("/report/csv/{task_id}")

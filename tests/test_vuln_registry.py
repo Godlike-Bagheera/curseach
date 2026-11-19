@@ -1,4 +1,5 @@
 """Реестр /vulns синхронизирован с CHECK_METADATA и descriptions."""
+
 from checks import CHECK_METADATA
 from scanner.vuln_guide import build_guide, build_registry, slugify
 

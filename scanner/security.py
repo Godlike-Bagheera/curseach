@@ -5,24 +5,23 @@ import re
 import secrets
 import socket
 import time
-from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import httpx
 from fastapi import Cookie, HTTPException
 
 from .config import (
+    LOGIN_MAX_ATTEMPTS,
+    LOGIN_WINDOW_SECONDS,
+    SCAN_PIN_DNS,
     SESSION_TTL_SECONDS,
     SSRF_ALLOW_PRIVATE,
-    SCAN_PIN_DNS,
-    LOGIN_WINDOW_SECONDS,
-    LOGIN_MAX_ATTEMPTS,
     authenticate,
     origin_allowed,
 )
 
 # ---------- Сессии ----------
-sessions: Dict[str, Tuple[str, float]] = {}
+sessions: dict[str, tuple[str, float]] = {}
 
 
 def create_session(username: str) -> str:
@@ -31,12 +30,12 @@ def create_session(username: str) -> str:
     return sid
 
 
-def destroy_session(sid: Optional[str]) -> None:
+def destroy_session(sid: str | None) -> None:
     if sid and sid in sessions:
         sessions.pop(sid, None)
 
 
-def get_current_user(session_id: Optional[str] = Cookie(None)) -> Optional[str]:
+def get_current_user(session_id: str | None = Cookie(None)) -> str | None:
     if not session_id:
         return None
     entry = sessions.get(session_id)
@@ -50,14 +49,14 @@ def get_current_user(session_id: Optional[str] = Cookie(None)) -> Optional[str]:
     return username
 
 
-def require_user(session_id: Optional[str] = Cookie(None)) -> str:
+def require_user(session_id: str | None = Cookie(None)) -> str:
     user = get_current_user(session_id)
     if user is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
 
-def require_admin(session_id: Optional[str] = Cookie(None)) -> str:
+def require_admin(session_id: str | None = Cookie(None)) -> str:
     user = require_user(session_id)
     if user != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -66,8 +65,8 @@ def require_admin(session_id: Optional[str] = Cookie(None)) -> str:
 
 # ---------- SSRF-защита: блокировка private/loopback/link-local ----------
 _ALWAYS_BLOCKED_NETS = [
-    ipaddress.ip_network("169.254.169.254/32"),   # AWS/GCP metadata
-    ipaddress.ip_network("fd00:ec2::254/128"),    # IPv6 metadata
+    ipaddress.ip_network("169.254.169.254/32"),  # AWS/GCP metadata
+    ipaddress.ip_network("fd00:ec2::254/128"),  # IPv6 metadata
 ]
 
 
@@ -81,13 +80,10 @@ def _is_blocked_ip(ip: str) -> bool:
             return True
     if SSRF_ALLOW_PRIVATE:
         return False
-    return (
-        addr.is_private or addr.is_loopback or addr.is_link_local
-        or addr.is_reserved or addr.is_multicast
-    )
+    return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved or addr.is_multicast
 
 
-def ssrf_check_host(host: str) -> Optional[str]:
+def ssrf_check_host(host: str) -> str | None:
     """Возвращает сообщение об ошибке, если хост запрещён."""
     # Прямой IP?
     try:
@@ -120,7 +116,7 @@ def ssrf_check_host(host: str) -> Optional[str]:
     return None
 
 
-def validate_target_url(url: str) -> Optional[str]:
+def validate_target_url(url: str) -> str | None:
     """
     Проверяет URL. Использует urlparse вместо ручного split — так
     корректно обрабатываются IPv6-адреса вида http://[::1]:8000,
@@ -181,7 +177,7 @@ def safe_host_for_filename(target_url: str) -> str:
 
 
 # ---------- Rate limiting логина (защита от брутфорса) ----------
-_login_attempts: Dict[str, List[float]] = {}
+_login_attempts: dict[str, list[float]] = {}
 
 
 def check_login_rate(client_ip: str) -> bool:
@@ -196,7 +192,7 @@ def check_login_rate(client_ip: str) -> bool:
 
 
 # ---------- Anti-DNS-rebinding: пиннинг проверенного IP ----------
-def resolve_target_ip(host: str) -> Optional[str]:
+def resolve_target_ip(host: str) -> str | None:
     """
     Возвращает проверенный (не запрещённый SSRF-политикой) IP для хоста.
     Если host — уже IP-литерал, возвращает его как есть.
@@ -269,10 +265,19 @@ def pinned_client_kwargs(target_url: str) -> dict:
 
 
 __all__ = [
-    "authenticate", "origin_allowed",
-    "sessions", "create_session", "destroy_session",
-    "get_current_user", "require_user", "require_admin",
-    "ssrf_check_host", "validate_target_url", "safe_host_for_filename",
+    "authenticate",
+    "origin_allowed",
+    "sessions",
+    "create_session",
+    "destroy_session",
+    "get_current_user",
+    "require_user",
+    "require_admin",
+    "ssrf_check_host",
+    "validate_target_url",
+    "safe_host_for_filename",
     "check_login_rate",
-    "resolve_target_ip", "PinnedTransport", "pinned_client_kwargs",
+    "resolve_target_ip",
+    "PinnedTransport",
+    "pinned_client_kwargs",
 ]

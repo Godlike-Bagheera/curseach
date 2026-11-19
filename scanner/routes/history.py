@@ -6,7 +6,6 @@ PDF рендерится на сервере через WeasyPrint (/history/{id
 
 import datetime
 import json
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
@@ -40,7 +39,7 @@ async def _get_scan_or_404(scan_id: int) -> dict:
 # ---------- Экспорт всей истории ----------
 # ВАЖНО: /history/export.xlsx объявлен ДО /history/{scan_id},
 # иначе "export.xlsx" парсился бы как scan_id (как в исходном web_app.py).
-def _filter_scans_by_date(scans: list, date_from: Optional[str], date_to: Optional[str]) -> list:
+def _filter_scans_by_date(scans: list, date_from: str | None, date_to: str | None) -> list:
     """Фильтр сканов по дате (YYYY-MM-DD, включительно). Пустые границы — без фильтра."""
     if not date_from and not date_to:
         return scans
@@ -58,8 +57,8 @@ def _filter_scans_by_date(scans: list, date_from: Optional[str], date_to: Option
 @router.get("/history/export.xlsx")
 async def export_history_xlsx(
     user: str = Depends(require_admin),
-    date_from: Optional[str] = Query(None, alias="from"),
-    date_to: Optional[str] = Query(None, alias="to"),
+    date_from: str | None = Query(None, alias="from"),
+    date_to: str | None = Query(None, alias="to"),
 ):
     """Сводный XLSX по сканам истории (опционально — за период ?from=&to=)."""
     if not report_xlsx.is_available():
@@ -101,7 +100,7 @@ async def get_history_item(scan_id: int, user: str = Depends(require_admin)):
 
 @router.delete("/history/{scan_id}")
 async def delete_history_item(scan_id: int, user: str = Depends(require_admin)):
-    _get_scan_or_404(scan_id)
+    await _get_scan_or_404(scan_id)
     await run_in_threadpool(database.delete_scan, scan_id)
     return {"status": "deleted"}
 
@@ -117,19 +116,23 @@ async def delete_all_history(user: str = Depends(require_admin)):
 async def view_history_report(scan_id: int, request: Request, user: str = Depends(require_admin)):
     scan = await _get_scan_or_404(scan_id)
     score = calculate_score(scan["critical"], scan["high"], scan["medium"], scan["low"])
-    return common.templates.TemplateResponse(request, "report.html", {
-        "target_url": scan["target_url"],
-        "findings": scan["results"],
-        "critical": scan["critical"],
-        "high": scan["high"],
-        "medium": scan["medium"],
-        "low": scan["low"],
-        "score": score,
-        "mode_ru": "ПОЛНАЯ ПРОВЕРКА",
-        "scan_date": scan["scan_date"].replace("T", " ")[:19],
-        "source": "history",
-        "scan_id": scan["id"],
-    })
+    return common.templates.TemplateResponse(
+        request,
+        "report.html",
+        {
+            "target_url": scan["target_url"],
+            "findings": scan["results"],
+            "critical": scan["critical"],
+            "high": scan["high"],
+            "medium": scan["medium"],
+            "low": scan["low"],
+            "score": score,
+            "mode_ru": "ПОЛНАЯ ПРОВЕРКА",
+            "scan_date": scan["scan_date"].replace("T", " ")[:19],
+            "source": "history",
+            "scan_id": scan["id"],
+        },
+    )
 
 
 @router.get("/history/{scan_id}/chart", response_class=HTMLResponse)
@@ -229,9 +232,7 @@ async def download_history_csv(scan_id: int, user: str = Depends(require_admin))
 @router.get("/history/{scan_id}/sarif")
 async def download_history_sarif(scan_id: int, user: str = Depends(require_admin)):
     scan = await _get_scan_or_404(scan_id)
-    sarif = results_to_sarif(
-        scan["target_url"], scan["scan_date"], scan.get("results") or []
-    )
+    sarif = results_to_sarif(scan["target_url"], scan["scan_date"], scan.get("results") or [])
     filename = f"scan_{scan_id}.sarif"
     return Response(
         content=json.dumps(sarif, ensure_ascii=False, indent=2),

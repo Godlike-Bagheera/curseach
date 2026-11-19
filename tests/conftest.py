@@ -16,6 +16,7 @@ os.environ.setdefault("SCAN_TOTAL_TIMEOUT", "180")
 def _reset_auth_state():
     """Изоляция тестов: глобальные сессии и rate-limit логина не протекают между тестами."""
     from scanner import security
+
     security._login_attempts.clear()
     security.sessions.clear()
     yield

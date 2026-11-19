@@ -23,7 +23,6 @@ import os
 import random
 import sqlite3
 import time
-from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
@@ -45,7 +44,7 @@ cursor.close()
 # ---------- Пользователи, токены, заказы ----------
 _USERS = {
     1: {"username": "alice", "password": "alice123", "role": "user"},
-    2: {"username": "bob",   "password": "bob123",   "role": "user"},
+    2: {"username": "bob", "password": "bob123", "role": "user"},
     3: {"username": "admin", "password": "admin123", "role": "admin"},
 }
 
@@ -53,21 +52,21 @@ _USERS = {
 # В реальной жизни был бы JWT/HMAC; здесь — для учебной цели.
 _TOKENS = {
     "token_alice_aaa111": 1,
-    "token_bob_bbb222":   2,
+    "token_bob_bbb222": 2,
     "token_admin_ccc333": 3,
 }
 
 # Заказы: id -> {user_id, item, price}
 _ORDERS = {
-    1: {"id": 1, "user_id": 1, "item": "laptop",   "price": 1200},
-    2: {"id": 2, "user_id": 1, "item": "mouse",    "price": 25},
+    1: {"id": 1, "user_id": 1, "item": "laptop", "price": 1200},
+    2: {"id": 2, "user_id": 1, "item": "mouse", "price": 25},
     3: {"id": 3, "user_id": 2, "item": "keyboard", "price": 80},
-    4: {"id": 4, "user_id": 2, "item": "monitor",  "price": 350},
-    5: {"id": 5, "user_id": 3, "item": "server",   "price": 5000},
+    4: {"id": 4, "user_id": 2, "item": "monitor", "price": 350},
+    5: {"id": 5, "user_id": 3, "item": "server", "price": 5000},
 }
 
 
-def _resolve_token(authorization: Optional[str]) -> Optional[int]:
+def _resolve_token(authorization: str | None) -> int | None:
     """Возвращает user_id, если токен валиден, иначе None."""
     if not authorization:
         return None
@@ -100,7 +99,7 @@ _state = {
 }
 
 
-def _new_scan(seed: Optional[int] = None):
+def _new_scan(seed: int | None = None):
     """
     Генерирует новый профиль уязвимостей для одного скана.
     С seed (заголовок X-Scan-Seed) профиль детерминирован — для
@@ -122,12 +121,12 @@ def _new_scan(seed: Optional[int] = None):
     _state["profile"] = {
         "headers_present": headers_present,
         "sqli_enabled": rng.random() < 0.80,
-        "idor_enabled": rng.random() < 0.90,           # /api/system/keys без auth
-        "order_idor_enabled": rng.random() < 0.80,     # /api/orders/{id}: без проверки владельца
-        "bfla_enabled": rng.random() < 0.80,           # /api/admin/users: без проверки роли
+        "idor_enabled": rng.random() < 0.90,  # /api/system/keys без auth
+        "order_idor_enabled": rng.random() < 0.80,  # /api/orders/{id}: без проверки владельца
+        "bfla_enabled": rng.random() < 0.80,  # /api/admin/users: без проверки роли
         "sensitive_enabled": rng.random() < 0.75,
         "business_enabled": rng.random() < 0.75,
-        "jwt_none_enabled": rng.random() < 0.80,   # /api/reports/{id}: JWT alg=none
+        "jwt_none_enabled": rng.random() < 0.80,  # /api/reports/{id}: JWT alg=none
         "global_bias": 1.0 if seed is not None else rng.uniform(0.7, 1.3),
         "seeded": seed is not None,
     }
@@ -153,8 +152,7 @@ def _maybe(prob: float) -> bool:
 
 def _is_suspicious_input(value: str) -> bool:
     """Эвристика: содержит ли ввод SQL-подобные маркеры."""
-    markers = ("'", '"', "--", ";", "UNION", "SELECT", "SLEEP",
-               "WAITFOR", "PG_SLEEP", " OR ", " AND ")
+    markers = ("'", '"', "--", ";", "UNION", "SELECT", "SLEEP", "WAITFOR", "PG_SLEEP", " OR ", " AND ")
     upper = value.upper()
     return any(m in upper for m in markers)
 
@@ -278,10 +276,7 @@ def admin_users(authorization: str = Header(None)):
         if info["role"] != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
 
-    users = [
-        {"id": uid, "username": info["username"], "role": info["role"]}
-        for uid, info in _USERS.items()
-    ]
+    users = [{"id": uid, "username": info["username"], "role": info["role"]} for uid, info in _USERS.items()]
     return {"data": users}
 
 
@@ -308,11 +303,7 @@ def get_user(user_id: str):
             return {"error": "Invalid ID"}
         # Возвращаем непустой data — иначе сканер не увидит,
         # что сервер реально принял отрицательный ID.
-        return {
-            "data": [
-                {"id": int(user_id), "name": "unknown", "secret": None}
-            ]
-        }
+        return {"data": [{"id": int(user_id), "name": "unknown", "secret": None}]}
 
     query = f"SELECT name, secret FROM users WHERE id = {user_id}"
     # Свежий курсор на каждый запрос — иначе синхронные роуты FastAPI
@@ -365,18 +356,16 @@ def login_jwt(body: LoginRequest):
 
     for uid, info in _USERS.items():
         if info["username"] == body.username and info["password"] == body.password:
-            header = _b64.urlsafe_b64encode(
-                _json.dumps({"alg": "HS256", "typ": "JWT"}).encode()
-            ).rstrip(b"=").decode()
-            payload = _b64.urlsafe_b64encode(
-                _json.dumps({"uid": uid, "role": info["role"]}).encode()
-            ).rstrip(b"=").decode()
+            header = _b64.urlsafe_b64encode(_json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).rstrip(b"=").decode()
+            payload = (
+                _b64.urlsafe_b64encode(_json.dumps({"uid": uid, "role": info["role"]}).encode()).rstrip(b"=").decode()
+            )
             sig = _b64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode()
             return {"token": f"{header}.{payload}.{sig}"}
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
 
-def _resolve_jwt(authorization: Optional[str]) -> Optional[int]:
+def _resolve_jwt(authorization: str | None) -> int | None:
     """Разбирает 'JWT'-токен. УЯЗВИМОСТЬ: принимает alg=none без проверки подписи."""
     if not authorization:
         return None

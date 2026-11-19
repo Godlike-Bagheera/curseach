@@ -10,7 +10,6 @@ import json as _json
 import os
 import zipfile
 from datetime import datetime
-from typing import Dict, List, Optional
 
 import report_csv
 import report_xlsx
@@ -28,8 +27,7 @@ def init_templates(tmpl) -> None:
 
 
 # ---------- HTML-отчёт по активной задаче ----------
-def render_report(request, target_url, results, critical, high, medium, low,
-                  score, mode, scan_date):
+def render_report(request, target_url, results, critical, high, medium, low, score, mode, scan_date):
     return templates.TemplateResponse(
         request,
         "report.html",
@@ -53,14 +51,13 @@ def render_report(request, target_url, results, critical, high, medium, low,
 def build_chart_context(scan: dict, include_findings: bool = False) -> dict:
     results = scan.get("results") or []
 
-    by_type: Dict[str, int] = {}
-    by_type_level: Dict[str, str] = {}
+    by_type: dict[str, int] = {}
+    by_type_level: dict[str, str] = {}
     for f in results:
         t = f.get("type", "Unknown")
         lvl = f.get("level", "LOW")
         by_type[t] = by_type.get(t, 0) + 1
-        if t not in by_type_level or \
-           LEVEL_RANK.get(lvl, 99) < LEVEL_RANK.get(by_type_level[t], 99):
+        if t not in by_type_level or LEVEL_RANK.get(lvl, 99) < LEVEL_RANK.get(by_type_level[t], 99):
             by_type_level[t] = lvl
 
     total = scan["critical"] + scan["high"] + scan["medium"] + scan["low"]
@@ -107,9 +104,10 @@ def inline_chartjs(html: str) -> str:
     try:
         chart_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "static", "chart.umd.min.js",
+            "static",
+            "chart.umd.min.js",
         )
-        with open(chart_path, "r", encoding="utf-8") as f:
+        with open(chart_path, encoding="utf-8") as f:
             chart_js = f.read()
     except Exception:
         return html
@@ -155,7 +153,7 @@ def scan_csv_bytes(scan: dict) -> bytes:
     )
 
 
-def scan_xlsx_bytes(scan: dict) -> Optional[bytes]:
+def scan_xlsx_bytes(scan: dict) -> bytes | None:
     if not report_xlsx.is_available():
         return None
     score = calculate_score(scan["critical"], scan["high"], scan["medium"], scan["low"])
@@ -222,7 +220,7 @@ def _evidence_text(f: dict) -> str:
     return "\n".join(parts)
 
 
-def results_to_sarif(target_url: str, scan_date: str, findings: List[dict]) -> dict:
+def results_to_sarif(target_url: str, scan_date: str, findings: list[dict]) -> dict:
     """Конвертирует находки сканера в SARIF 2.1.0 (CWE/OWASP-теги, evidence, confidence)."""
     rules = {}
     results = []
@@ -256,33 +254,39 @@ def results_to_sarif(target_url: str, scan_date: str, findings: List[dict]) -> d
             props["evidence"] = f["evidence"]
         props["targetUrl"] = target_url
         props["endpoint"] = f.get("endpoint", "")
-        results.append({
-            "ruleId": vtype,
-            "level": sarif_level,
-            "message": {"text": f.get("desc", "") + _evidence_text(f)},
-            "locations": [{
-                "physicalLocation": {
-                    "artifactLocation": {"uri": _sarif_uri(f.get("endpoint", ""))},
-                },
-            }],
-            "properties": props,
-        })
+        results.append(
+            {
+                "ruleId": vtype,
+                "level": sarif_level,
+                "message": {"text": f.get("desc", "") + _evidence_text(f)},
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": _sarif_uri(f.get("endpoint", ""))},
+                        },
+                    }
+                ],
+                "properties": props,
+            }
+        )
 
     return {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
         "version": "2.1.0",
-        "runs": [{
-            "tool": {
-                "driver": {
-                    "name": "DevSecOps Scanner",
-                    "version": "1.1",
-                    "rules": list(rules.values()),
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "DevSecOps Scanner",
+                        "version": "1.1",
+                        "rules": list(rules.values()),
+                    },
                 },
-            },
-            "columnKind": "utf16CodeUnits",
-            "results": results,
-            "automationDetails": {"id": f"devsecops/{scan_date}"},
-        }],
+                "columnKind": "utf16CodeUnits",
+                "results": results,
+                "automationDetails": {"id": f"devsecops/{scan_date}"},
+            }
+        ],
     }
 
 
@@ -313,6 +317,7 @@ def build_scan_bundle(scan: dict, host_part: str) -> tuple:
     pdf_bytes = None
     try:
         from . import pdf as pdf_mod
+
         if pdf_mod.is_available():
             pdf_ctx = build_chart_context(scan, include_findings=True)
             pdf_html = templates.get_template("report_full.html").render(**pdf_ctx)
@@ -326,7 +331,7 @@ def build_scan_bundle(scan: dict, host_part: str) -> tuple:
         f"<p>Серверный PDF недоступен (WeasyPrint не установлен). "
         f"Откройте <a href='/history/{scan_id}/full'>полный отчёт #{scan_id}</a> "
         "и нажмите «Печать (браузером)» (Ctrl+P → «Сохранить как PDF»).</p>"
-    ).encode("utf-8")
+    ).encode()
 
     date_part = datetime.now().strftime("%Y-%m-%d_%H-%M")
     zip_name = f"scan_{scan_id}_{host_part}_{date_part}.zip"

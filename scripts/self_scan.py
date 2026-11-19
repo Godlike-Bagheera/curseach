@@ -45,22 +45,36 @@ def main() -> int:
     ap.add_argument("--mode", default="full")
     args = ap.parse_args()
 
-    from scanner.tasks import AccountConfig, ScanTask, scan_engine
     from scanner.reporting import results_to_sarif
+    from scanner.tasks import AccountConfig, ScanTask, scan_engine
 
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1",
-         "--port", str(port), "--log-level", "warning"],
-        cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     try:
         if not _wait_ready(url):
             print("[self-scan] не удалось поднять цель", file=sys.stderr)
             return 1
         task = ScanTask(
-            url, mode=args.mode, seed=args.seed,
+            url,
+            mode=args.mode,
+            seed=args.seed,
             account1=AccountConfig(username="alice", password="alice123"),
             account2=AccountConfig(username="bob", password="bob123"),
         )
@@ -68,8 +82,7 @@ def main() -> int:
         sarif = results_to_sarif(url, time.strftime("%Y-%m-%dT%H:%M:%S"), task.scan_results)
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(sarif, f, ensure_ascii=False, indent=2)
-        print(f"[self-scan] status={task.status} findings={len(task.scan_results)} "
-              f"score={task.score} -> {args.out}")
+        print(f"[self-scan] status={task.status} findings={len(task.scan_results)} score={task.score} -> {args.out}")
         return 0
     finally:
         proc.terminate()

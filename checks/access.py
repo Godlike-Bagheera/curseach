@@ -1,35 +1,33 @@
 """Контроль доступа: IDOR, cross-auth IDOR, CSRF, CORS, CAPTCHA."""
 
-from typing import Dict, List, Optional
-
 import httpx
 
 from .base import (
-    ScanContext,
-    _safe_get,
-    _safe_post,
-    _safe_options,
-    _content_hash,
-    _body,
-    _method_not_supported,
-    _is_auth_endpoint,
-    _writable_endpoints,
-    _endpoint_requires_security,
-    _endpoint_explicitly_public,
     _PUBLIC_PATHS,
+    ScanContext,
+    _body,
+    _content_hash,
+    _endpoint_explicitly_public,
+    _endpoint_requires_security,
+    _is_auth_endpoint,
+    _method_not_supported,
+    _safe_get,
+    _safe_options,
+    _safe_post,
+    _writable_endpoints,
 )
 from .descriptions import get_vuln_info
 
 
 # ================== IDOR / Broken Access Control ==================
-async def check_idor(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     findings = []
     seen_endpoints = set()
 
     param_endpoints = [p for p in endpoints if "{" in p and "}" in p]
     for ep in param_endpoints:
-        param_name = ep[ep.find("{") + 1:ep.find("}")]
-        responses: Dict[str, httpx.Response] = {}
+        param_name = ep[ep.find("{") + 1 : ep.find("}")]
+        responses: dict[str, httpx.Response] = {}
         for test_id in ["1", "2", "3", "0", "-1", "100"]:
             path = ep.replace(f"{{{param_name}}}", test_id)
             r = await _safe_get(ctx.client, f"{ctx.target_url}{path}")
@@ -44,13 +42,15 @@ async def check_idor(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
         hashes = {tid: _content_hash(r) for tid, r in responses.items()}
         if len(set(hashes.values())) >= 2:
             ids_list = ", ".join(responses.keys())
-            findings.append({
-                "level": "HIGH",
-                "type": "Broken Access Control",
-                "endpoint": ep,
-                "desc": f"Эвристика: эндпоинт возвращает данные для разных ID ({ids_list}) без проверки прав",
-                "details": get_vuln_info("Broken Access Control"),
-            })
+            findings.append(
+                {
+                    "level": "HIGH",
+                    "type": "Broken Access Control",
+                    "endpoint": ep,
+                    "desc": f"Эвристика: эндпоинт возвращает данные для разных ID ({ids_list}) без проверки прав",
+                    "details": get_vuln_info("Broken Access Control"),
+                }
+            )
             seen_endpoints.add(ep)
 
     sensitive_keywords = ["keys", "admin", "system", "config", "settings", "internal", "debug"]
@@ -65,19 +65,21 @@ async def check_idor(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
         if r is None:
             continue
         if r.status_code == 200:
-            findings.append({
-                "level": "CRITICAL",
-                "type": "Broken Access Control",
-                "endpoint": ep,
-                "desc": "Чувствительный эндпоинт доступен без аутентификации",
-                "details": get_vuln_info("Broken Access Control"),
-            })
+            findings.append(
+                {
+                    "level": "CRITICAL",
+                    "type": "Broken Access Control",
+                    "endpoint": ep,
+                    "desc": "Чувствительный эндпоинт доступен без аутентификации",
+                    "details": get_vuln_info("Broken Access Control"),
+                }
+            )
 
     return findings
 
 
 # ================== Cross-auth IDOR ==================
-async def check_idor_auth(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_idor_auth(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     """
     Сравнивает ответы с авторизацией и без.
     Если для статического эндпоинта они идентичны (200/200 и одинаковый контент) —
@@ -110,19 +112,23 @@ async def check_idor_auth(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
                 desc = "Эндпоинт требует авторизацию по спеке, но отдаёт идентичный ответ с токеном и без него"
             else:
                 level = "MEDIUM"
-                desc = "Эвристика: идентичный ответ с токеном и без него — возможно, эндпоинт публичный; проверьте вручную"
-            findings.append({
-                "level": level,
-                "type": "Broken Access Control",
-                "endpoint": ep,
-                "desc": desc,
-                "details": get_vuln_info("Broken Access Control"),
-            })
+                desc = (
+                    "Эвристика: идентичный ответ с токеном и без него — возможно, эндпоинт публичный; проверьте вручную"
+                )
+            findings.append(
+                {
+                    "level": level,
+                    "type": "Broken Access Control",
+                    "endpoint": ep,
+                    "desc": desc,
+                    "details": get_vuln_info("Broken Access Control"),
+                }
+            )
     return findings
 
 
 # ================== CSRF (эвристика) ==================
-async def check_csrf(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_csrf(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     findings = []
 
     # Логин / регистрация — не state-changing эндпоинты.
@@ -142,21 +148,21 @@ async def check_csrf(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
         set_cookie = r.headers.get("set-cookie", "")
         has_csrf_cookie = "csrf" in set_cookie.lower()
         if not has_csrf_header and not has_csrf_cookie:
-            findings.append({
-                "level": "MEDIUM",
-                "type": "Missing CSRF Protection",
-                "endpoint": test_path,
-                "desc": "Эвристика: не обнаружен CSRF-токен",
-                "details": get_vuln_info("Missing CSRF Protection"),
-            })
+            findings.append(
+                {
+                    "level": "MEDIUM",
+                    "type": "Missing CSRF Protection",
+                    "endpoint": test_path,
+                    "desc": "Эвристика: не обнаружен CSRF-токен",
+                    "details": get_vuln_info("Missing CSRF Protection"),
+                }
+            )
         return findings
     return findings
 
 
 # ================== CORS ==================
-async def check_cors(
-    ctx: ScanContext, endpoints: Optional[List[str]] = None
-) -> List[Dict]:
+async def check_cors(ctx: ScanContext, endpoints: list[str] | None = None) -> list[dict]:
     findings = []
     r = await _safe_options(ctx.client, ctx.target_url)
     if r is None:
@@ -165,18 +171,20 @@ async def check_cors(
         return findings
     acao = r.headers.get("access-control-allow-origin", "")
     if acao.strip() == "*":
-        findings.append({
-            "level": "MEDIUM",
-            "type": "Open CORS",
-            "endpoint": "/",
-            "desc": "CORS разрешает любые источники",
-            "details": get_vuln_info("Open CORS"),
-        })
+        findings.append(
+            {
+                "level": "MEDIUM",
+                "type": "Open CORS",
+                "endpoint": "/",
+                "desc": "CORS разрешает любые источники",
+                "details": get_vuln_info("Open CORS"),
+            }
+        )
     return findings
 
 
 # ================== CAPTCHA (эвристика) ==================
-async def check_captcha(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_captcha(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     findings = []
     login_endpoints = [e for e in endpoints if "login" in e.lower() or "auth" in e.lower()]
     if not login_endpoints:
@@ -189,7 +197,8 @@ async def check_captcha(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
 
     for _ in range(NUM_ATTEMPTS):
         r = await _safe_post(
-            ctx.client, f"{ctx.target_url}{test_path}",
+            ctx.client,
+            f"{ctx.target_url}{test_path}",
             json={"username": "wrong", "password": "wrong"},
         )
         if _method_not_supported(r):
@@ -202,11 +211,13 @@ async def check_captcha(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
             break
 
     if got_valid_response and not got_protection:
-        findings.append({
-            "level": "MEDIUM",
-            "type": "Lack of CAPTCHA",
-            "endpoint": test_path,
-            "desc": f"Эвристика: {NUM_ATTEMPTS} неудачных попыток логина не привели к блокировке",
-            "details": get_vuln_info("Lack of CAPTCHA"),
-        })
+        findings.append(
+            {
+                "level": "MEDIUM",
+                "type": "Lack of CAPTCHA",
+                "endpoint": test_path,
+                "desc": f"Эвристика: {NUM_ATTEMPTS} неудачных попыток логина не привели к блокировке",
+                "details": get_vuln_info("Lack of CAPTCHA"),
+            }
+        )
     return findings
