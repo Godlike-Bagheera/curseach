@@ -658,7 +658,7 @@ async function loadHistory(page) {
             const table = el('table', { className: 'history-table' });
             const thead = el('thead', null, [
                 el('tr', null, [
-                    el('th', { text: 'DIFF' }), el('th', { text: 'ID' }), el('th', { text: 'ДАТА' }), el('th', { text: 'ЦЕЛЬ' }),
+                    el('th', { text: 'DIFF' }), el('th', { text: 'ID' }), el('th', { text: 'ДАТА (UTC)' }), el('th', { text: 'ЦЕЛЬ' }),
                     el('th', { text: 'КРИТ' }), el('th', { text: 'ВЫС' }), el('th', { text: 'СРЕД' }),
                     el('th', { text: 'НИЗК' }), el('th', { text: 'ДЕЙСТВИЯ' }),
                 ]),

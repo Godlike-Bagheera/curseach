@@ -171,7 +171,7 @@ async def _osv_lookup(deps: list[tuple[str, str, str]], client=None) -> list[tup
                 return None
 
         docs = await asyncio.gather(*(get_doc(vid) for _, vid in wanted[:25]))
-        return [(dep, doc) for (dep, _), doc in zip(wanted[:25], docs) if doc]
+        return [(dep, doc) for (dep, _), doc in zip(wanted[:25], docs, strict=True) if doc]
     except (httpx.HTTPError, ValueError):
         return []
     finally:

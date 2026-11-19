@@ -59,7 +59,7 @@ def init_db():
 
 
 def save_scan(target_url: str, critical: int, high: int, medium: int, low: int, results: list[dict]):
-    scan_date = datetime.datetime.now().isoformat()
+    scan_date = datetime.datetime.now(datetime.timezone.utc).isoformat()
     results_json = json.dumps(results, ensure_ascii=False)
     with _db() as conn:
         conn.execute(
@@ -228,7 +228,7 @@ def prune_old_scans(days: int) -> int:
     """
     if days <= 0:
         return 0
-    cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat()
+    cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)).isoformat()
     with _db() as conn:
         c = conn.cursor()
         c.execute("SELECT COUNT(*) FROM scans WHERE scan_date < ?", (cutoff,))

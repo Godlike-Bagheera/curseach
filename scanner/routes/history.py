@@ -232,7 +232,7 @@ def _render_pdf(template_name: str, ctx: dict, filename: str) -> Response:
     try:
         pdf_bytes = pdf_mod.html_to_pdf(html_str, ctx)
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {exc}")
+        raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {exc}") from exc
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

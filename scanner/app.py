@@ -2,11 +2,11 @@
 
 import asyncio
 import os
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from .config import origin_allowed
 from .routes import auth, common, history, misc, scan
@@ -37,7 +37,7 @@ app = FastAPI(title="DevSecOps Scanner", version="1.0", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+templates = common.NonceTemplates(directory=os.path.join(BASE_DIR, "templates"))
 common.init_templates(templates)
 templates.env.filters["vuln_slug"] = slugify
 
@@ -51,17 +51,20 @@ async def security_middleware(request: Request, call_next):
 
         return JSONResponse(status_code=403, content={"detail": "Origin not allowed"})
 
+    nonce = secrets.token_urlsafe(16)
+    request.state.csp_nonce = nonce
+
     response = await call_next(request)
 
     # Запрет встраивания в iframe (защита от clickjacking).
     response.headers["X-Frame-Options"] = "DENY"
     # Защита от MIME sniffing.
     response.headers["X-Content-Type-Options"] = "nosniff"
-    # CSP для HTML-страниц. Разрешаем inline-скрипты/стили — они нужны
-    # для шаблонов отчётов и инлайн Chart.js; внешние источники запрещены.
+    # CSP для HTML-страниц: скрипты только свои + nonce для inline-блоков
+    # (Chart.js в отчётах). Inline-стили разрешены (style-src), внешние источники запрещены.
     if "text/html" in response.headers.get("content-type", ""):
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; "
             "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
             "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"
         )

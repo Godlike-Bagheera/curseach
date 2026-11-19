@@ -433,10 +433,10 @@
 <body>
 
     <div class="toolbar">
-        <button class="btn-back" onclick="window.open('/history/{{ scan_id }}/view', '_blank')">Только таблица</button>
-        <button class="btn-bundle" onclick="window.location.href='/history/{{ scan_id }}/bundle'">Скачать всё (ZIP)</button>
-        <button class="btn-download-pdf" onclick="window.location.href='/history/{{ scan_id }}/full/pdf'" title="Серверный PDF: без дат/URL сверху и снизу">Скачать PDF</button>
-        <button class="btn-back" onclick="window.close()">Закрыть</button>
+        <button class="btn-back" data-action="open" data-url="/history/{{ scan_id }}/view">Только таблица</button>
+        <button class="btn-bundle" data-action="navigate" data-url="/history/{{ scan_id }}/bundle">Скачать всё (ZIP)</button>
+        <button class="btn-download-pdf" data-action="navigate" data-url="/history/{{ scan_id }}/full/pdf" title="Серверный PDF: без дат/URL сверху и снизу">Скачать PDF</button>
+        <button class="btn-back" data-action="close">Закрыть</button>
     </div>
 
     <div class="page">
@@ -610,7 +610,7 @@
 
     </div>
 
-    <script id="chart-data" type="application/json">
+    <script id="chart-data" type="application/json" nonce="{{ csp_nonce }}">
     {{ {
         "critical": critical,
         "high": high,
@@ -621,7 +621,7 @@
     </script>
 
     <script src="/static/chart.umd.min.js"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function () {
         var dataEl = document.getElementById('chart-data');
         if (!dataEl) return;
@@ -695,5 +695,6 @@
         });
     })();
     </script>
+<script src="/static/report.js"></script>
 </body>
 </html>
