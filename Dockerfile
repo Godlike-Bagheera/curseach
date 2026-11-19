@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 # Системные библиотеки для WeasyPrint (pango) + шрифты — иначе PDF в контейнере не работает.
 RUN apt-get update && apt-get install -y --no-install-recommends \
