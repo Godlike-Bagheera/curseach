@@ -39,7 +39,9 @@ async def _get_scan_or_404(scan_id: int) -> dict:
 # ---------- Экспорт всей истории ----------
 # ВАЖНО: /history/export.xlsx объявлен ДО /history/{scan_id},
 # иначе "export.xlsx" парсился бы как scan_id (как в исходном web_app.py).
-def _filter_scans_by_date(scans: list, date_from: str | None, date_to: str | None) -> list:
+def _filter_scans_by_date(
+    scans: list, date_from: str | None, date_to: str | None
+) -> list:
     """Фильтр сканов по дате (YYYY-MM-DD, включительно). Пустые границы — без фильтра."""
     if not date_from and not date_to:
         return scans
@@ -90,14 +92,16 @@ async def export_history_xlsx(
 @router.get("/history")
 async def get_history(
     user: str = Depends(require_admin),
-    date_from: Optional[str] = Query(None, alias="from"),
-    date_to: Optional[str] = Query(None, alias="to"),
-    target: Optional[str] = Query(None),
+    date_from: str | None = Query(None, alias="from"),
+    date_to: str | None = Query(None, alias="to"),
+    target: str | None = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
     """История сканов с серверной фильтрацией по дате/цели и пагинацией."""
-    items, total = await run_in_threadpool(database.query_scans, date_from, date_to, target, limit, offset)
+    items, total = await run_in_threadpool(
+        database.query_scans, date_from, date_to, target, limit, offset
+    )
     return JSONResponse(items, headers={"X-Total-Count": str(total)})
 
 
@@ -122,7 +126,9 @@ async def delete_all_history(user: str = Depends(require_admin)):
 
 # ---------- Страницы отчётов (HTML; серверный PDF — ниже) ----------
 @router.get("/history/{scan_id}/view", response_class=HTMLResponse)
-async def view_history_report(scan_id: int, request: Request, user: str = Depends(require_admin)):
+async def view_history_report(
+    scan_id: int, request: Request, user: str = Depends(require_admin)
+):
     scan = await _get_scan_or_404(scan_id)
     score = calculate_score(scan["critical"], scan["high"], scan["medium"], scan["low"])
     return common.templates.TemplateResponse(
@@ -145,14 +151,18 @@ async def view_history_report(scan_id: int, request: Request, user: str = Depend
 
 
 @router.get("/history/{scan_id}/chart", response_class=HTMLResponse)
-async def view_history_chart(scan_id: int, request: Request, user: str = Depends(require_admin)):
+async def view_history_chart(
+    scan_id: int, request: Request, user: str = Depends(require_admin)
+):
     scan = await _get_scan_or_404(scan_id)
     ctx = build_chart_context(scan)
     return common.templates.TemplateResponse(request, "chart.html", ctx)
 
 
 @router.get("/history/{scan_id}/full", response_class=HTMLResponse)
-async def view_history_full(scan_id: int, request: Request, user: str = Depends(require_admin)):
+async def view_history_full(
+    scan_id: int, request: Request, user: str = Depends(require_admin)
+):
     """Страница с объединённым отчётом: диаграмма + таблица находок."""
     scan = await _get_scan_or_404(scan_id)
     ctx = build_chart_context(scan, include_findings=True)
@@ -241,7 +251,9 @@ async def download_history_csv(scan_id: int, user: str = Depends(require_admin))
 @router.get("/history/{scan_id}/sarif")
 async def download_history_sarif(scan_id: int, user: str = Depends(require_admin)):
     scan = await _get_scan_or_404(scan_id)
-    sarif = results_to_sarif(scan["target_url"], scan["scan_date"], scan.get("results") or [])
+    sarif = results_to_sarif(
+        scan["target_url"], scan["scan_date"], scan.get("results") or []
+    )
     filename = f"scan_{scan_id}.sarif"
     return Response(
         content=json.dumps(sarif, ensure_ascii=False, indent=2),
