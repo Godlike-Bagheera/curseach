@@ -54,9 +54,22 @@ def main() -> int:
     url = f"http://127.0.0.1:{port}"
     env = dict(os.environ, SCANNER_ALLOW_PRIVATE_TARGETS="1")
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "web_app:app", "--host", "127.0.0.1",
-         "--port", str(port), "--log-level", "warning"],
-        cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "web_app:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
     )
     try:
         if not _wait_ready(url):
@@ -68,8 +81,10 @@ def main() -> int:
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(sarif, f, ensure_ascii=False, indent=2)
         critical = [r for r in task.scan_results if r.get("level") == "CRITICAL"]
-        print(f"[scanner-self-scan] status={task.status} findings={len(task.scan_results)} "
-              f"critical={len(critical)} -> {args.out}")
+        print(
+            f"[scanner-self-scan] status={task.status} findings={len(task.scan_results)} "
+            f"critical={len(critical)} -> {args.out}"
+        )
         if critical:
             print("[scanner-self-scan] РЕГРЕССИЯ: сканер сам содержит CRITICAL-уязвимости", file=sys.stderr)
             return 1
