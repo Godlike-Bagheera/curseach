@@ -20,8 +20,10 @@ async def about_page():
 async def vulns_page(request: Request):
     """Справочник популярных уязвимостей: EN + RU-название + RU-смысл. Доступен гостю."""
     from . import common
-    from ..vuln_guide import build_guide
-    return common.templates.TemplateResponse(request, "vulns.html", {"guide": build_guide()})
+    from ..vuln_guide import build_guide, build_registry
+    return common.templates.TemplateResponse(
+        request, "vulns.html", {"guide": build_guide(), "registry": build_registry()}
+    )
 
 
 @router.get("/healthz")

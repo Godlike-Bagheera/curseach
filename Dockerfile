@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 # Системные библиотеки для WeasyPrint (pango) + шрифты — иначе PDF в контейнере не работает.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

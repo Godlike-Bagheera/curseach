@@ -544,7 +544,7 @@
             </div>
             <div class="doc-header-right">
                 <div class="doc-id">Документ № DOC-001</div>
-                <div class="doc-date">Редакция 2.1</div>
+                <div class="doc-date">Редакция 2.2</div>
             </div>
         </div>
 
@@ -578,7 +578,7 @@
             </p>
             <ul class="list">
                 <li><strong>Сканер</strong> (<code class="inline">web_app.py</code>, порт 8001) — веб-интерфейс,
-                    который запускает проверки, ведёт живой лог, строит графики и формирует отчёты в 5 форматах.</li>
+                    который запускает проверки, ведёт живой лог, строит графики и формирует отчёты в 7 форматах (HTML, PDF, CSV, XLSX, JSON, SARIF, ZIP).</li>
                 <li><strong>Уязвимый стенд</strong> (<code class="inline">main.py</code>, порт 8000) — намеренно
                     уязвимый FastAPI-сервис, на котором можно безопасно тренировать сканер и проверять его работу.</li>
             </ul>
@@ -625,7 +625,6 @@ chmod +x run.sh
             <ul class="list">
                 <li>переходит в папку скрипта — запускать можно из любой директории;</li>
                 <li>проверит и поставит все зависимости в venv;</li>
-                <li>скачает Chromium для Playwright <em>внутрь venv</em> (<code class="inline">venv/.playwright-browsers</code>) — в систему ничего не летит;</li>
                 <li>найдёт свободные порты, если 8000 / 8001 заняты;</li>
                 <li>откроет браузер на <code class="inline">http://127.0.0.1:8001</code>;</li>
                 <li>корректно остановит оба сервера по <strong>Ctrl + C</strong>.</li>
@@ -644,7 +643,7 @@ chmod +x run.sh
                     <div class="ftitle">Режимы сканирования</div>
                     <div class="fdesc">
                         <b>Быстрый</b> — только ключевые проверки.<br>
-                        <b>Полный</b> — все 24 проверки.<br>
+                        <b>Полный</b> — все 26 проверок.<br>
                         <b>Свои</b> — галочками выбираются конкретные проверки.
                     </div>
                 </div>
@@ -665,8 +664,23 @@ chmod +x run.sh
                 <div class="feature-card">
                     <div class="ftitle">Отчёты</div>
                     <div class="fdesc">
-                        HTML, JSON, CSV, XLSX и PDF (серверный рендер через headless Chromium).
+                        HTML, JSON, CSV, XLSX, SARIF и PDF (серверный рендер через WeasyPrint).
                         Плюс ZIP-архив со всеми форматами сразу.
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="ftitle">Справочник уязвимостей</div>
+                    <div class="fdesc">
+                        Страница <code class="inline">/vulns</code>: EN + RU-название, понятный смысл,
+                        рекомендация, CWE и OWASP API Top 10. Ниже — реестр всех 26 проверок сканера.
+                        Поиск без перезагрузки, доступна гостю.
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="ftitle">Фильтр истории по датам</div>
+                    <div class="fdesc">
+                        Период «С/По», пресеты «Сегодня / 7 / 30 дней», счётчик «Показано X из Y»
+                        и экспорт XLSX за выбранный период. Выбор сохраняется между перезагрузками.
                     </div>
                 </div>
                 <div class="feature-card">
@@ -766,7 +780,7 @@ chmod +x run.sh
         <section id="checks">
             <div class="section-title"><span class="num">05</span> Проверки сканера</div>
 
-            <p>Всего реализовано <strong>24 проверки</strong>, сгруппированные по категориям.</p>
+            <p>Всего реализовано <strong>26 проверок</strong>, сгруппированные по категориям.</p>
 
             <table class="data-table">
                 <thead>
@@ -850,7 +864,7 @@ chmod +x run.sh
                         <td><b>HTML / PDF</b></td>
                         <td>
                             Официальный документ со сводкой, диаграммой и таблицей находок.
-                            PDF рендерится на сервере через headless Chromium — без системных
+                            PDF рендерится на сервере через WeasyPrint — без системных
                             колонтитулов браузера.
                         </td>
                     </tr>
@@ -948,7 +962,7 @@ chmod +x run.sh
                 <li>Открывается WebSocket на <code class="inline">/ws/scan/{task_id}</code>.</li>
                 <li>В фоновом потоке сканер логинится в стенд, дёргает <code class="inline">/openapi.json</code>
                     с <code class="inline">X-Scan-Start: 1</code> (стенд генерирует новый профиль уязвимостей).</li>
-                <li>24 проверки прогоняются последовательно, находки летят в UI по WebSocket.</li>
+                <li>26 проверок прогоняются параллельно, находки летят в UI по WebSocket.</li>
                 <li>Результат сохраняется в SQLite (<code class="inline">scans.db</code>) — <em>до</em> того,
                     как UI получит статус «ГОТОВО».</li>
                 <li>Пользователь может скачать отчёты и посмотреть график динамики.</li>
@@ -960,32 +974,55 @@ chmod +x run.sh
             <div class="section-title"><span class="num">08</span> Файлы проекта</div>
 
             <div class="tree">курсач/
-├── main.py              <span class="cm"># уязвимый API (цель для сканирования)</span>
-├── web_app.py           <span class="cm"># веб-сервер сканера</span>
-├── database.py          <span class="cm"># SQLite: история сканов</span>
-├── start.py             <span class="cm"># лаунчер (одна команда — два сервера)</span>
-├── run.sh               <span class="cm"># shell-обёртка над start.py для Linux</span>
-├── requirements.txt     <span class="cm"># зависимости</span>
+├── main.py              <span class="cm"># уязвимая цель (FastAPI)</span>
+├── web_app.py           <span class="cm"># точка входа сканера (re-export app)</span>
+├── database.py          <span class="cm"># SQLite: история сканов (WAL)</span>
+├── start.py             <span class="cm"># лаунчер: зависимости + два сервера</span>
+├── run.sh               <span class="cm"># shell-обёртка над start.py</span>
 ├── report_csv.py        <span class="cm"># генерация CSV-отчёта</span>
 ├── report_xlsx.py       <span class="cm"># генерация Excel-отчёта</span>
 ├── about.html           <span class="cm"># этот документ</span>
+├── requirements.txt     <span class="cm"># пины зависимостей</span>
+├── requirements-dev.txt <span class="cm"># pytest / ruff / mypy / coverage</span>
+├── Dockerfile           <span class="cm"># образ python:3.12-slim + pango</span>
+├── pyproject.toml       <span class="cm"># конфиг ruff</span>
+├── pytest.ini           <span class="cm"># конфиг pytest</span>
 │
-├── checks/              <span class="cm"># модуль проверок</span>
-│   ├── __init__.py      <span class="cm">#   реестр проверок</span>
-│   ├── base.py          <span class="cm">#   обёртки httpx, ScanContext, _is_auth_endpoint</span>
-│   ├── descriptions.py  <span class="cm">#   тексты уязвимостей и рекомендации</span>
+├── scanner/             <span class="cm"># веб-приложение сканера</span>
+│   ├── app.py           <span class="cm">#   FastAPI + CSP / security middleware</span>
+│   ├── config.py        <span class="cm">#   env, пароли, оценка, лимиты</span>
+│   ├── security.py      <span class="cm">#   anti-SSRF, сессии, rate-limit</span>
+│   ├── tasks.py         <span class="cm">#   движок сканирования (asyncio)</span>
+│   ├── reporting.py     <span class="cm">#   CSV / JSON / SARIF / ZIP / график</span>
+│   ├── pdf.py           <span class="cm">#   серверный PDF (WeasyPrint)</span>
+│   ├── vuln_guide.py    <span class="cm">#   справочник /vulns + реестр проверок</span>
+│   └── routes/          <span class="cm">#   auth, scan, history, misc, common</span>
+│
+├── checks/              <span class="cm"># 26 проверок безопасности</span>
+│   ├── __init__.py      <span class="cm">#   реестр CHECK_METADATA</span>
+│   ├── base.py          <span class="cm">#   ScanContext, бюджет запросов, evidence</span>
+│   ├── descriptions.py  <span class="cm">#   тексты уязвимостей, CWE / OWASP</span>
+│   ├── surface.py       <span class="cm">#   поверхности атаки из OpenAPI</span>
 │   ├── injection.py     <span class="cm">#   SQLi, OS command, error leak</span>
 │   ├── xss.py           <span class="cm">#   отражённый XSS</span>
 │   ├── access.py        <span class="cm">#   IDOR, CORS, CSRF, CAPTCHA</span>
-│   ├── auth.py          <span class="cm">#   cross-user IDOR, BFLA</span>
-│   ├── headers.py       <span class="cm">#   security headers, TLS, методы</span>
-│   ├── data.py          <span class="cm">#   sensitive data, SCA</span>
-│   ├── logic.py         <span class="cm">#   business logic, pagination</span>
-│   └── misc.py          <span class="cm">#   hidden paths, HTTP, rate limit</span>
+│   ├── auth.py          <span class="cm">#   cross-user IDOR, BFLA, JWT</span>
+│   ├── headers.py       <span class="cm">#   заголовки, TLS, методы</span>
+│   ├── data.py          <span class="cm">#   утечки данных, SCA / OSV</span>
+│   ├── logic.py         <span class="cm">#   бизнес-логика, пагинация, mass assignment</span>
+│   └── misc.py          <span class="cm">#   скрытые пути, HTTP, rate limit</span>
 │
-├── static/              <span class="cm"># CSS, JS, Chart.js</span>
-├── templates/           <span class="cm"># Jinja2: login, index, отчёты, диаграмма</span>
-└── venv/                <span class="cm"># виртуальное окружение (не в git)</span></div>
+├── static/              <span class="cm"># style.css, fonts.css, шрифты, JS</span>
+│   ├── fonts/           <span class="cm">#   JetBrains Mono (self-hosted woff2)</span>
+│   ├── script.js        <span class="cm">#   логика UI сканера</span>
+│   ├── history_filter.* <span class="cm">#   фильтр истории по датам</span>
+│   └── vulns.js         <span class="cm">#   поиск по справочнику</span>
+│
+├── templates/           <span class="cm"># index, login, vulns, отчёты, диаграмма</span>
+├── scripts/self_scan.py <span class="cm"># self-scan для CI (SARIF)</span>
+├── tests/               <span class="cm"># pytest: юнит + e2e</span>
+├── .github/workflows/   <span class="cm"># CI + Security Scan</span>
+└── .devcontainer/       <span class="cm"># GitHub Codespaces</span></div>
         </section>
 
         <!-- ================= 09 ================= -->
@@ -1006,7 +1043,7 @@ chmod +x run.sh
                     <tr><td><b>Jinja2</b></td><td>HTML-шаблоны отчётов</td></tr>
                     <tr><td><b>Chart.js</b></td><td>График динамики уязвимостей</td></tr>
                     <tr><td><b>openpyxl</b></td><td>Генерация XLSX-отчётов</td></tr>
-                    <tr><td><b>Playwright</b></td><td>Серверный рендер PDF через headless Chromium</td></tr>
+                    <tr><td><b>WeasyPrint</b></td><td>Серверный рендер PDF через WeasyPrint</td></tr>
                     <tr><td><b>WebSocket</b></td><td>Живой лог сканирования</td></tr>
                 </tbody>
             </table>
@@ -1058,7 +1095,7 @@ chmod +x run.sh
 
         <div class="doc-footer">
             <span>DevSecOps Scanner — учебный проект</span>
-            <span>Редакция 2.1</span>
+            <span>Редакция 2.2</span>
         </div>
 
     </main>

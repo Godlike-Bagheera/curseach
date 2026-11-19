@@ -718,7 +718,15 @@ async function clearAllHistory() {
 // ---------- Export history ----------
 function exportHistory() {
     if (isGuest) return;
-    window.location.href = '/history/export.xlsx';
+    let url = '/history/export.xlsx';
+    try {
+        const r = JSON.parse(localStorage.getItem('curseach.historyRange') || '{}');
+        const p = new URLSearchParams();
+        if (r.from) p.set('from', r.from);
+        if (r.to) p.set('to', r.to);
+        if (p.toString()) url += '?' + p.toString();
+    } catch (e) { /* фильтр не задан — экспортируем всё */ }
+    window.location.href = url;
 }
 
 // ---------- Wire up ----------

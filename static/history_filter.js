@@ -41,6 +41,13 @@
     const el = panel && panel.querySelector('.hf-count');
     if (el) el.textContent = `Показано ${shown} из ${tot == null ? shown : tot}`;
   }
+  function exportHint() {
+    const b = document.getElementById('exportHistoryBtn');
+    if (!b) return;
+    const active = !!(state.from || state.to);
+    b.title = active ? 'Экспорт только за выбранный период' : 'Экспорт всей истории';
+    b.textContent = active ? 'ЭКСПОРТ ИСТОРИИ (XLSX) · ПЕРИОД' : 'ЭКСПОРТ ИСТОРИИ (XLSX)';
+  }
   function rowDate(row) {
     const m = (row.textContent || '').match(/\d{4}-\d{2}-\d{2}/);
     return m ? m[0] : null;
@@ -67,6 +74,7 @@
         host.parentNode.insertBefore(empty, host.nextSibling);
       }
     } else if (empty) { empty.remove(); empty = null; }
+    exportHint();
   }
 
   function setRange(from, to, chip) {

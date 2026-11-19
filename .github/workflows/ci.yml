@@ -28,6 +28,9 @@ jobs:
         continue-on-error: true
         run: mypy checks scanner database.py main.py
 
+      - name: System libs for WeasyPrint (HarfBuzz-Subset)
+        run: sudo apt-get update && sudo apt-get install -y libharfbuzz-subset0
+
       - name: Run tests + coverage
         run: pytest -q --cov=checks --cov=scanner --cov-report=term-missing --cov-report=xml
 

@@ -63,6 +63,15 @@ def ensure_dependencies():
               "PDF-экспорт будет недоступен, остальные отчёты работают. В Docker всё вшито.")
 
 
+def _pick_ports(api_preferred, web_preferred):
+    """Два РАЗНЫХ свободных порта: цель и сканер не должны занять один и тот же."""
+    api_port = _free_port(api_preferred)
+    web_port = _free_port(web_preferred)
+    if web_port == api_port:
+        web_port = _free_port(web_port + 1)
+    return api_port, web_port
+
+
 def _free_port(preferred):
     for port in range(preferred, preferred + 50):
         with socket.socket() as s:
@@ -84,8 +93,8 @@ def main():
     from main import app as target_app
     from scanner.app import app as scanner_app
 
-    api_port = _free_port(int(os.environ.get("API_PORT", "8000")))
-    web_port = _free_port(int(os.environ.get("SCANNER_PORT", "8001")))
+    api_port, web_port = _pick_ports(int(os.environ.get("API_PORT", "8000")),
+                                     int(os.environ.get("SCANNER_PORT", "8001")))
     api_host = os.environ.get("API_HOST", "127.0.0.1")
     web_host = os.environ.get("SCANNER_HOST", "127.0.0.1")
 
