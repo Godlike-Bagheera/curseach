@@ -26,6 +26,7 @@ omit = ["tests/*", "scanner/pdf.py"]
 
 [tool.coverage.report]
 show_missing = true
+fail_under = 75
 
 [tool.ruff.lint.per-file-ignores]
 # __init__.py — хабы реэкспорта публичного API (checks, scanner, routes).
