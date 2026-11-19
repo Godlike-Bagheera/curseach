@@ -88,8 +88,17 @@ async def export_history_xlsx(
 
 # ---------- История (JSON) ----------
 @router.get("/history")
-async def get_history(user: str = Depends(require_admin)):
-    return JSONResponse(await run_in_threadpool(database.get_all_scans))
+async def get_history(
+    user: str = Depends(require_admin),
+    date_from: str | None = Query(None, alias="from"),
+    date_to: str | None = Query(None, alias="to"),
+    target: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """История сканов с серверной фильтрацией по дате/цели и пагинацией."""
+    items, total = await run_in_threadpool(database.query_scans, date_from, date_to, target, limit, offset)
+    return JSONResponse(items, headers={"X-Total-Count": str(total)})
 
 
 @router.get("/history/{scan_id}")

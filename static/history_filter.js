@@ -1,80 +1,24 @@
 'use strict';
+/* Панель фильтра истории по датам. Фильтрация выполняется на сервере
+   (/history?from=&to=), панель лишь хранит выбор в localStorage и
+   запускает перезагрузку списка через window.__curseachHistoryReload. */
 (function () {
   const LS = 'curseach.historyRange';
   let state = {};
   try { state = JSON.parse(localStorage.getItem(LS)) || {}; } catch (e) { state = {}; }
-  let total = null, panel = null, empty = null, host = null;
+  let panel = null, host = null;
 
   const iso = d => d.toISOString().slice(0, 10);
   const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n + 1); return d; };
   const save = () => localStorage.setItem(LS, JSON.stringify(state));
-  const inRange = s => {
-    const d = (s || '').slice(0, 10);
-    if (!d || (!state.from && !state.to)) return true;
-    if (state.from && d < state.from) return false;
-    if (state.to && d > state.to) return false;
-    return true;
-  };
+  const reload = () => { if (typeof window.__curseachHistoryReload === 'function') window.__curseachHistoryReload(); };
 
-  // 1) фильтруем JSON /history до того, как его отрендерит существующий код
-  const origFetch = window.fetch.bind(window);
-  window.fetch = async function (input, init) {
-    const url = typeof input === 'string' ? input : (input && input.url) || '';
-    const resp = await origFetch(input, init);
-    if (url.split('?')[0].endsWith('/history')) {
-      try {
-        const data = await resp.clone().json();
-        if (Array.isArray(data)) {
-          total = data.length;
-          const filtered = data.filter(s => inRange(s.scan_date));
-          const h = new Headers(resp.headers); h.delete('content-length');
-          count(filtered.length, total);
-          return new Response(JSON.stringify(filtered),
-            { status: resp.status, statusText: resp.statusText, headers: h });
-        }
-      } catch (e) { /* не JSON — пропускаем как есть */ }
-    }
-    return resp;
-  };
-
-  function count(shown, tot) {
-    const el = panel && panel.querySelector('.hf-count');
-    if (el) el.textContent = `Показано ${shown} из ${tot == null ? shown : tot}`;
-  }
   function exportHint() {
     const b = document.getElementById('exportHistoryBtn');
     if (!b) return;
     const active = !!(state.from || state.to);
     b.title = active ? 'Экспорт только за выбранный период' : 'Экспорт всей истории';
     b.textContent = active ? 'ЭКСПОРТ ИСТОРИИ (XLSX) · ПЕРИОД' : 'ЭКСПОРТ ИСТОРИИ (XLSX)';
-  }
-  function rowDate(row) {
-    const m = (row.textContent || '').match(/\d{4}-\d{2}-\d{2}/);
-    return m ? m[0] : null;
-  }
-  function applyToDom() {
-    if (!host) return;
-    const rows = host.querySelectorAll('tr, li, .history-item, .history-row, [data-scan-id]');
-    let shown = 0, seen = 0;
-    rows.forEach(r => {
-      if (r.querySelector('tr, li')) return;
-      const d = rowDate(r);
-      if (d === null) return;
-      seen++;
-      const ok = inRange(d);
-      r.style.display = ok ? '' : 'none';
-      if (ok) shown++;
-    });
-    if (seen) count(shown, total == null ? seen : total);
-    if (seen && !shown) {
-      if (!empty) {
-        empty = document.createElement('div');
-        empty.className = 'hf-empty';
-        empty.textContent = 'За выбранный период проверок нет';
-        host.parentNode.insertBefore(empty, host.nextSibling);
-      }
-    } else if (empty) { empty.remove(); empty = null; }
-    exportHint();
   }
 
   function setRange(from, to, chip) {
@@ -84,7 +28,8 @@
     save();
     panel.querySelectorAll('input[type=date]').forEach(i => { i.value = state[i.dataset.k] || ''; });
     panel.querySelectorAll('.hf-chip').forEach(c => c.classList.toggle('active', c === chip));
-    applyToDom();
+    exportHint();
+    reload();
   }
 
   function mount(h) {
@@ -109,7 +54,7 @@
       i.addEventListener('change', () => {
         state[i.dataset.k] = i.value || undefined; save();
         panel.querySelectorAll('.hf-chip').forEach(c => c.classList.remove('active'));
-        applyToDom();
+        exportHint(); reload();
       });
     });
     panel.querySelectorAll('.hf-chip').forEach(c => c.addEventListener('click', () => {
@@ -117,14 +62,10 @@
       setRange(n ? iso(daysAgo(n)) : null, n ? iso(new Date()) : null, c);
     }));
     panel.querySelector('.hf-reset').addEventListener('click', () => setRange(null, null, null));
-    new MutationObserver(() => requestAnimationFrame(applyToDom))
-      .observe(h, { childList: true, subtree: true });
-    applyToDom();
+    exportHint();
   }
 
   function findHost() {
-    // Реальный контейнер списка истории в index.html — #historyList (div.history-list):
-    // панель встаёт прямо над таблицей, внутри вкладки «История».
     const list = document.getElementById('historyList');
     if (list) return list;
     const c = document.querySelectorAll('[id*="history" i], [class*="history" i]');
