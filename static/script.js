@@ -295,6 +295,10 @@ function setStatus(data) {
     if (typeof data.low_count === 'number' && lowCount) lowCount.textContent = data.low_count;
     if (typeof data.score === 'number') applyScoreStyle(data.score);
     if (typeof data.progress === 'number' && progressBar) progressBar.style.width = (data.progress * 100) + '%';
+    const reqEl = $('progressRequests');
+    if (reqEl && typeof data.requests_used === 'number') {
+        reqEl.textContent = 'ЗАПРОСОВ ' + data.requests_used + ' / ' + (data.requests_max || '—');
+    }
     if (data.status && statusValue) {
         statusValue.textContent = STATUS_MAP[data.status] || data.status.toUpperCase();
     }
@@ -654,7 +658,7 @@ async function loadHistory(page) {
             const table = el('table', { className: 'history-table' });
             const thead = el('thead', null, [
                 el('tr', null, [
-                    el('th', { text: 'ID' }), el('th', { text: 'ДАТА' }), el('th', { text: 'ЦЕЛЬ' }),
+                    el('th', { text: 'DIFF' }), el('th', { text: 'ID' }), el('th', { text: 'ДАТА' }), el('th', { text: 'ЦЕЛЬ' }),
                     el('th', { text: 'КРИТ' }), el('th', { text: 'ВЫС' }), el('th', { text: 'СРЕД' }),
                     el('th', { text: 'НИЗК' }), el('th', { text: 'ДЕЙСТВИЯ' }),
                 ]),
@@ -676,6 +680,8 @@ async function loadHistory(page) {
                         } catch (e) { alert('Ошибка: ' + e.message); }
                     } });
                 const row = el('tr', null, [
+                    el('td', { className: 'diff-cell' }, [el('input', { type: 'checkbox', className: 'diff-check',
+                        dataset: { id: String(s.id), target: s.target_url }, title: 'Выбрать для сравнения' })]),
                     el('td', { text: String(s.id) }),
                     el('td', { text: s.scan_date.replace('T', ' ').slice(0, 19) }),
                     el('td', { className: 'url-cell', text: s.target_url, title: s.target_url }),
@@ -692,6 +698,7 @@ async function loadHistory(page) {
             container.appendChild(table);
         }
         renderHistoryPager(total);
+        updateDiffButton();
         const cnt = document.querySelector('.hf-count');
         if (cnt) cnt.textContent = `Показано ${scans.length} из ${total}`;
     } catch (e) {
@@ -716,6 +723,23 @@ async function loadHistoryChart() {
         if (!resp.ok) return;
         renderHistoryChart(await resp.json());
     } catch (e) { /* график не критичен — молча пропускаем */ }
+}
+
+function updateDiffButton() {
+    const btn = $('diffHistoryBtn');
+    if (!btn) return;
+    const checked = document.querySelectorAll('.diff-check:checked');
+    btn.textContent = `СРАВНИТЬ (${checked.length}/2)`;
+    btn.disabled = checked.length !== 2;
+}
+
+function openDiff() {
+    const checked = [...document.querySelectorAll('.diff-check:checked')];
+    if (checked.length !== 2) return;
+    const targets = new Set(checked.map(c => c.dataset.target));
+    if (targets.size > 1) { alert('Выберите два скана одной цели'); return; }
+    const ids = checked.map(c => parseInt(c.dataset.id, 10)).sort((x, y) => x - y);
+    window.open(`/history/diff/view?a=${ids[0]}&b=${ids[1]}`, '_blank');
 }
 
 function renderHistoryPager(total) {
@@ -788,6 +812,9 @@ if (!isGuest) {
         historyTargetFilter.addEventListener('keydown', e => { if (e.key === 'Enter') { loadHistory(0); loadHistoryChart(); } });
     }
     $('clearAllHistoryBtn').addEventListener('click', clearAllHistory);
+    $('historyList').addEventListener('change', e => { if (e.target.classList.contains('diff-check')) updateDiffButton(); });
+    const diffBtn = $('diffHistoryBtn');
+    if (diffBtn) diffBtn.addEventListener('click', openDiff);
     const exportBtn = $('exportHistoryBtn');
     if (exportBtn) exportBtn.addEventListener('click', exportHistory);
 } else {

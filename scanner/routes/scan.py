@@ -11,7 +11,7 @@ import checks
 import report_csv
 import report_xlsx
 
-from ..config import SESSION_TTL_SECONDS
+from ..config import SCAN_MAX_REQUESTS, SESSION_TTL_SECONDS
 from ..reporting import render_report
 from ..security import origin_allowed, require_admin, safe_host_for_filename, sessions, validate_target_url
 from ..tasks import ScanRequest, ScanTask, run_scan_in_thread, tasks
@@ -119,6 +119,8 @@ async def ws_scan(websocket: WebSocket, task_id: str):
             "medium_count": task.medium_count,
             "low_count": task.low_count,
             "score": task.score,
+            "requests_used": task.budget.used if task.budget else 0,
+            "requests_max": task.budget.max_requests if task.budget else SCAN_MAX_REQUESTS,
         }
     )
 

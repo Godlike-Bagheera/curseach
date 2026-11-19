@@ -164,6 +164,7 @@
             <div class="progress-container">
                 <div class="progress-bar" id="progressBar"></div>
             </div>
+            <span class="progress-requests" id="progressRequests">ЗАПРОСОВ 0 / —</span>
 
             <div class="terminal" id="terminal">
                 <div class="terminal-line terminal-info">&gt; {% if is_guest %}гостевой режим — сканирование недоступно{% else %}ожидание команды...{% endif %}</div>
@@ -202,6 +203,7 @@
                 <button id="clearAllHistoryBtn" class="action-btn btn-clear-all">ОЧИСТИТЬ ВСЮ ИСТОРИЮ</button>
                 <button id="exportHistoryBtn" class="action-btn">ЭКСПОРТ ИСТОРИИ (XLSX)</button>
                 <button id="refreshHistoryBtn" class="action-btn">ОБНОВИТЬ</button>
+                <button id="diffHistoryBtn" class="action-btn" disabled>СРАВНИТЬ (0/2)</button>
             </div>
         </div>
     </section>
