@@ -26,6 +26,11 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 - **Детерминированная цель**: заголовок `X-Scan-Seed` фиксирует профиль уязвимостей (воспроизводимые тесты).
 - Anti-SSRF (включая пиннинг проверенного IP от DNS-rebinding), CSRF-Origin-политика, CSP,
   PBKDF2-пароли, HttpOnly-cookie, rate-limit логина.
+- **Справочник `/vulns`**: EN + RU-название и смысл популярных уязвимостей, рекомендации,
+  CWE/OWASP API Top 10 и реестр всех 26 проверок; поиск без перезагрузки, доступен гостю.
+- **Фильтр истории по датам**: период «С/По», пресеты «Сегодня/7/30 дней», счётчик,
+  экспорт XLSX за выбранный период; выбор сохраняется в localStorage.
+- **JetBrains Mono self-hosted** (`static/fonts/`) — строгая CSP без внешних CDN, работа офлайн.
 
 ## Быстрый старт
 
@@ -93,11 +98,16 @@ coverage, smoke-import. Отдельный workflow **Security Scan** скани
 ## Структура
 
 - `main.py` — уязвимая цель (FastAPI), профиль уязвимостей рандомизируется на скан (или фиксируется seed-ом)
-- `scanner/` — веб-приложение сканера (app, config, security, tasks, reporting, routes)
-- `checks/` — 26 проверок + поверхности атаки из OpenAPI (`surface.py`)
+- `scanner/` — веб-приложение сканера: `app`, `config`, `security` (anti-SSRF/сессии), `tasks` (движок),
+  `reporting`, `pdf` (WeasyPrint), `vuln_guide` (справочник `/vulns`), `routes/` (auth/scan/history/misc)
+- `checks/` — 26 проверок + поверхности атаки из OpenAPI (`surface.py`), описания и CWE/OWASP (`descriptions.py`)
 - `scripts/self_scan.py` — self-scan для CI (SARIF)
-- `templates/`, `static/` — UI
+- `templates/` — index, login, `vulns` (справочник), отчёты и диаграмма
+- `static/` — UI: `style.css`, `fonts.css` + `fonts/` (self-hosted JetBrains Mono), `script.js`,
+  `history_filter.*` (фильтр истории), `vulns.js` (поиск по справочнику)
 - `database.py` — история сканов (SQLite, WAL)
+- `tests/` — pytest: юнит-тесты проверок и роутов + e2e-скан
+- `Dockerfile`, `.devcontainer/`, `.github/workflows/` — контейнер, Codespaces, CI и Security Scan
 
 ## Лицензия
 

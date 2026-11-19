@@ -6,8 +6,9 @@ PDF рендерится на сервере через WeasyPrint (/history/{id
 
 import datetime
 import json
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
@@ -39,9 +40,28 @@ async def _get_scan_or_404(scan_id: int) -> dict:
 # ---------- Экспорт всей истории ----------
 # ВАЖНО: /history/export.xlsx объявлен ДО /history/{scan_id},
 # иначе "export.xlsx" парсился бы как scan_id (как в исходном web_app.py).
+def _filter_scans_by_date(scans: list, date_from: Optional[str], date_to: Optional[str]) -> list:
+    """Фильтр сканов по дате (YYYY-MM-DD, включительно). Пустые границы — без фильтра."""
+    if not date_from and not date_to:
+        return scans
+    out = []
+    for s in scans:
+        d = (s.get("scan_date") or "")[:10]
+        if date_from and d < date_from:
+            continue
+        if date_to and d > date_to:
+            continue
+        out.append(s)
+    return out
+
+
 @router.get("/history/export.xlsx")
-async def export_history_xlsx(user: str = Depends(require_admin)):
-    """Сводный XLSX по всем сканам в истории."""
+async def export_history_xlsx(
+    user: str = Depends(require_admin),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+):
+    """Сводный XLSX по сканам истории (опционально — за период ?from=&to=)."""
     if not report_xlsx.is_available():
         raise HTTPException(
             status_code=503,
@@ -49,6 +69,7 @@ async def export_history_xlsx(user: str = Depends(require_admin)):
         )
 
     scans = await run_in_threadpool(database.get_all_scans)
+    scans = _filter_scans_by_date(scans, date_from, date_to)
     content = report_xlsx.generate_history_xlsx(scans)
     if content is None:
         raise HTTPException(
