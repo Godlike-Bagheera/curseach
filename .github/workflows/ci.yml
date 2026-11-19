@@ -34,6 +34,8 @@ jobs:
           node --check static/script.js
           node --check static/history_filter.js
           node --check static/vulns.js
+          node --check static/report.js
+          node --check static/diff.js
 
       - name: Lint (ruff)
         run: ruff check .
@@ -48,7 +50,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libharfbuzz-subset0
 
       - name: Run tests + coverage
-        run: pytest -q --cov=checks --cov=scanner --cov-report=term-missing --cov-report=xml --cov-fail-under=70
+        run: pytest -q --cov=checks --cov=scanner --cov-report=term-missing --cov-report=xml --cov-fail-under=75
 
       - name: Smoke — import app
         run: python -c "import web_app; print('app OK')"
@@ -73,4 +75,4 @@ jobs:
         run: python -m playwright install chromium --with-deps
 
       - name: UI smoke (Playwright)
-        run: pytest tests/test_ui_smoke.py -q
+        run: pytest tests/test_ui_smoke.py tests/test_ui_scan.py -q
