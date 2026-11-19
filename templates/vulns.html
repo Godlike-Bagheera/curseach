@@ -53,6 +53,7 @@
   @media (max-width:640px){.vg-title{font-size:21px}.vg-grid{grid-template-columns:1fr}}
   @media print{.vg-searchrow,.vg-back{display:none}.vg-card,.vr-card{break-inside:avoid;border-color:#999}
     .vg-title{text-shadow:none}.vg-sub,.vg-meaning,.vg-rec,.vg-check{color:#333}}
+.vr-card.vg-target{border-color:var(--fg);box-shadow:0 0 16px rgba(0,255,65,.4)}
 </style>
 </head>
 <body>
@@ -91,7 +92,7 @@
   <h2 class="vg-h2">&gt; Все проверки сканера ({{ registry|length }})</h2>
   <div class="vg-grid" id="vr-grid">
     {% for r in registry %}
-    <article class="vr-card" data-search="{{ r.search }}">
+    <article class="vr-card" id="reg-{{ r.id }}" data-search="{{ r.search }}">
       <div class="vr-head">
         <h3 class="vr-name">{{ r.name }}</h3>
         <span class="vr-badge vr-lvl-{{ r.level|lower }}">{{ r.level }}</span>

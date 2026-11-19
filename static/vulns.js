@@ -33,7 +33,7 @@
     var id = (location.hash || '').slice(1);
     if (!id) return;
     var el = document.getElementById(id);
-    if (el && el.classList.contains('vg-card')) {
+    if (el && (el.classList.contains('vg-card') || el.classList.contains('vr-card'))) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el.classList.add('vg-target');
       setTimeout(function () { el.classList.remove('vg-target'); }, 2400);

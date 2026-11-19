@@ -219,3 +219,19 @@ def query_scans(date_from=None, date_to=None, target=None, limit=50, offset=0):
         for r in rows
     ]
     return items, total
+
+
+def prune_old_scans(days: int) -> int:
+    """Retention: удаляет сканы старше N дней. Возвращает число удалённых записей.
+
+    days <= 0 — выключено (ничего не удаляем). Включается env SCANNER_HISTORY_RETENTION_DAYS.
+    """
+    if days <= 0:
+        return 0
+    cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat()
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM scans WHERE scan_date < ?", (cutoff,))
+        count = c.fetchone()[0]
+        c.execute("DELETE FROM scans WHERE scan_date < ?", (cutoff,))
+    return count

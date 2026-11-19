@@ -30,7 +30,7 @@ async def check_jwt_none(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     к защищённому эндпоинту из OpenAPI. Если сервер принимает поддельный
     токен — это критическое нарушение аутентификации (CWE-347).
     """
-    findings = []
+    findings: list = []
     # Приоритетные цели: пути, где в спецификации есть 401/403 (требуют auth)
     try:
         spec = await ctx.client.get(f"{ctx.target_url}/openapi.json")

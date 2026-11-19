@@ -21,7 +21,7 @@ from .descriptions import get_vuln_info
 
 # ================== IDOR / Broken Access Control ==================
 async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    findings = []
+    findings: list = []
     seen_endpoints = set()
 
     param_endpoints = [p for p in endpoints if "{" in p and "}" in p]
@@ -89,7 +89,7 @@ async def check_idor_auth(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     if not ctx.has_auth:
         return []
 
-    findings = []
+    findings: list = []
     for ep in endpoints:
         if "{" in ep or "}" in ep:
             continue
@@ -129,8 +129,7 @@ async def check_idor_auth(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
 
 # ================== CSRF (эвристика) ==================
 async def check_csrf(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    findings = []
-
+    findings: list = []
     # Логин / регистрация — не state-changing эндпоинты.
     # На них CSRF-токен не нужен, поэтому не проверяем их и не
     # считаем отсутствие токена уязвимостью.
@@ -163,7 +162,7 @@ async def check_csrf(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
 
 # ================== CORS ==================
 async def check_cors(ctx: ScanContext, endpoints: list[str] | None = None) -> list[dict]:
-    findings = []
+    findings: list = []
     r = await _safe_options(ctx.client, ctx.target_url)
     if r is None:
         r = await _safe_get(ctx.client, ctx.target_url)
@@ -185,7 +184,7 @@ async def check_cors(ctx: ScanContext, endpoints: list[str] | None = None) -> li
 
 # ================== CAPTCHA (эвристика) ==================
 async def check_captcha(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    findings = []
+    findings: list = []
     login_endpoints = [e for e in endpoints if "login" in e.lower() or "auth" in e.lower()]
     if not login_endpoints:
         return findings

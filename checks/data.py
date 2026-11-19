@@ -12,7 +12,7 @@ from .descriptions import get_vuln_info
 
 # ================== Sensitive data ==================
 async def check_sensitive_data(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    findings = []
+    findings: list = []
     patterns = [
         (r"AKIA[0-9A-Z]{16}", "AWS-ключ"),
         (r"BEGIN (RSA|DSA|EC) PRIVATE KEY", "Приватный ключ"),
@@ -47,7 +47,7 @@ async def check_sensitive_data(ctx: ScanContext, endpoints: list[str]) -> list[d
 
 # ================== SCA ==================
 async def check_sca(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    findings = []
+    findings: list = []
     for path in ("/package.json", "/requirements.txt", "/pom.xml", "/build.gradle"):
         r = await _safe_get(ctx.client, f"{ctx.target_url}{path}")
         if r is None:

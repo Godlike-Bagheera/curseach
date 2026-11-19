@@ -1,6 +1,7 @@
 """Задачи сканирования: ScanTask, движок, реестр задач, фоновый GC."""
 
 import asyncio
+import os
 import sqlite3
 import threading
 import time
@@ -466,6 +467,12 @@ async def gc_loop():
                     continue
                 if task.finished_at and now - task.finished_at > TASK_TTL_SECONDS:
                     tasks.pop(tid, None)
+
+            retention = int(os.environ.get("SCANNER_HISTORY_RETENTION_DAYS", "0") or 0)
+            if retention > 0:
+                import database
+
+                database.prune_old_scans(retention)
         except asyncio.CancelledError:
             break
         except Exception:
