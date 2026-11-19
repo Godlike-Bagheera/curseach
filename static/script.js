@@ -146,7 +146,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.add('active');
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(btn.dataset.tab).classList.add('active');
-        if (btn.dataset.tab === 'history' && !isGuest) loadHistory();
+        if (btn.dataset.tab === 'history' && !isGuest) { loadHistory(); loadHistoryChart(); }
     });
 });
 
@@ -644,11 +644,12 @@ async function loadHistory(page) {
         const scans = await resp.json();
         const total = parseInt(resp.headers.get('X-Total-Count') || String(scans.length), 10);
         cachedScans = scans;
-        renderHistoryChart(scans);
 
         clear(container);
         if (!scans.length) {
-            container.appendChild(el('div', { className: 'empty-history', text: 'История пуста' }));
+            const filtered = !!(f.from || f.to || target);
+            container.appendChild(el('div', { className: 'empty-history',
+                text: filtered ? 'За выбранный период проверок нет' : 'История пуста' }));
         } else {
             const table = el('table', { className: 'history-table' });
             const thead = el('thead', null, [
@@ -671,7 +672,7 @@ async function loadHistory(page) {
                         if (!confirm('Удалить скан #' + s.id + '?')) return;
                         try {
                             const r = await fetch(`/history/${s.id}`, { method: 'DELETE' });
-                            if (r.ok) loadHistory(); else alert('Ошибка удаления');
+                            if (r.ok) { loadHistory(); loadHistoryChart(); } else alert('Ошибка удаления');
                         } catch (e) { alert('Ошибка: ' + e.message); }
                     } });
                 const row = el('tr', null, [
@@ -699,6 +700,24 @@ async function loadHistory(page) {
     }
 }
 
+async function loadHistoryChart() {
+    if (isGuest) return;
+    const f = historyFilterState();
+    const targetInput = $('historyTargetFilter');
+    const target = targetInput ? targetInput.value.trim() : '';
+    const p = new URLSearchParams();
+    if (f.from) p.set('from', f.from);
+    if (f.to) p.set('to', f.to);
+    if (target) p.set('target', target);
+    p.set('limit', '60');
+    p.set('offset', '0');
+    try {
+        const resp = await fetch('/history?' + p.toString());
+        if (!resp.ok) return;
+        renderHistoryChart(await resp.json());
+    } catch (e) { /* график не критичен — молча пропускаем */ }
+}
+
 function renderHistoryPager(total) {
     let pager = $('historyPager');
     if (!pager) {
@@ -718,7 +737,7 @@ function renderHistoryPager(total) {
     pager.appendChild(prev); pager.appendChild(info); pager.appendChild(next);
 }
 
-window.__curseachHistoryReload = () => loadHistory(0);
+window.__curseachHistoryReload = () => { loadHistory(0); loadHistoryChart(); };
 
 // ---------- Clear all history ----------
 async function clearAllHistory() {
@@ -733,6 +752,7 @@ async function clearAllHistory() {
         const data = await resp.json();
         alert(`Удалено записей: ${data.count}`);
         loadHistory();
+        loadHistoryChart();
     } catch (e) {
         alert('Ошибка: ' + e.message);
     }
@@ -761,11 +781,11 @@ if (!isGuest) {
     jsonBtn.addEventListener('click', () => exportReport('json'));
     csvBtn.addEventListener('click', () => exportReport('csv'));
     xlsxBtn.addEventListener('click', () => exportReport('xlsx'));
-    $('refreshHistoryBtn').addEventListener('click', () => loadHistory(historyPage));
+    $('refreshHistoryBtn').addEventListener('click', () => { loadHistory(historyPage); loadHistoryChart(); });
     const historyTargetFilter = $('historyTargetFilter');
     if (historyTargetFilter) {
-        historyTargetFilter.addEventListener('change', () => loadHistory(0));
-        historyTargetFilter.addEventListener('keydown', e => { if (e.key === 'Enter') loadHistory(0); });
+        historyTargetFilter.addEventListener('change', () => { loadHistory(0); loadHistoryChart(); });
+        historyTargetFilter.addEventListener('keydown', e => { if (e.key === 'Enter') { loadHistory(0); loadHistoryChart(); } });
     }
     $('clearAllHistoryBtn').addEventListener('click', clearAllHistory);
     const exportBtn = $('exportHistoryBtn');
