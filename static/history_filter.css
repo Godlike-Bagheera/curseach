@@ -1,0 +1,21 @@
+/* Панель фильтра истории — в CRT-стиле сайта */
+.hf-panel{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px;
+  padding:12px 14px;border:1px solid rgba(51,255,102,.25);border-radius:10px;
+  background:rgba(51,255,102,.05);font-family:inherit;color-scheme:dark}
+.hf-panel label{display:flex;align-items:center;gap:6px;font-size:12px;letter-spacing:.06em;
+  text-transform:uppercase;opacity:.85}
+.hf-panel input[type=date]{background:rgba(0,0,0,.45);border:1px solid rgba(51,255,102,.35);
+  color:inherit;border-radius:6px;padding:6px 8px;font:inherit;font-size:13px}
+.hf-panel input[type=date]:focus-visible,.hf-chip:focus-visible,.hf-reset:focus-visible{
+  outline:2px solid #33ff66;outline-offset:2px}
+.hf-chips{display:flex;gap:6px;flex-wrap:wrap}
+.hf-chip,.hf-reset{cursor:pointer;background:transparent;border:1px solid rgba(51,255,102,.35);
+  color:inherit;border-radius:999px;padding:5px 12px;font:inherit;font-size:12px;
+  transition:background .15s,border-color .15s}
+.hf-chip:hover,.hf-reset:hover{background:rgba(51,255,102,.12)}
+.hf-chip.active{background:rgba(51,255,102,.2);border-color:#33ff66}
+.hf-reset{border-style:dashed;opacity:.8}
+.hf-count{margin-left:auto;font-size:12px;opacity:.75;white-space:nowrap}
+.hf-empty{padding:18px;text-align:center;border:1px dashed rgba(51,255,102,.3);
+  border-radius:10px;opacity:.8;font-size:13px}
+@media (max-width:640px){.hf-count{margin-left:0;width:100%}}
