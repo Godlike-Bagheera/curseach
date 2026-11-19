@@ -1,4 +1,5 @@
 """Справочник уязвимостей доступен гостю: EN/RU/смысл + реестр всех проверок."""
+
 from fastapi.testclient import TestClient
 
 import web_app
@@ -27,6 +28,6 @@ def test_vulns_page_has_full_registry():
 def test_vulns_search_script_is_external():
     client = TestClient(web_app.app)
     body = client.get("/vulns").text
-    assert '/static/vulns.js' in body
+    assert "/static/vulns.js" in body
     js = client.get("/static/vulns.js")
     assert js.status_code == 200

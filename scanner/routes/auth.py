@@ -1,7 +1,5 @@
 """Роуты логина/выхода и главная страница."""
 
-from typing import Optional
-
 from fastapi import APIRouter, Cookie, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -19,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, session_id: Optional[str] = Cookie(None)):
+async def login_page(request: Request, session_id: str | None = Cookie(None)):
     if get_current_user(session_id):
         return RedirectResponse(url="/", status_code=303)
     return common.templates.TemplateResponse(request, "login.html", {"error": None})
@@ -62,7 +60,7 @@ async def login_post(
 
 
 @router.get("/logout")
-async def logout(session_id: Optional[str] = Cookie(None)):
+async def logout(session_id: str | None = Cookie(None)):
     destroy_session(session_id)
     resp = RedirectResponse(url="/login", status_code=303)
     resp.delete_cookie("session_id", path="/")
@@ -70,11 +68,15 @@ async def logout(session_id: Optional[str] = Cookie(None)):
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request, session_id: Optional[str] = Cookie(None)):
+async def index(request: Request, session_id: str | None = Cookie(None)):
     user = get_current_user(session_id)
     if user is None:
         return RedirectResponse(url="/login", status_code=303)
-    return common.templates.TemplateResponse(request, "index.html", {
-        "user": user,
-        "is_guest": user == "guest",
-    })
+    return common.templates.TemplateResponse(
+        request,
+        "index.html",
+        {
+            "user": user,
+            "is_guest": user == "guest",
+        },
+    )

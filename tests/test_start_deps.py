@@ -1,12 +1,14 @@
 """Юнит-тесты requirements-driven бутстрапа start.py."""
+
 import start
 
 
 def test_parse_pins():
-    txt = ("# comment\n-r other.txt\nfastapi==0.163.1\nuvicorn[standard]==0.54.0\n"
-           "httpx==0.28.1 ; python_version>='3.9'\n\nnoversion\n")
-    assert start._parse_pins(txt) == [
-        ("fastapi", "0.163.1"), ("uvicorn", "0.54.0"), ("httpx", "0.28.1")]
+    txt = (
+        "# comment\n-r other.txt\nfastapi==0.163.1\nuvicorn[standard]==0.54.0\n"
+        "httpx==0.28.1 ; python_version>='3.9'\n\nnoversion\n"
+    )
+    assert start._parse_pins(txt) == [("fastapi", "0.163.1"), ("uvicorn", "0.54.0"), ("httpx", "0.28.1")]
 
 
 def test_missing_logic(monkeypatch):

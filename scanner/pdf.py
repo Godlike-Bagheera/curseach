@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import html as _html
 import re
-from typing import List, Optional
 
 _LEVEL_COLORS = {
     "CRITICAL": "#e5484d",
@@ -29,6 +28,7 @@ _LEVEL_COLORS = {
 def is_available() -> bool:
     try:
         import weasyprint  # noqa: F401
+
         return True
     except Exception:
         return False
@@ -43,8 +43,7 @@ _LEVEL_RU = {
 }
 
 
-def _donut_segment_path(cx: float, cy: float, r_out: float, r_in: float,
-                        a0_deg: float, a1_deg: float) -> str:
+def _donut_segment_path(cx: float, cy: float, r_out: float, r_in: float, a0_deg: float, a1_deg: float) -> str:
     """Кольцевой сегмент между углами a0..a1 (градусы, 0 = вверх, по часовой)."""
     import math
 
@@ -59,15 +58,14 @@ def _donut_segment_path(cx: float, cy: float, r_out: float, r_in: float,
     x1i, y1i = pt(r_in, a1_deg)
     x0i, y0i = pt(r_in, a0_deg)
     return (
-        f'M {x0o:.2f} {y0o:.2f} '
-        f'A {r_out:.2f} {r_out:.2f} 0 {large} 1 {x1o:.2f} {y1o:.2f} '
-        f'L {x1i:.2f} {y1i:.2f} '
-        f'A {r_in:.2f} {r_in:.2f} 0 {large} 0 {x0i:.2f} {y0i:.2f} Z'
+        f"M {x0o:.2f} {y0o:.2f} "
+        f"A {r_out:.2f} {r_out:.2f} 0 {large} 1 {x1o:.2f} {y1o:.2f} "
+        f"L {x1i:.2f} {y1i:.2f} "
+        f"A {r_in:.2f} {r_in:.2f} 0 {large} 0 {x0i:.2f} {y0i:.2f} Z"
     )
 
 
-def make_donut_svg(critical: int, high: int, medium: int, low: int,
-                   size: int = 300) -> str:
+def make_donut_svg(critical: int, high: int, medium: int, low: int, size: int = 300) -> str:
     """Кольцевая диаграмма «по уровням риска» + легенда с подписями.
 
     Большой круг слева, крупная легенда справа; зоны жёстко разнесены,
@@ -85,15 +83,15 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
     total = sum(v for _, v, _ in parts)
     # Кольцо крупное, целиком в левой части холста; легенда — сильно правее.
     # Правый край кольца (cx + r_out) жёстко меньше левого края легенды.
-    cx = size * 0.52                # центр круга (ещё крупнее)
+    cx = size * 0.52  # центр круга (ещё крупнее)
     cy = size / 2.0
-    r_out = size * 0.46             # радиус кольца (было 0.30*size)
+    r_out = size * 0.46  # радиус кольца (было 0.30*size)
     r_in = size * 0.27
-    ring_right = cx + r_out         # ≈ 294 при size=300
+    ring_right = cx + r_out  # ≈ 294 при size=300
     legend_x = int(ring_right + size * 0.55)  # огромный зазор от кольца (~165px)
-    width = legend_x + int(size * 1.05)       # легенда занимает всю правую половину
+    width = legend_x + int(size * 1.05)  # легенда занимает всю правую половину
     height = size
-    segs: List[str] = []
+    segs: list[str] = []
 
     if total == 0:
         segs.append(
@@ -118,10 +116,7 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
                     f'stroke-width="{r_out - r_in:.1f}"/>'
                 )
             else:
-                segs.append(
-                    f'<path d="{_donut_segment_path(cx, cy, r_out, r_in, a0, a1)}" '
-                    f'fill="{color}"/>'
-                )
+                segs.append(f'<path d="{_donut_segment_path(cx, cy, r_out, r_in, a0, a1)}" fill="{color}"/>')
                 # число внутри сегмента — только если сектор реально широкий,
                 # иначе надписи наслаиваются друг на друга
                 mid = (a0 + a1) / 2.0
@@ -155,14 +150,14 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
         f'font-family="DejaVu Sans, Arial, sans-serif">{total}</text>'
         f'<text x="{cx}" y="{cy + 30}" fill="#57606a" font-size="18" '
         f'text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif">'
-        f'всего</text>'
+        f"всего</text>"
     )
 
     # легенда: вся правая половина холста, КРУПНЫЙ текст и большой шаг строк
     lx0 = float(legend_x)
-    row_h = 62                     # крупный межстрочный шаг легенды
-    marker = 20                    # размер цветного маркера
-    font = 22                      # крупный шрифт подписей
+    row_h = 62  # крупный межстрочный шаг легенды
+    marker = 20  # размер цветного маркера
+    font = 22  # крупный шрифт подписей
     rows = len(parts)
     ly0 = cy - (rows - 1) * row_h / 2.0 + font / 2.0
     legend_items = []
@@ -181,15 +176,14 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int,
 
     return (
         f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
-        f'xmlns="http://www.w3.org/2000/svg">'
-        + "".join(segs) + center_text + "".join(legend_items) + "</svg>"
+        f'xmlns="http://www.w3.org/2000/svg">' + "".join(segs) + center_text + "".join(legend_items) + "</svg>"
     )
 
 
-def make_types_bars_svg(types_data: List[dict], width: int = 640) -> str:
+def make_types_bars_svg(types_data: list[dict], width: int = 640) -> str:
     """Горизонтальные полосы «находки по типам проверок» в виде SVG."""
     if not types_data:
-        return ('<p style="color:#8b949e">Нет данных для диаграммы типов.</p>')
+        return '<p style="color:#8b949e">Нет данных для диаграммы типов.</p>'
     label_w = 240
     bar_max = width - label_w - 90
     row_h, gap = 30, 10
@@ -209,7 +203,7 @@ def make_types_bars_svg(types_data: List[dict], width: int = 640) -> str:
             f'fill="{color}"/>'
             f'<text x="{label_w + w + 8}" y="{y + row_h / 2 + 4:.0f}" fill="#8b949e" '
             f'font-size="12" font-family="DejaVu Sans, Arial, sans-serif">'
-            f'{d["count"]} ({d["percent"]}%)</text>'
+            f"{d['count']} ({d['percent']}%)</text>"
         )
     return (
         f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
@@ -220,12 +214,10 @@ def make_types_bars_svg(types_data: List[dict], width: int = 640) -> str:
 # ---------- Конвертация HTML-страницы отчёта в PDF ----------
 _SCRIPT_RE = re.compile(r"<script\b.*?</script>", re.S | re.I)
 _TOOLBAR_RE = re.compile(r'<div class="toolbar">.*?</div>', re.S)
-_PAYLOAD_RE = re.compile(
-    r'<script id="chart-data" type="application/json">(.*?)</script>', re.S
-)
+_PAYLOAD_RE = re.compile(r'<script id="chart-data" type="application/json">(.*?)</script>', re.S)
 
 
-def html_to_pdf(html_str: str, ctx: dict, base_url: Optional[str] = None) -> bytes:
+def html_to_pdf(html_str: str, ctx: dict, base_url: str | None = None) -> bytes:
     """HTML строка страницы отчёта + контекст рендера -> PDF bytes.
 
     Canvas-диаграммы Chart.js заменяются на SVG-аналоги (WeasyPrint не
@@ -248,6 +240,7 @@ def html_to_pdf(html_str: str, ctx: dict, base_url: Optional[str] = None) -> byt
         if m:
             try:
                 import json
+
                 payload = json.loads(m.group(1))
                 critical = int(payload.get("critical", 0))
                 high = int(payload.get("high", 0))

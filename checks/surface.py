@@ -10,7 +10,7 @@ JSON-схемы requestBody). Инъекции/XSS проверяются во �
 import copy
 import urllib.parse
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .base import ScanContext, _safe_request
 
@@ -32,7 +32,7 @@ def resolve_ref(spec: dict, ref: str) -> dict:
     return node if isinstance(node, dict) else {}
 
 
-def sample_from_schema(schema: Optional[dict], spec: dict, depth: int = 0) -> Any:
+def sample_from_schema(schema: dict | None, spec: dict, depth: int = 0) -> Any:
     """Генерирует валидный пример значения по JSON-схеме (для тел запросов)."""
     if not isinstance(schema, dict) or depth > _SCHEMA_DEPTH:
         return "test"
@@ -45,7 +45,7 @@ def sample_from_schema(schema: Optional[dict], spec: dict, depth: int = 0) -> An
     if "enum" in schema and isinstance(schema["enum"], list) and schema["enum"]:
         return schema["enum"][0]
     if "allOf" in schema and isinstance(schema["allOf"], list):
-        merged: Dict[str, Any] = {}
+        merged: dict[str, Any] = {}
         for sub in schema["allOf"]:
             s = sample_from_schema(sub, spec, depth + 1)
             if isinstance(s, dict):
@@ -55,7 +55,7 @@ def sample_from_schema(schema: Optional[dict], spec: dict, depth: int = 0) -> An
     if t == "object" or (t is None and "properties" in schema):
         props = schema.get("properties") or {}
         required = set(schema.get("required") or [])
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         for name, sub in list(props.items())[:_MAX_PARAMS_PER_SURFACE]:
             if required and name not in required and len(out) >= 3:
                 continue
@@ -77,34 +77,35 @@ def sample_from_schema(schema: Optional[dict], spec: dict, depth: int = 0) -> An
 @dataclass
 class Surface:
     """Один эндпоинт+метод со всеми инъекционными точками."""
+
     path: str
     method: str
-    path_params: Dict[str, str] = field(default_factory=dict)
-    query: Dict[str, Any] = field(default_factory=dict)
-    body: Optional[Any] = None
+    path_params: dict[str, str] = field(default_factory=dict)
+    query: dict[str, Any] = field(default_factory=dict)
+    body: Any | None = None
     # (kind, name): kind in {"path", "query", "body"}
-    injectable: List[Tuple[str, str]] = field(default_factory=list)
+    injectable: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def label(self) -> str:
         return f"{self.method.upper()} {self.path}"
 
 
-def _body_injectable_fields(body: Any) -> List[str]:
+def _body_injectable_fields(body: Any) -> list[str]:
     """Поля верхнего уровня, куда можно внедрить строковый payload."""
     if not isinstance(body, dict):
         return []
     return [k for k, v in body.items() if isinstance(v, (str, int, float))][:_MAX_PARAMS_PER_SURFACE]
 
 
-def build_surfaces(ctx: ScanContext, endpoints: Optional[List[str]] = None, limit: int = _MAX_SURFACES) -> List[Surface]:
+def build_surfaces(ctx: ScanContext, endpoints: list[str] | None = None, limit: int = _MAX_SURFACES) -> list[Surface]:
     """
     Строит поверхности атаки по спеке. Без спеки — fallback: GET-поверхности
     из списка эндпоинтов с path-параметрами (старое поведение).
     """
     spec = ctx.openapi or {}
     paths = spec.get("paths")
-    surfaces: List[Surface] = []
+    surfaces: list[Surface] = []
     if isinstance(paths, dict) and paths:
         for path, item in paths.items():
             if not isinstance(item, dict):
@@ -130,9 +131,7 @@ def build_surfaces(ctx: ScanContext, endpoints: Optional[List[str]] = None, limi
                         s.query[name] = sample
                         s.injectable.append(("query", name))
                 body_schema = (
-                    ((op.get("requestBody") or {}).get("content") or {})
-                    .get("application/json", {})
-                    .get("schema")
+                    ((op.get("requestBody") or {}).get("content") or {}).get("application/json", {}).get("schema")
                 )
                 if body_schema:
                     s.body = sample_from_schema(body_schema, spec)
@@ -144,7 +143,7 @@ def build_surfaces(ctx: ScanContext, endpoints: Optional[List[str]] = None, limi
                     return surfaces
         return surfaces
     # fallback без спеки
-    for ep in (endpoints or []):
+    for ep in endpoints or []:
         s = Surface(path=ep, method="get")
         for part in ep.split("/"):
             if part.startswith("{") and part.endswith("}"):
@@ -159,10 +158,10 @@ def build_surfaces(ctx: ScanContext, endpoints: Optional[List[str]] = None, limi
 
 def build_url_query_body(
     s: Surface,
-    path_over: Optional[Dict[str, str]] = None,
-    query_over: Optional[Dict[str, Any]] = None,
-    body_over: Optional[Dict[str, Any]] = None,
-) -> Tuple[str, Dict[str, Any], Optional[Any]]:
+    path_over: dict[str, str] | None = None,
+    query_over: dict[str, Any] | None = None,
+    body_over: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any], Any | None]:
     """Собирает path (с подстановками), query и тело для запроса."""
     path = s.path
     for name, val in {**s.path_params, **(path_over or {})}.items():
@@ -177,15 +176,15 @@ def build_url_query_body(
 async def probe(
     ctx: ScanContext,
     s: Surface,
-    path_over: Optional[Dict[str, str]] = None,
-    query_over: Optional[Dict[str, Any]] = None,
-    body_over: Optional[Dict[str, Any]] = None,
+    path_over: dict[str, str] | None = None,
+    query_over: dict[str, Any] | None = None,
+    body_over: dict[str, Any] | None = None,
     client=None,
 ):
     """Отправляет запрос по поверхности (через общий _safe_request: бюджет/evidence)."""
     path, query, body = build_url_query_body(s, path_over, query_over, body_over)
     url = f"{ctx.target_url}{path}"
-    kwargs: Dict[str, Any] = {}
+    kwargs: dict[str, Any] = {}
     if query:
         kwargs["params"] = query
     if body is not None and s.method in ("post", "put", "patch"):

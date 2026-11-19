@@ -2,23 +2,23 @@
 
 import asyncio
 import os
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .config import ALLOWED_HOSTS, origin_allowed
+from .config import origin_allowed
 from .routes import auth, common, history, misc, scan
-from .security import sessions
-from .tasks import gc_loop, tasks
+from .tasks import gc_loop
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import database
+
     database.init_db()
     gc_task = asyncio.create_task(gc_loop())
     try:
@@ -46,6 +46,7 @@ async def security_middleware(request: Request, call_next):
     origin = request.headers.get("origin", "")
     if origin and not origin_allowed(origin):
         from fastapi.responses import JSONResponse
+
         return JSONResponse(status_code=403, content={"detail": "Origin not allowed"})
 
     response = await call_next(request)
@@ -79,4 +80,5 @@ def _run_server():
     print(f"  Интерфейс: http://{host}:{port}")
     print("  Ctrl+C для остановки")
     import uvicorn
+
     uvicorn.run(app, host=host, port=port)

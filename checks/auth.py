@@ -4,17 +4,14 @@
 - check_bfla: обычный user получает доступ к админскому эндпоинту
 """
 
-from typing import Dict, List
-
 import httpx
 
 from .base import (
     ScanContext,
-    _safe_get,
     _content_hash,
+    _safe_get,
 )
 from .descriptions import get_vuln_info
-
 
 # ---------- Вспомогательное ----------
 _ID_RANGE = list(range(1, 11))
@@ -22,11 +19,12 @@ _ID_RANGE = list(range(1, 11))
 
 def _b64url_nopad(data: bytes) -> str:
     import base64
+
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
 # ================== JWT alg=none / подделка токена ==================
-async def check_jwt_none(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_jwt_none(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     """
     Пытается создать токен с alg=none (без подписи) и получить доступ
     к защищённому эндпоинту из OpenAPI. Если сервер принимает поддельный
@@ -62,12 +60,10 @@ async def check_jwt_none(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
             return 0
         return 1
 
-    ordered = sorted(dict.fromkeys(
-        prioritized + all_get_params + [p for p in endpoints if "{" in p]
-    ), key=_rank)
+    ordered = sorted(dict.fromkeys(prioritized + all_get_params + [p for p in endpoints if "{" in p]), key=_rank)
     candidates = list(ordered)
 
-    forged = "%s.%s." % (
+    forged = "{}.{}.".format(
         _b64url_nopad(b'{"alg":"none","typ":"JWT"}'),
         _b64url_nopad(b'{"uid":1,"role":"admin","exp":9999999999}'),
     )
@@ -80,30 +76,29 @@ async def check_jwt_none(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
         if "{" not in ep:
             continue
         tried += 1
-        param = ep[ep.find("{") + 1: ep.find("}")]
+        param = ep[ep.find("{") + 1 : ep.find("}")]
         path = ep.replace(f"{{{param}}}", "1")
-        r = await _safe_get(ctx.anon_client, f"{ctx.target_url}{path}",
-                            headers=headers)
+        r = await _safe_get(ctx.anon_client, f"{ctx.target_url}{path}", headers=headers)
         if r is not None and r.status_code == 200:
-            findings.append({
-                "level": "CRITICAL",
-                "type": "JWT alg=none",
-                "endpoint": ep,
-                "desc": (
-                    f"Сервер принял JWT с alg=none (HTTP 200) — подпись не проверяется, "
-                    "токен любого пользователя можно подделать"
-                ),
-                "details": get_vuln_info("JWT alg=none"),
-            })
+            findings.append(
+                {
+                    "level": "CRITICAL",
+                    "type": "JWT alg=none",
+                    "endpoint": ep,
+                    "desc": (
+                        "Сервер принял JWT с alg=none (HTTP 200) — подпись не проверяется, "
+                        "токен любого пользователя можно подделать"
+                    ),
+                    "details": get_vuln_info("JWT alg=none"),
+                }
+            )
             break
     return findings
 
 
-async def _collect_200(
-    client, target_url: str, ep: str, param_name: str
-) -> Dict[int, httpx.Response]:
+async def _collect_200(client, target_url: str, ep: str, param_name: str) -> dict[int, httpx.Response]:
     """Ходит к /endpoint/{id} для id из _ID_RANGE, возвращает только те, что дали 200."""
-    out: Dict[int, httpx.Response] = {}
+    out: dict[int, httpx.Response] = {}
     for i in _ID_RANGE:
         path = ep.replace(f"{{{param_name}}}", str(i))
         r = await _safe_get(client, f"{target_url}{path}")
@@ -134,7 +129,7 @@ def _extract_ids_from_payload(payload) -> set:
 
 
 # ================== Cross-user IDOR (BOLA) ==================
-async def check_cross_user_idor(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_cross_user_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     """
     Проверка на cross-user IDOR (Broken Object Level Authorization).
 
@@ -155,13 +150,13 @@ async def check_cross_user_idor(ctx: ScanContext, endpoints: List[str]) -> List[
     if not ctx.has_auth or not ctx.has_auth_secondary or ctx.secondary_client is None:
         return []
 
-    findings: List[Dict] = []
+    findings: list[dict] = []
 
     # ---- 1. Ищем «me»-эндпоинты со списками ----
     list_endpoints = [
-        e for e in endpoints
-        if "{" not in e and "}" not in e
-        and any(k in e.lower() for k in ("/me", "/my", "/profile", "/account"))
+        e
+        for e in endpoints
+        if "{" not in e and "}" not in e and any(k in e.lower() for k in ("/me", "/my", "/profile", "/account"))
     ]
 
     user1_ids: set = set()
@@ -191,7 +186,7 @@ async def check_cross_user_idor(ctx: ScanContext, endpoints: List[str]) -> List[
             if "/api/users/" in ep:
                 continue
 
-            param_name = ep[ep.find("{") + 1:ep.find("}")]
+            param_name = ep[ep.find("{") + 1 : ep.find("}")]
             foreign_ids = sorted(user2_ids)[:5]
             leaked = []
 
@@ -202,17 +197,19 @@ async def check_cross_user_idor(ctx: ScanContext, endpoints: List[str]) -> List[
                     leaked.append(oid)
 
             if leaked:
-                findings.append({
-                    "level": "CRITICAL",
-                    "type": "Broken Access Control",
-                    "endpoint": ep,
-                    "desc": (
-                        f"Cross-user IDOR (BOLA): user1 получает доступ к "
-                        f"чужим объектам через {param_name} "
-                        f"(ID: {', '.join(map(str, leaked))})"
-                    ),
-                    "details": get_vuln_info("Broken Access Control"),
-                })
+                findings.append(
+                    {
+                        "level": "CRITICAL",
+                        "type": "Broken Access Control",
+                        "endpoint": ep,
+                        "desc": (
+                            f"Cross-user IDOR (BOLA): user1 получает доступ к "
+                            f"чужим объектам через {param_name} "
+                            f"(ID: {', '.join(map(str, leaked))})"
+                        ),
+                        "details": get_vuln_info("Broken Access Control"),
+                    }
+                )
 
         return findings
 
@@ -223,7 +220,7 @@ async def check_cross_user_idor(ctx: ScanContext, endpoints: List[str]) -> List[
         if "/api/users/" in ep:
             continue
 
-        param_name = ep[ep.find("{") + 1:ep.find("}")]
+        param_name = ep[ep.find("{") + 1 : ep.find("}")]
 
         user1_ok = await _collect_200(ctx.client, ctx.target_url, ep, param_name)
         if not user1_ok:
@@ -237,29 +234,28 @@ async def check_cross_user_idor(ctx: ScanContext, endpoints: List[str]) -> List[
         if len(shared_ids) < 2:
             continue
 
-        same_content = sum(
-            1 for oid in shared_ids
-            if _content_hash(user1_ok[oid]) == _content_hash(user2_ok[oid])
-        )
+        same_content = sum(1 for oid in shared_ids if _content_hash(user1_ok[oid]) == _content_hash(user2_ok[oid]))
 
         if same_content == len(shared_ids):
-            findings.append({
-                "level": "MEDIUM",
-                "type": "Broken Access Control",
-                "endpoint": ep,
-                "desc": (
-                    f"Эвристика: user1 и user2 получают одинаковый контент "
-                    f"на {same_content} объектах через {param_name} — "
-                    f"возможно, нет разделения по пользователям"
-                ),
-                "details": get_vuln_info("Broken Access Control"),
-            })
+            findings.append(
+                {
+                    "level": "MEDIUM",
+                    "type": "Broken Access Control",
+                    "endpoint": ep,
+                    "desc": (
+                        f"Эвристика: user1 и user2 получают одинаковый контент "
+                        f"на {same_content} объектах через {param_name} — "
+                        f"возможно, нет разделения по пользователям"
+                    ),
+                    "details": get_vuln_info("Broken Access Control"),
+                }
+            )
 
     return findings
 
 
 # ================== BFLA (Broken Function Level Authorization) ==================
-async def check_bfla(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_bfla(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     """
     Проверка на BFLA: обычный пользователь получает доступ к эндпоинту,
     который должен быть только для админа.
@@ -274,13 +270,9 @@ async def check_bfla(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
         return []
 
     admin_keywords = ("admin", "manage", "internal", "superuser", "settings", "config")
-    candidates = [
-        e for e in endpoints
-        if "{" not in e and "}" not in e
-        and any(k in e.lower() for k in admin_keywords)
-    ]
+    candidates = [e for e in endpoints if "{" not in e and "}" not in e and any(k in e.lower() for k in admin_keywords)]
 
-    findings: List[Dict] = []
+    findings: list[dict] = []
 
     for ep in candidates:
         # 1. user1 → должен получить 403/401 (если разделение ролей корректное)
@@ -301,16 +293,18 @@ async def check_bfla(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
             r2 = await _safe_get(ctx.secondary_client, f"{ctx.target_url}{ep}")
             if r2 is not None and r2.status_code == 200:
                 if _content_hash(r1) == _content_hash(r2):
-                    findings.append({
-                        "level": "CRITICAL",
-                        "type": "Broken Access Control",
-                        "endpoint": ep,
-                        "desc": (
-                            f"BFLA: обычные пользователи (user1 и user2) получают "
-                            f"доступ к административному эндпоинту {ep}"
-                        ),
-                        "details": get_vuln_info("Broken Access Control"),
-                    })
+                    findings.append(
+                        {
+                            "level": "CRITICAL",
+                            "type": "Broken Access Control",
+                            "endpoint": ep,
+                            "desc": (
+                                f"BFLA: обычные пользователи (user1 и user2) получают "
+                                f"доступ к административному эндпоинту {ep}"
+                            ),
+                            "details": get_vuln_info("Broken Access Control"),
+                        }
+                    )
                     continue
                 # user2 отдал 200, но контент разный — не наш случай, идём в эвристику
                 secondary_confirmed = True
@@ -320,17 +314,17 @@ async def check_bfla(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
         #    и когда он дал 200 с другим телом.
         if not secondary_confirmed:
             body = r1.text.lower()
-            if any(k in body for k in ("users", "config", "settings",
-                                       "internal", "password", "secret", "role")):
-                findings.append({
-                    "level": "HIGH",
-                    "type": "Broken Access Control",
-                    "endpoint": ep,
-                    "desc": (
-                        f"BFLA (эвристика): эндпоинт {ep} выглядит административным, "
-                        f"но доступен обычному токену"
-                    ),
-                    "details": get_vuln_info("Broken Access Control"),
-                })
+            if any(k in body for k in ("users", "config", "settings", "internal", "password", "secret", "role")):
+                findings.append(
+                    {
+                        "level": "HIGH",
+                        "type": "Broken Access Control",
+                        "endpoint": ep,
+                        "desc": (
+                            f"BFLA (эвристика): эндпоинт {ep} выглядит административным, но доступен обычному токену"
+                        ),
+                        "details": get_vuln_info("Broken Access Control"),
+                    }
+                )
 
     return findings

@@ -3,6 +3,7 @@
 Ставит зависимости СТРОГО по requirements.txt (с пинами), поднимает оба
 сервиса, сам находит свободные порты и открывает браузер. Ctrl+C гасит оба.
 """
+
 import os
 import re
 import socket
@@ -34,6 +35,7 @@ def _parse_pins(text):
 def _installed_version(name):
     try:
         from importlib import metadata
+
         return metadata.version(name)
     except Exception:
         return None
@@ -53,14 +55,18 @@ def ensure_dependencies():
     missing = [(n, v) for n, v in pins if _installed_version(n) != v]
     if not missing:
         return
-    print(f"[start] доустанавливаю {len(missing)} пакетов строго по requirements.txt: "
-          + ", ".join(f"{n}=={v}" for n, v in missing))
+    print(
+        f"[start] доустанавливаю {len(missing)} пакетов строго по requirements.txt: "
+        + ", ".join(f"{n}=={v}" for n, v in missing)
+    )
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", REQ_FILE])
     try:
         import weasyprint  # noqa: F401
     except Exception:
-        print("[start] ВНИМАНИЕ: WeasyPrint не импортируется (нужны системные pango/GTK). "
-              "PDF-экспорт будет недоступен, остальные отчёты работают. В Docker всё вшито.")
+        print(
+            "[start] ВНИМАНИЕ: WeasyPrint не импортируется (нужны системные pango/GTK). "
+            "PDF-экспорт будет недоступен, остальные отчёты работают. В Docker всё вшито."
+        )
 
 
 def _pick_ports(api_preferred, web_preferred):
@@ -90,11 +96,13 @@ def main():
         ensure_dependencies()
 
     import uvicorn
+
     from main import app as target_app
     from scanner.app import app as scanner_app
 
-    api_port, web_port = _pick_ports(int(os.environ.get("API_PORT", "8000")),
-                                     int(os.environ.get("SCANNER_PORT", "8001")))
+    api_port, web_port = _pick_ports(
+        int(os.environ.get("API_PORT", "8000")), int(os.environ.get("SCANNER_PORT", "8001"))
+    )
     api_host = os.environ.get("API_HOST", "127.0.0.1")
     web_host = os.environ.get("SCANNER_HOST", "127.0.0.1")
 

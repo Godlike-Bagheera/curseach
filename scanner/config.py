@@ -18,9 +18,7 @@ GUEST_USER = "guest"
 
 
 def _hash_password(password: str) -> str:
-    return hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), _SALT, _KDF_ITERATIONS
-    ).hex()
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), _SALT, _KDF_ITERATIONS).hex()
 
 
 # Пароли можно переопределить через env (для публичного деплоя — обязательно):
@@ -31,11 +29,13 @@ GUEST_PASSWORD_HASH = _hash_password(os.environ.get("SCANNER_GUEST_PASSWORD", "g
 
 def authenticate(username: str, password: str):
     provided = _hash_password(password)
-    if secrets.compare_digest(username.encode(), ADMIN_USER.encode()) and \
-       secrets.compare_digest(provided, ADMIN_PASSWORD_HASH):
+    if secrets.compare_digest(username.encode(), ADMIN_USER.encode()) and secrets.compare_digest(
+        provided, ADMIN_PASSWORD_HASH
+    ):
         return "admin"
-    if secrets.compare_digest(username.encode(), GUEST_USER.encode()) and \
-       secrets.compare_digest(provided, GUEST_PASSWORD_HASH):
+    if secrets.compare_digest(username.encode(), GUEST_USER.encode()) and secrets.compare_digest(
+        provided, GUEST_PASSWORD_HASH
+    ):
         return "guest"
     return None
 
@@ -57,8 +57,7 @@ ALLOWED_HOSTS = {
     h.strip().lower()
     for h in os.environ.get(
         "ALLOWED_HOSTS",
-        "127.0.0.1,localhost,::1,*.github.dev,*.githubcodespaces.app,"
-        "*.preview.app.github.dev",
+        "127.0.0.1,localhost,::1,*.github.dev,*.githubcodespaces.app,*.preview.app.github.dev",
     ).split(",")
     if h.strip()
 }
@@ -86,12 +85,12 @@ def origin_allowed(origin: str) -> bool:
 
 
 # ---------- Параметры сканирования (настраиваются через env) ----------
-SCAN_CONCURRENCY = int(os.environ.get("SCAN_CONCURRENCY", "8"))        # одновременных запросов внутри скана
-SCAN_MAX_REQUESTS = int(os.environ.get("SCAN_MAX_REQUESTS", "1500"))   # общий бюджет запросов на скан
-SCAN_RPS = float(os.environ.get("SCAN_RPS", "20"))                     # запросов в секунду (0 = без лимита)
+SCAN_CONCURRENCY = int(os.environ.get("SCAN_CONCURRENCY", "8"))  # одновременных запросов внутри скана
+SCAN_MAX_REQUESTS = int(os.environ.get("SCAN_MAX_REQUESTS", "1500"))  # общий бюджет запросов на скан
+SCAN_RPS = float(os.environ.get("SCAN_RPS", "20"))  # запросов в секунду (0 = без лимита)
 SCAN_TOTAL_TIMEOUT = int(os.environ.get("SCAN_TOTAL_TIMEOUT", "300"))  # общий таймаут скана, сек
-MAX_CONCURRENT_SCANS = int(os.environ.get("MAX_CONCURRENT_SCANS", "3"))# одновременных сканов на процесс
-SCAN_PIN_DNS = os.environ.get("SCAN_PIN_DNS", "1") == "1"              # пиннить проверенный IP (anti-DNS-rebinding)
+MAX_CONCURRENT_SCANS = int(os.environ.get("MAX_CONCURRENT_SCANS", "3"))  # одновременных сканов на процесс
+SCAN_PIN_DNS = os.environ.get("SCAN_PIN_DNS", "1") == "1"  # пиннить проверенный IP (anti-DNS-rebinding)
 
 # ---------- SSRF ----------
 SSRF_ALLOW_PRIVATE = os.environ.get("SCANNER_ALLOW_PRIVATE_TARGETS", "1") == "1"

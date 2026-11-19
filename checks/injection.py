@@ -8,17 +8,24 @@ import asyncio
 import hashlib
 import re
 import time
-from typing import Dict, List, Optional
 
-from .base import ScanContext, _body, ev, SQL_ERROR_PATTERNS
+from .base import SQL_ERROR_PATTERNS, ScanContext, _body, ev
 from .descriptions import get_vuln_info
 from .surface import Surface, build_surfaces, probe
 
 _SQLI_ERROR_PAYLOADS = ["'", '"', "1'", '1"', "1')", "1'))"]
 
 
-def _mk(s: Surface, kind: str, name: str, level: str, desc: str,
-        evidence: Optional[dict], confidence: str, vtype: str = "SQL Injection") -> Dict:
+def _mk(
+    s: Surface,
+    kind: str,
+    name: str,
+    level: str,
+    desc: str,
+    evidence: dict | None,
+    confidence: str,
+    vtype: str = "SQL Injection",
+) -> dict:
     return {
         "level": level,
         "type": vtype,
@@ -48,8 +55,12 @@ def _norm_body(r) -> str:
         return ""
     text = re.sub(r"\b\d{10,13}\b", "<TS>", text)
     text = re.sub(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "<UUID>", text)
-    text = re.sub(r'"(timestamp|ts|time|date|nonce|request_id|trace_id|expires?)"\s*:\s*("[^"]*"|\d+)',
-                  r'"\1":<DYN>', text, flags=re.IGNORECASE)
+    text = re.sub(
+        r'"(timestamp|ts|time|date|nonce|request_id|trace_id|expires?)"\s*:\s*("[^"]*"|\d+)',
+        r'"\1":<DYN>',
+        text,
+        flags=re.IGNORECASE,
+    )
     return text.lower()
 
 
@@ -58,25 +69,37 @@ def _norm_hash(r) -> str:
 
 
 # ---------- SQLi: error-based ----------
-async def _sqli_error_param(ctx, s, kind, name) -> Optional[Dict]:
+async def _sqli_error_param(ctx, s, kind, name) -> dict | None:
     for payload in _SQLI_ERROR_PAYLOADS:
         r = await _probe_param(ctx, s, kind, name, payload)
         if r is None:
             continue
         body = _body(r)
         if any(p in body for p in SQL_ERROR_PATTERNS):
-            return _mk(s, kind, name, "CRITICAL",
-                       f"Error-based SQLi: {kind}-параметр {name} (payload: {payload}, HTTP {r.status_code})",
-                       ev(r), "high")
+            return _mk(
+                s,
+                kind,
+                name,
+                "CRITICAL",
+                f"Error-based SQLi: {kind}-параметр {name} (payload: {payload}, HTTP {r.status_code})",
+                ev(r),
+                "high",
+            )
         if r.status_code == 500:
-            return _mk(s, kind, name, "CRITICAL",
-                       f"Подозрение на SQLi: {kind}-параметр {name} — HTTP 500 на SQL-подобном payload ({payload})",
-                       ev(r), "medium")
+            return _mk(
+                s,
+                kind,
+                name,
+                "CRITICAL",
+                f"Подозрение на SQLi: {kind}-параметр {name} — HTTP 500 на SQL-подобном payload ({payload})",
+                ev(r),
+                "medium",
+            )
     return None
 
 
 # ---------- SQLi: boolean-based ----------
-async def _sqli_boolean_param(ctx, s, kind, name) -> Optional[Dict]:
+async def _sqli_boolean_param(ctx, s, kind, name) -> dict | None:
     r_base = await _probe_param(ctx, s, kind, name, "1")
     if r_base is None or r_base.status_code != 200:
         return None
@@ -88,14 +111,20 @@ async def _sqli_boolean_param(ctx, s, kind, name) -> Optional[Dict]:
         return None
     bh, th, fh = _norm_hash(r_base), _norm_hash(r_true), _norm_hash(r_false)
     if bh == th and bh != fh:
-        return _mk(s, kind, name, "CRITICAL",
-                   f"Boolean-based SQLi: {kind}-параметр {name} (1 AND 1=1 vs 1 AND 1=2, динамика нормализована)",
-                   ev(r_false), "high")
+        return _mk(
+            s,
+            kind,
+            name,
+            "CRITICAL",
+            f"Boolean-based SQLi: {kind}-параметр {name} (1 AND 1=1 vs 1 AND 1=2, динамика нормализована)",
+            ev(r_false),
+            "high",
+        )
     return None
 
 
 # ---------- SQLi: time-based (с перепроверкой) ----------
-async def _sqli_time_param(ctx, s, kind, name) -> Optional[Dict]:
+async def _sqli_time_param(ctx, s, kind, name) -> dict | None:
     t0 = time.perf_counter()
     r_base = await _probe_param(ctx, s, kind, name, "1")
     baseline = time.perf_counter() - t0
@@ -118,17 +147,23 @@ async def _sqli_time_param(ctx, s, kind, name) -> Optional[Dict]:
         r2 = await _probe_param(ctx, s, kind, name, payload)
         elapsed2 = time.perf_counter() - t0
         if r2 is not None and elapsed2 >= threshold:
-            return _mk(s, kind, name, "CRITICAL",
-                       f"Time-based SQLi (подтверждено 2 запросами): {kind}-параметр {name}, {db_type}, "
-                       f"задержки {elapsed:.1f}s/{elapsed2:.1f}s (baseline {baseline:.1f}s)",
-                       ev(r2), "high")
+            return _mk(
+                s,
+                kind,
+                name,
+                "CRITICAL",
+                f"Time-based SQLi (подтверждено 2 запросами): {kind}-параметр {name}, {db_type}, "
+                f"задержки {elapsed:.1f}s/{elapsed2:.1f}s (baseline {baseline:.1f}s)",
+                ev(r2),
+                "high",
+            )
     return None
 
 
-async def check_sqli(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_sqli(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     surfaces = build_surfaces(ctx, endpoints)
 
-    async def per_surface(s: Surface) -> List[Dict]:
+    async def per_surface(s: Surface) -> list[dict]:
         for kind, name in s.injectable:
             f = await _sqli_error_param(ctx, s, kind, name)
             if f is None:
@@ -144,11 +179,11 @@ async def check_sqli(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
 
 
 # ---------- OS Command Injection ----------
-async def check_command_injection(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_command_injection(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     surfaces = build_surfaces(ctx, endpoints)
     payloads = [";id", "|id", "&whoami", "$(id)", "`id`"]
 
-    async def per_surface(s: Surface) -> List[Dict]:
+    async def per_surface(s: Surface) -> list[dict]:
         for kind, name in s.injectable:
             for payload in payloads:
                 r = await _probe_param(ctx, s, kind, name, payload)
@@ -156,9 +191,18 @@ async def check_command_injection(ctx: ScanContext, endpoints: List[str]) -> Lis
                     continue
                 body = _body(r)
                 if any(sig in body for sig in ("uid=", "gid=", "root:", "windows ip")):
-                    return [_mk(s, kind, name, "CRITICAL",
-                                f"Возможна инъекция команд ОС через {kind}-параметр {name} (payload: {payload})",
-                                ev(r), "high", "OS Command Injection")]
+                    return [
+                        _mk(
+                            s,
+                            kind,
+                            name,
+                            "CRITICAL",
+                            f"Возможна инъекция команд ОС через {kind}-параметр {name} (payload: {payload})",
+                            ev(r),
+                            "high",
+                            "OS Command Injection",
+                        )
+                    ]
         return []
 
     results = await asyncio.gather(*(per_surface(s) for s in surfaces))
@@ -166,19 +210,28 @@ async def check_command_injection(ctx: ScanContext, endpoints: List[str]) -> Lis
 
 
 # ---------- Утечка через ошибки ----------
-async def check_error_leak(ctx: ScanContext, endpoints: List[str]) -> List[Dict]:
+async def check_error_leak(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     surfaces = build_surfaces(ctx, endpoints)[:8]
 
-    async def per_surface(s: Surface) -> List[Dict]:
+    async def per_surface(s: Surface) -> list[dict]:
         for kind, name in s.injectable[:1]:
             r = await _probe_param(ctx, s, kind, name, "invalid'")
             if r is None:
                 continue
             body = _body(r)
             if any(k in body for k in ("traceback", "stack trace", "at line", 'file "')):
-                return [_mk(s, kind, name, "MEDIUM",
-                            f"В ответе содержатся детали ошибки (stack trace) на {kind}-параметре {name}",
-                            ev(r), "high", "Information Leak via Errors")]
+                return [
+                    _mk(
+                        s,
+                        kind,
+                        name,
+                        "MEDIUM",
+                        f"В ответе содержатся детали ошибки (stack trace) на {kind}-параметре {name}",
+                        ev(r),
+                        "high",
+                        "Information Leak via Errors",
+                    )
+                ]
         return []
 
     results = await asyncio.gather(*(per_surface(s) for s in surfaces))

@@ -6,7 +6,6 @@ import threading
 import time
 import uuid
 from contextlib import AsyncExitStack
-from typing import Dict, List, Optional
 
 import httpx
 
@@ -14,26 +13,26 @@ import checks
 import database
 
 from .config import (
+    GC_INTERVAL_SECONDS,
+    LOG_TRIM_CHUNK,
     LOGIN_PATH,
     LOGIN_TOKEN_FIELD,
-    QUEUE_MAXSIZE,
+    MAX_CONCURRENT_SCANS,
     MAX_LOG_LINES,
-    LOG_TRIM_CHUNK,
-    SESSION_TTL_SECONDS,
-    TASK_TTL_SECONDS,
-    GC_INTERVAL_SECONDS,
     MODE_TITLES_RU,
+    QUEUE_MAXSIZE,
     SCAN_CONCURRENCY,
     SCAN_MAX_REQUESTS,
     SCAN_RPS,
     SCAN_TOTAL_TIMEOUT,
-    MAX_CONCURRENT_SCANS,
+    SESSION_TTL_SECONDS,
+    TASK_TTL_SECONDS,
     calculate_score,
 )
-from .security import sessions, pinned_client_kwargs
+from .security import pinned_client_kwargs, sessions
 
 # Реестр активных/завершённых задач (очистка — в _gc_loop)
-tasks: Dict[str, "ScanTask"] = {}
+tasks: dict[str, "ScanTask"] = {}
 
 
 # ---------- Модели запросов ----------
@@ -41,32 +40,32 @@ from pydantic import BaseModel  # noqa: E402
 
 
 class AccountConfig(BaseModel):
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
 
 
 class ScanRequest(BaseModel):
     url: str
     mode: str = "full"
-    checks: Optional[List[str]] = None
-    account1: Optional[AccountConfig] = None
-    account2: Optional[AccountConfig] = None
-    seed: Optional[int] = None  # детерминированный профиль учебной цели (X-Scan-Seed)
+    checks: list[str] | None = None
+    account1: AccountConfig | None = None
+    account2: AccountConfig | None = None
+    seed: int | None = None  # детерминированный профиль учебной цели (X-Scan-Seed)
 
 
-async def login_and_get_token(
-    target_url: str, account: Optional[AccountConfig]
-) -> Optional[str]:
+async def login_and_get_token(target_url: str, account: AccountConfig | None) -> str | None:
     if account is None or not account.username or not account.password:
         return None
     url = f"{target_url.rstrip('/')}{LOGIN_PATH}"
     try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False,
-                                     **pinned_client_kwargs(target_url)) as c:
-            r = await c.post(url, json={
-                "username": account.username,
-                "password": account.password,
-            })
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False, **pinned_client_kwargs(target_url)) as c:
+            r = await c.post(
+                url,
+                json={
+                    "username": account.username,
+                    "password": account.password,
+                },
+            )
         if r.status_code != 200:
             return None
         data = r.json()
@@ -86,10 +85,10 @@ class ScanTask:
         self,
         target_url: str,
         mode: str = "full",
-        selected_checks: Optional[List[str]] = None,
-        account1: Optional[AccountConfig] = None,
-        account2: Optional[AccountConfig] = None,
-        seed: Optional[int] = None,
+        selected_checks: list[str] | None = None,
+        account1: AccountConfig | None = None,
+        account2: AccountConfig | None = None,
+        seed: int | None = None,
     ):
         self.id = str(uuid.uuid4())
         self.seed = seed
@@ -101,19 +100,19 @@ class ScanTask:
         self.account2 = account2
         self.status = "pending"
         self.progress = 0.0
-        self.logs: List[str] = []
+        self.logs: list[str] = []
         self.critical_count = 0
         self.high_count = 0
         self.medium_count = 0
         self.low_count = 0
         self.score = 100
-        self.scan_results: List[dict] = []
-        self.error: Optional[str] = None
-        self.finished_at: Optional[float] = None
-        self.started_at: Optional[float] = None
+        self.scan_results: list[dict] = []
+        self.error: str | None = None
+        self.finished_at: float | None = None
+        self.started_at: float | None = None
 
-        self.queue: "asyncio.Queue[dict]" = asyncio.Queue(maxsize=QUEUE_MAXSIZE)
-        self.loop: Optional[asyncio.AbstractEventLoop] = None
+        self.queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=QUEUE_MAXSIZE)
+        self.loop: asyncio.AbstractEventLoop | None = None
 
     def add_log(self, msg: str):
         self.logs.append(msg)
@@ -141,8 +140,10 @@ class ScanTask:
         self.medium_count = sum(1 for r in self.scan_results if r["level"] == "MEDIUM")
         self.low_count = sum(1 for r in self.scan_results if r["level"] == "LOW")
         self.score = calculate_score(
-            self.critical_count, self.high_count,
-            self.medium_count, self.low_count,
+            self.critical_count,
+            self.high_count,
+            self.medium_count,
+            self.low_count,
         )
         self._push_status()
 
@@ -183,16 +184,18 @@ class ScanTask:
             pass
 
     def _push_status(self):
-        self._push({
-            "type": "status",
-            "status": self.status,
-            "progress": self.progress,
-            "critical_count": self.critical_count,
-            "high_count": self.high_count,
-            "medium_count": self.medium_count,
-            "low_count": self.low_count,
-            "score": self.score,
-        })
+        self._push(
+            {
+                "type": "status",
+                "status": self.status,
+                "progress": self.progress,
+                "critical_count": self.critical_count,
+                "high_count": self.high_count,
+                "medium_count": self.medium_count,
+                "low_count": self.low_count,
+                "score": self.score,
+            }
+        )
 
     def to_dict(self):
         return {
@@ -256,13 +259,11 @@ async def scan_engine(task: ScanTask):
 
     async with AsyncExitStack() as stack:
         pin_kw = pinned_client_kwargs(task.target_url)
-        anon_client = await stack.enter_async_context(
-            httpx.AsyncClient(timeout=10.0, follow_redirects=False, **pin_kw)
-        )
+        anon_client = await stack.enter_async_context(httpx.AsyncClient(timeout=10.0, follow_redirects=False, **pin_kw))
         auth_client = await stack.enter_async_context(
             httpx.AsyncClient(timeout=10.0, headers=auth_headers, follow_redirects=False, **pin_kw)
         )
-        auth2_client: Optional[httpx.AsyncClient] = None
+        auth2_client: httpx.AsyncClient | None = None
         if auth2_headers:
             auth2_client = await stack.enter_async_context(
                 httpx.AsyncClient(timeout=10.0, headers=auth2_headers, follow_redirects=False, **pin_kw)
@@ -278,7 +279,7 @@ async def scan_engine(task: ScanTask):
         )
 
         task.add_log("[ИНФО] Получение спецификации OpenAPI...")
-        endpoints: List[str] = []
+        endpoints: list[str] = []
         try:
             spec_headers = {"X-Scan-Start": "1"}
             if task.seed is not None:
@@ -327,7 +328,7 @@ async def scan_engine(task: ScanTask):
             meta = checks.CHECK_METADATA.get(check_func.__name__, {})
             name = meta.get("name", check_func.__name__)
             task.add_log(f"[*] {name} — старт")
-            evidence_log: List[dict] = []
+            evidence_log: list[dict] = []
             tok_ctx = checks._SCAN_CTX.set(ctx)
             tok_log = checks._EVIDENCE_LOG.set(evidence_log)
             try:

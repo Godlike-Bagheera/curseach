@@ -1,4 +1,5 @@
 """E2E: поднимаем учебную цель (main.py) и сканируем её движком с фиксированным seed."""
+
 import asyncio
 import os
 import socket
@@ -11,6 +12,8 @@ import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SEED = 5  # профиль со всеми основными уязвимостями (детерминирован)
+
+pytestmark = [pytest.mark.slow, pytest.mark.e2e]
 
 
 def _free_port():
@@ -25,9 +28,21 @@ def _free_port():
 def target_url():
     port = _free_port()
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1",
-         "--port", str(port), "--log-level", "warning"],
-        cwd=REPO_ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=REPO_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     url = f"http://127.0.0.1:{port}"
     try:
@@ -55,7 +70,9 @@ def test_seeded_quick_scan_finds_known_vulns(target_url):
     from scanner.tasks import AccountConfig, ScanTask, scan_engine
 
     task = ScanTask(
-        target_url, mode="quick", seed=SEED,
+        target_url,
+        mode="quick",
+        seed=SEED,
         account1=AccountConfig(username="alice", password="alice123"),
         account2=AccountConfig(username="bob", password="bob123"),
     )
@@ -77,8 +94,7 @@ def test_seeded_quick_scan_finds_known_vulns(target_url):
 def test_scan_cancellation(target_url):
     from scanner.tasks import AccountConfig, ScanTask, scan_engine
 
-    task = ScanTask(target_url, mode="full", seed=SEED,
-                    account1=AccountConfig(username="alice", password="alice123"))
+    task = ScanTask(target_url, mode="full", seed=SEED, account1=AccountConfig(username="alice", password="alice123"))
     task.cancel_event.set()  # отмена до старта
     asyncio.run(scan_engine(task))
     assert task.status == "cancelled"

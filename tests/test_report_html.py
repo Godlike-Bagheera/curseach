@@ -1,4 +1,5 @@
 """Регрессия: /report/html/{task_id} рендерится, а не падает в 422/500."""
+
 import time
 
 import pytest
@@ -19,8 +20,15 @@ def test_report_html_renders_for_completed_task(authed_client):
     task = ScanTask("http://127.0.0.1:8000", mode="quick")
     task.status = "completed"
     task.finished_at = time.time()
-    task.scan_results = [{"level": "HIGH", "type": "SQL Injection", "endpoint": "/api/users/{user_id}",
-                          "desc": "test", "details": {"plain": "p", "recommendation": "r"}}]
+    task.scan_results = [
+        {
+            "level": "HIGH",
+            "type": "SQL Injection",
+            "endpoint": "/api/users/{user_id}",
+            "desc": "test",
+            "details": {"plain": "p", "recommendation": "r"},
+        }
+    ]
     task.high_count = 1
     task.score = 90
     tasks[task.id] = task

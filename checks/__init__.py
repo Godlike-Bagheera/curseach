@@ -7,62 +7,62 @@
     ALL_CHECKS
 """
 
-from typing import Awaitable, Callable, Dict, List, Optional
+from collections.abc import Awaitable, Callable
+from typing import Optional
 
-# ---------- Реэкспорт проверок ----------
-from .injection import check_sqli, check_command_injection, check_error_leak
-from .xss import check_xss
 from .access import (
+    check_captcha,
+    check_cors,
+    check_csrf,
     check_idor,
     check_idor_auth,
-    check_csrf,
-    check_cors,
-    check_captcha,
 )
-from .auth import check_cross_user_idor, check_bfla, check_jwt_none
+from .auth import check_bfla, check_cross_user_idor, check_jwt_none
+from .base import (
+    _EVIDENCE_LOG,
+    _SCAN_CTX,
+    RateLimiter,
+    RequestBudget,
+    ScanCancelled,
+    ScanContext,
+    dedup_findings,
+    enrich_findings,
+    ev,
+)
+from .data import check_osv_sca, check_sca, check_sensitive_data
+from .descriptions import VULN_DESCRIPTIONS, get_vuln_info
 from .headers import (
     check_security_headers,
     check_tls_version,
     check_unsafe_methods,
 )
-from .data import check_sensitive_data, check_sca, check_osv_sca
+
+# ---------- Реэкспорт проверок ----------
+from .injection import check_command_injection, check_error_leak, check_sqli
 from .logic import (
     check_business_logic,
-    check_pagination,
-    check_mass_assignment,
     check_graphql_introspection,
+    check_mass_assignment,
+    check_pagination,
 )
 from .misc import (
+    check_content_type_validation,
     check_hidden_paths,
     check_http_only,
-    check_content_type_validation,
     check_rate_limiting,
 )
-
-from .descriptions import VULN_DESCRIPTIONS, get_vuln_info
-from .base import (
-    ScanContext,
-    ScanCancelled,
-    RequestBudget,
-    RateLimiter,
-    _SCAN_CTX,
-    _EVIDENCE_LOG,
-    enrich_findings,
-    dedup_findings,
-    ev,
-)
 from .surface import Surface, build_surfaces, sample_from_schema
+from .xss import check_xss
 
-
-ALL_CHECKS: List[Callable[..., Awaitable[List[Dict]]]] = [
+ALL_CHECKS: list[Callable[..., Awaitable[list[dict]]]] = [
     check_sqli,
     check_xss,
     check_hidden_paths,
     check_idor,
     check_idor_auth,
-    check_cross_user_idor,      # новое
-    check_bfla,                 # новое
-    check_jwt_none,             # новое: JWT alg=none / подделка токена
+    check_cross_user_idor,  # новое
+    check_bfla,  # новое
+    check_jwt_none,  # новое: JWT alg=none / подделка токена
     check_security_headers,
     check_sensitive_data,
     check_cors,
@@ -85,36 +85,36 @@ ALL_CHECKS: List[Callable[..., Awaitable[List[Dict]]]] = [
 
 
 CHECK_METADATA = {
-    "check_sqli":                    {"name": "SQL-инъекция",               "quick": True,  "level": "CRITICAL"},
-    "check_xss":                     {"name": "Отражённый XSS",             "quick": True,  "level": "MEDIUM"},
-    "check_hidden_paths":            {"name": "Скрытые пути",               "quick": False, "level": "MEDIUM"},
-    "check_idor":                    {"name": "Нарушение контроля доступа", "quick": True,  "level": "CRITICAL"},
-    "check_idor_auth":               {"name": "IDOR: auth vs аноним",       "quick": True,  "level": "CRITICAL"},
-    "check_cross_user_idor":         {"name": "Cross-user IDOR (BOLA)",     "quick": True,  "level": "CRITICAL"},
-    "check_bfla":                    {"name": "BFLA (admin без роли)",      "quick": True,  "level": "CRITICAL"},
-    "check_jwt_none":                {"name": "JWT alg=none / подделка",    "quick": True,  "level": "CRITICAL"},
-    "check_security_headers":        {"name": "Заголовки безопасности",     "quick": True,  "level": "MEDIUM"},
-    "check_sensitive_data":          {"name": "Утечка данных",              "quick": True,  "level": "HIGH"},
-    "check_cors":                    {"name": "Открытый CORS",              "quick": True,  "level": "MEDIUM"},
-    "check_rate_limiting":           {"name": "Ограничение запросов",       "quick": False, "level": "LOW"},
-    "check_command_injection":       {"name": "Инъекция команд ОС",         "quick": True,  "level": "CRITICAL"},
-    "check_error_leak":              {"name": "Утечка через ошибки",        "quick": True,  "level": "MEDIUM"},
-    "check_http_only":               {"name": "HTTP без HTTPS",             "quick": True,  "level": "MEDIUM"},
-    "check_csrf":                    {"name": "Защита от CSRF",             "quick": False, "level": "MEDIUM"},
-    "check_unsafe_methods":          {"name": "Опасные HTTP-методы",        "quick": False, "level": "MEDIUM"},
-    "check_content_type_validation": {"name": "Валидация Content-Type",     "quick": False, "level": "LOW"},
-    "check_sca":                     {"name": "Утечка манифеста зависимостей", "quick": False, "level": "MEDIUM"},
-    "check_captcha":                 {"name": "Защита от брутфорса",        "quick": False, "level": "MEDIUM"},
-    "check_business_logic":          {"name": "Бизнес-логика",              "quick": False, "level": "HIGH"},
-    "check_pagination":              {"name": "Пагинация",                  "quick": False, "level": "LOW"},
-    "check_tls_version":             {"name": "TLS и сертификат",           "quick": False, "level": "HIGH"},
-    "check_mass_assignment":         {"name": "Массовое присвоение",        "quick": False, "level": "HIGH"},
-    "check_graphql_introspection":   {"name": "GraphQL-интроспекция",       "quick": False, "level": "MEDIUM"},
-    "check_osv_sca":                 {"name": "SCA: уязвимые зависимости (OSV)", "quick": False, "level": "CRITICAL"},
+    "check_sqli": {"name": "SQL-инъекция", "quick": True, "level": "CRITICAL"},
+    "check_xss": {"name": "Отражённый XSS", "quick": True, "level": "MEDIUM"},
+    "check_hidden_paths": {"name": "Скрытые пути", "quick": False, "level": "MEDIUM"},
+    "check_idor": {"name": "Нарушение контроля доступа", "quick": True, "level": "CRITICAL"},
+    "check_idor_auth": {"name": "IDOR: auth vs аноним", "quick": True, "level": "CRITICAL"},
+    "check_cross_user_idor": {"name": "Cross-user IDOR (BOLA)", "quick": True, "level": "CRITICAL"},
+    "check_bfla": {"name": "BFLA (admin без роли)", "quick": True, "level": "CRITICAL"},
+    "check_jwt_none": {"name": "JWT alg=none / подделка", "quick": True, "level": "CRITICAL"},
+    "check_security_headers": {"name": "Заголовки безопасности", "quick": True, "level": "MEDIUM"},
+    "check_sensitive_data": {"name": "Утечка данных", "quick": True, "level": "HIGH"},
+    "check_cors": {"name": "Открытый CORS", "quick": True, "level": "MEDIUM"},
+    "check_rate_limiting": {"name": "Ограничение запросов", "quick": False, "level": "LOW"},
+    "check_command_injection": {"name": "Инъекция команд ОС", "quick": True, "level": "CRITICAL"},
+    "check_error_leak": {"name": "Утечка через ошибки", "quick": True, "level": "MEDIUM"},
+    "check_http_only": {"name": "HTTP без HTTPS", "quick": True, "level": "MEDIUM"},
+    "check_csrf": {"name": "Защита от CSRF", "quick": False, "level": "MEDIUM"},
+    "check_unsafe_methods": {"name": "Опасные HTTP-методы", "quick": False, "level": "MEDIUM"},
+    "check_content_type_validation": {"name": "Валидация Content-Type", "quick": False, "level": "LOW"},
+    "check_sca": {"name": "Утечка манифеста зависимостей", "quick": False, "level": "MEDIUM"},
+    "check_captcha": {"name": "Защита от брутфорса", "quick": False, "level": "MEDIUM"},
+    "check_business_logic": {"name": "Бизнес-логика", "quick": False, "level": "HIGH"},
+    "check_pagination": {"name": "Пагинация", "quick": False, "level": "LOW"},
+    "check_tls_version": {"name": "TLS и сертификат", "quick": False, "level": "HIGH"},
+    "check_mass_assignment": {"name": "Массовое присвоение", "quick": False, "level": "HIGH"},
+    "check_graphql_introspection": {"name": "GraphQL-интроспекция", "quick": False, "level": "MEDIUM"},
+    "check_osv_sca": {"name": "SCA: уязвимые зависимости (OSV)", "quick": False, "level": "CRITICAL"},
 }
 
 
-def get_checks_by_mode(mode: str, selected: Optional[List[str]] = None) -> list:
+def get_checks_by_mode(mode: str, selected: list[str] | None = None) -> list:
     if mode == "quick":
         return [fn for fn in ALL_CHECKS if CHECK_METADATA.get(fn.__name__, {}).get("quick")]
     if mode == "custom":
@@ -124,7 +124,7 @@ def get_checks_by_mode(mode: str, selected: Optional[List[str]] = None) -> list:
     return list(ALL_CHECKS)
 
 
-def get_available_checks() -> List[Dict]:
+def get_available_checks() -> list[dict]:
     return [
         {
             "id": fn.__name__,
