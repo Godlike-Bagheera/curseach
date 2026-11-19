@@ -4,5 +4,3 @@ pytest==9.2.0
 ruff==0.17.5
 mypy==2.4.1
 pytest-cov==7.1.0
-# starlette 1.10 TestClient: миграция с httpx на httpx2 (убирает deprecation-warning)
-httpx2==2.16.2
