@@ -941,3 +941,15 @@ body {
         transition: none;
     }
 }
+
+/* ---------- Фильтр истории по цели + пагинация ---------- */
+.history-target-row { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; flex-wrap: wrap; }
+.history-target-row label { margin: 0; white-space: nowrap; }
+.history-target-row input {
+    flex: 1; min-width: 200px; background: #000; border: 2px solid var(--border-dim);
+    color: var(--fg); padding: 8px 12px; font: inherit; font-size: 13px;
+}
+.history-target-row input:focus-visible { outline: none; border-color: var(--border); box-shadow: 0 0 8px rgba(0,255,65,.25); }
+.history-pager { display: flex; align-items: center; gap: 12px; justify-content: center; margin: 14px 0; flex-wrap: wrap; }
+.history-pager-info { font-size: 12px; color: var(--fg-dim); letter-spacing: .06em; }
+.history-pager .action-btn { padding: 6px 14px; }

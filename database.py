@@ -176,3 +176,46 @@ def delete_all_scans() -> int:
         count = c.fetchone()[0]
         c.execute("DELETE FROM scans")
     return count
+
+
+def query_scans(date_from=None, date_to=None, target=None, limit=50, offset=0):
+    """Серверная фильтрация истории по дате (YYYY-MM-DD) и цели + пагинация.
+
+    Возвращает (items, total): items — страница записей, total — всего под фильтром.
+    """
+    where = []
+    params = []
+    if date_from:
+        where.append("substr(scan_date, 1, 10) >= ?")
+        params.append(date_from)
+    if date_to:
+        where.append("substr(scan_date, 1, 10) <= ?")
+        params.append(date_to)
+    if target:
+        where.append("target_url LIKE ?")
+        params.append("%" + target + "%")
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM scans" + clause, params)
+        total = c.fetchone()[0]
+        c.execute(
+            "SELECT id, target_url, scan_date, critical, high, medium, low FROM scans"
+            + clause
+            + " ORDER BY id DESC LIMIT ? OFFSET ?",
+            params + [int(limit), int(offset)],
+        )
+        rows = c.fetchall()
+    items = [
+        {
+            "id": r[0],
+            "target_url": r[1],
+            "scan_date": r[2],
+            "critical": r[3],
+            "high": r[4],
+            "medium": r[5],
+            "low": r[6],
+        }
+        for r in rows
+    ]
+    return items, total

@@ -614,88 +614,111 @@ function renderHistoryChart(scans) {
 }
 
 // ---------- History ----------
-async function loadHistory() {
+let historyPage = 0;
+const HISTORY_PAGE_SIZE = 25;
+
+function historyFilterState() {
+    try { return JSON.parse(localStorage.getItem('curseach.historyRange') || '{}'); } catch (e) { return {}; }
+}
+
+async function loadHistory(page) {
     if (isGuest) return;
+    if (typeof page === 'number') historyPage = Math.max(0, page);
     const container = $('historyList');
     clear(container);
     container.appendChild(el('div', { className: 'empty-history', text: 'Загрузка...' }));
 
+    const f = historyFilterState();
+    const targetInput = $('historyTargetFilter');
+    const target = targetInput ? targetInput.value.trim() : '';
+    const p = new URLSearchParams();
+    if (f.from) p.set('from', f.from);
+    if (f.to) p.set('to', f.to);
+    if (target) p.set('target', target);
+    p.set('limit', String(HISTORY_PAGE_SIZE));
+    p.set('offset', String(historyPage * HISTORY_PAGE_SIZE));
+
     try {
-        const resp = await fetch('/history');
+        const resp = await fetch('/history?' + p.toString());
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const scans = await resp.json();
+        const total = parseInt(resp.headers.get('X-Total-Count') || String(scans.length), 10);
         cachedScans = scans;
-
         renderHistoryChart(scans);
 
         clear(container);
         if (!scans.length) {
             container.appendChild(el('div', { className: 'empty-history', text: 'История пуста' }));
-            return;
-        }
-        const table = el('table', { className: 'history-table' });
-        const thead = el('thead', null, [
-            el('tr', null, [
-                el('th', { text: 'ID' }),
-                el('th', { text: 'ДАТА' }),
-                el('th', { text: 'ЦЕЛЬ' }),
-                el('th', { text: 'КРИТ' }),
-                el('th', { text: 'ВЫС' }),
-                el('th', { text: 'СРЕД' }),
-                el('th', { text: 'НИЗК' }),
-                el('th', { text: 'ДЕЙСТВИЯ' }),
-            ]),
-        ]);
-        const tbody = el('tbody');
-        for (const s of scans) {
-            const viewBtn = el('button', {
-                className: 'btn-view',
-                text: 'ПРОСМОТР',
-                onclick: () => window.open(`/history/${s.id}/view`, '_blank'),
-            });
-            const chartBtn = el('button', {
-                className: 'btn-chart',
-                text: 'ДИАГРАММА',
-                onclick: () => window.open(`/history/${s.id}/chart`, '_blank', 'width=1200,height=800'),
-            });
-            const bundleBtn = el('button', {
-                className: 'btn-bundle',
-                text: 'ZIP',
-                title: 'Скачать все форматы одним архивом',
-                onclick: () => window.location.href = `/history/${s.id}/bundle`,
-            });
-            const delBtn = el('button', {
-                className: 'btn-delete',
-                text: 'УДАЛИТЬ',
-                onclick: async () => {
-                    if (!confirm('Удалить скан #' + s.id + '?')) return;
-                    try {
-                        const r = await fetch(`/history/${s.id}`, { method: 'DELETE' });
-                        if (r.ok) loadHistory();
-                        else alert('Ошибка удаления');
-                    } catch (e) { alert('Ошибка: ' + e.message); }
-                },
-            });
-            const row = el('tr', null, [
-                el('td', { text: String(s.id) }),
-                el('td', { text: s.scan_date.replace('T', ' ').slice(0, 19) }),
-                el('td', { className: 'url-cell', text: s.target_url, title: s.target_url }),
-                el('td', null, [el('span', { className: 'badge badge-crit', text: String(s.critical ?? 0) })]),
-                el('td', null, [el('span', { className: 'badge badge-high', text: String(s.high ?? 0) })]),
-                el('td', null, [el('span', { className: 'badge badge-med', text: String(s.medium ?? 0) })]),
-                el('td', null, [el('span', { className: 'badge badge-low', text: String(s.low ?? 0) })]),
-                el('td', { className: 'actions-cell' }, [viewBtn, chartBtn, bundleBtn, delBtn]),
+        } else {
+            const table = el('table', { className: 'history-table' });
+            const thead = el('thead', null, [
+                el('tr', null, [
+                    el('th', { text: 'ID' }), el('th', { text: 'ДАТА' }), el('th', { text: 'ЦЕЛЬ' }),
+                    el('th', { text: 'КРИТ' }), el('th', { text: 'ВЫС' }), el('th', { text: 'СРЕД' }),
+                    el('th', { text: 'НИЗК' }), el('th', { text: 'ДЕЙСТВИЯ' }),
+                ]),
             ]);
-            tbody.appendChild(row);
+            const tbody = el('tbody');
+            for (const s of scans) {
+                const viewBtn = el('button', { className: 'btn-view', text: 'ПРОСМОТР',
+                    onclick: () => window.open(`/history/${s.id}/view`, '_blank') });
+                const chartBtn = el('button', { className: 'btn-chart', text: 'ДИАГРАММА',
+                    onclick: () => window.open(`/history/${s.id}/chart`, '_blank', 'width=1200,height=800') });
+                const bundleBtn = el('button', { className: 'btn-bundle', text: 'ZIP', title: 'Скачать все форматы одним архивом',
+                    onclick: () => window.location.href = `/history/${s.id}/bundle` });
+                const delBtn = el('button', { className: 'btn-delete', text: 'УДАЛИТЬ',
+                    onclick: async () => {
+                        if (!confirm('Удалить скан #' + s.id + '?')) return;
+                        try {
+                            const r = await fetch(`/history/${s.id}`, { method: 'DELETE' });
+                            if (r.ok) loadHistory(); else alert('Ошибка удаления');
+                        } catch (e) { alert('Ошибка: ' + e.message); }
+                    } });
+                const row = el('tr', null, [
+                    el('td', { text: String(s.id) }),
+                    el('td', { text: s.scan_date.replace('T', ' ').slice(0, 19) }),
+                    el('td', { className: 'url-cell', text: s.target_url, title: s.target_url }),
+                    el('td', null, [el('span', { className: 'badge badge-crit', text: String(s.critical ?? 0) })]),
+                    el('td', null, [el('span', { className: 'badge badge-high', text: String(s.high ?? 0) })]),
+                    el('td', null, [el('span', { className: 'badge badge-med', text: String(s.medium ?? 0) })]),
+                    el('td', null, [el('span', { className: 'badge badge-low', text: String(s.low ?? 0) })]),
+                    el('td', { className: 'actions-cell' }, [viewBtn, chartBtn, bundleBtn, delBtn]),
+                ]);
+                tbody.appendChild(row);
+            }
+            table.appendChild(thead);
+            table.appendChild(tbody);
+            container.appendChild(table);
         }
-        table.appendChild(thead);
-        table.appendChild(tbody);
-        container.appendChild(table);
+        renderHistoryPager(total);
+        const cnt = document.querySelector('.hf-count');
+        if (cnt) cnt.textContent = `Показано ${scans.length} из ${total}`;
     } catch (e) {
         clear(container);
         container.appendChild(el('div', { className: 'empty-history', text: 'Ошибка: ' + e.message }));
     }
 }
+
+function renderHistoryPager(total) {
+    let pager = $('historyPager');
+    if (!pager) {
+        pager = el('div', { className: 'history-pager', id: 'historyPager' });
+        const actions = document.querySelector('.history-actions');
+        if (actions && actions.parentNode) actions.parentNode.insertBefore(pager, actions);
+        else return;
+    }
+    clear(pager);
+    const pages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
+    if (historyPage >= pages) historyPage = pages - 1;
+    const prev = el('button', { className: 'action-btn', text: '← НАЗАД', disabled: historyPage <= 0,
+        onclick: () => loadHistory(historyPage - 1) });
+    const next = el('button', { className: 'action-btn', text: 'ВПЕРЁД →', disabled: historyPage >= pages - 1,
+        onclick: () => loadHistory(historyPage + 1) });
+    const info = el('span', { className: 'history-pager-info', text: `СТРАНИЦА ${historyPage + 1} / ${pages} · ВСЕГО ${total}` });
+    pager.appendChild(prev); pager.appendChild(info); pager.appendChild(next);
+}
+
+window.__curseachHistoryReload = () => loadHistory(0);
 
 // ---------- Clear all history ----------
 async function clearAllHistory() {
@@ -738,7 +761,12 @@ if (!isGuest) {
     jsonBtn.addEventListener('click', () => exportReport('json'));
     csvBtn.addEventListener('click', () => exportReport('csv'));
     xlsxBtn.addEventListener('click', () => exportReport('xlsx'));
-    $('refreshHistoryBtn').addEventListener('click', loadHistory);
+    $('refreshHistoryBtn').addEventListener('click', () => loadHistory(historyPage));
+    const historyTargetFilter = $('historyTargetFilter');
+    if (historyTargetFilter) {
+        historyTargetFilter.addEventListener('change', () => loadHistory(0));
+        historyTargetFilter.addEventListener('keydown', e => { if (e.key === 'Enter') loadHistory(0); });
+    }
     $('clearAllHistoryBtn').addEventListener('click', clearAllHistory);
     const exportBtn = $('exportHistoryBtn');
     if (exportBtn) exportBtn.addEventListener('click', exportHistory);
