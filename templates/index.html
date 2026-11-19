@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/history_filter.css">
     <noscript>
         <style>
             html.is-loading { overflow-y: scroll !important; }
@@ -38,6 +39,7 @@
                 ПОЛЬЗОВАТЕЛЬ: {{ user }}{% if is_guest %} [ТОЛЬКО ПРОСМОТР]{% endif %}
             </div>
             <a href="/about" target="_blank" class="about-btn">О ПРОЕКТЕ</a>
+            <a href="/vulns" target="_blank" class="about-btn">СПРАВОЧНИК УЯЗВИМОСТЕЙ</a>
             <a href="/logout" class="logout-btn">ВЫЙТИ</a>
         </div>
     </header>
@@ -205,5 +207,6 @@
 
 <script src="/static/chart.umd.min.js"></script>
 <script src="/static/script.js"></script>
+<script src="/static/history_filter.js"></script>
 </body>
 </html>

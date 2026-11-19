@@ -1,313 +1,124 @@
-"""
-Launcher: запускает уязвимое API и DevSecOps Scanner одной командой.
-- Автоматически устанавливает зависимости
-- Автоматически находит свободные порты, если стандартные заняты
-- Повторяет попытку запуска, если порт был перехвачен между проверкой и стартом
-- Показывает цветные логи и корректно останавливает всё по Ctrl+C
-- Работает из любой рабочей директории (делает chdir в папку скрипта)
+"""Единая точка входа: учебная цель + сканер одной командой.
 
-Примечание: Playwright/Chromium не нужны — PDF рендерится на сервере
-через WeasyPrint; браузерная печать (window.print()) осталась как резерв.
+Ставит зависимости СТРОГО по requirements.txt (с пинами), поднимает оба
+сервиса, сам находит свободные порты и открывает браузер. Ctrl+C гасит оба.
 """
-
+import os
+import re
+import socket
 import subprocess
 import sys
-import time
-import signal
-import webbrowser
 import threading
-import os
-import socket
-import importlib.util
+import time
+import webbrowser
 
-# ---------- Конфигурация ----------
-API_HOST = os.environ.get("API_HOST", "127.0.0.1")
-API_PORT_DEFAULT = 8000
-SCANNER_HOST = os.environ.get("SCANNER_HOST", "127.0.0.1")
-SCANNER_PORT_DEFAULT = 8001
-
-START_MAX_RETRIES = 5
-
-REQUIRED_PACKAGES = {
-    "fastapi": "fastapi",
-    "uvicorn": "uvicorn[standard]",
-    "httpx": "httpx",
-    "jinja2": "jinja2",
-    "pydantic": "pydantic",
-    "multipart": "python-multipart",
-    "openpyxl": "openpyxl",
-    "weasyprint": "weasyprint",
-}
-
-# ---------- Цветной вывод ----------
-if os.name == "nt":
-    os.system("")
-
-C_RESET = "\033[0m"
-C_GREEN = "\033[92m"
-C_BLUE = "\033[94m"
-C_YELLOW = "\033[93m"
-C_RED = "\033[91m"
-C_CYAN = "\033[96m"
-C_BOLD = "\033[1m"
+REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+REQ_FILE = os.path.join(REPO_ROOT, "requirements.txt")
+os.chdir(REPO_ROOT)
+sys.path.insert(0, REPO_ROOT)
 
 
-def banner():
-    print(f"""{C_CYAN}{C_BOLD}
-╔══════════════════════════════════════════════════════════╗
-║        🔐  DevSecOps API Security Scanner                ║
-║        Однокомандный запуск всего проекта                ║
-╚══════════════════════════════════════════════════════════╝
-{C_RESET}""")
+def _parse_pins(text):
+    """name==version из requirements.txt (комментарии/-r/extras/маркеры игнорируем)."""
+    pins = []
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line or line.startswith("-"):
+            continue
+        m = re.match(r"^([A-Za-z0-9_.\-]+)(\[[^\]]*\])?\s*==\s*([^\s;]+)", line)
+        if m:
+            pins.append((m.group(1), m.group(3)))
+    return pins
 
 
-# ---------- Проверка и установка зависимостей ----------
-def is_package_installed(import_name: str) -> bool:
-    return importlib.util.find_spec(import_name) is not None
-
-
-def _pip_available():
-    """Проверяет, что в текущем интерпретаторе есть pip."""
-    if importlib.util.find_spec("pip"):
-        return True
-    # Попытка self-heal (PEP 538/454 окружения без pip)
+def _installed_version(name):
     try:
-        r = subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"],
-                           capture_output=True, text=True)
-        if r.returncode == 0 and importlib.util.find_spec("pip"):
-            return True
+        from importlib import metadata
+        return metadata.version(name)
     except Exception:
-        pass
-    return False
+        return None
 
 
-def install_packages(pip_names):
-    print(f"{C_BLUE}[*] Установка зависимостей: {', '.join(pip_names)}{C_RESET}")
-    if not _pip_available():
-        print(f"{C_RED}[!] В интерпретаторе {sys.executable} нет модуля pip.{C_RESET}")
-        print("    Запустите через настроенное окружение:")
-        print("      python3 -m venv .venv && . .venv/bin/activate && "
-              "pip install -r requirements.txt")
-        print("    (в Codespaces достаточно просто `python start.py` — "
-              "зависимости ставятся при сборке контейнера)")
-        sys.exit(1)
+def _ensure_pip():
     try:
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "pip"],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install"] + pip_names,
-            check=False,
-        )
-        if result.returncode != 0:
-            print(f"{C_RED}[!] Не удалось установить зависимости.{C_RESET}")
-            print(f"{C_YELLOW}    Попробуйте вручную:{C_RESET}")
-            print(f"    pip install {' '.join(pip_names)}")
-            sys.exit(1)
-    except Exception as e:
-        print(f"{C_RED}[!] Ошибка при установке: {e}{C_RESET}")
-        sys.exit(1)
+        import pip  # noqa: F401
+    except Exception:
+        subprocess.check_call([sys.executable, "-m", "ensurepip", "--upgrade"])
 
 
 def ensure_dependencies():
-    missing = [
-        pip_name for import_name, pip_name in REQUIRED_PACKAGES.items()
-        if not is_package_installed(import_name)
-    ]
+    _ensure_pip()
+    with open(REQ_FILE, encoding="utf-8") as f:
+        pins = _parse_pins(f.read())
+    missing = [(n, v) for n, v in pins if _installed_version(n) != v]
     if not missing:
-        print(f"{C_GREEN}[✓]{C_RESET} Все зависимости найдены")
         return
-    print(f"{C_YELLOW}[!] Отсутствуют пакеты: {', '.join(missing)}{C_RESET}")
-    print(f"{C_BLUE}[*] Устанавливаю автоматически...{C_RESET}\n")
-    install_packages(missing)
-    still = [
-        name for import_name, name in REQUIRED_PACKAGES.items()
-        if not is_package_installed(import_name)
-    ]
-    if still:
-        print(f"{C_RED}[!] Всё ещё не установлены: {', '.join(still)}{C_RESET}")
-        sys.exit(1)
-    print(f"{C_GREEN}[✓]{C_RESET} Зависимости успешно установлены")
-
-
-# ---------- Порты ----------
-def is_port_free(host: str, port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            s.bind((host, port))
-            return True
-        except OSError:
-            return False
-
-
-def find_free_port(host: str, start_port: int, max_tries: int = 50) -> int:
-    for offset in range(max_tries):
-        candidate = start_port + offset
-        if is_port_free(host, candidate):
-            return candidate
-    raise RuntimeError(f"Не удалось найти свободный порт начиная с {start_port}")
-
-
-def resolve_port(host: str, default_port: int, name: str, quiet: bool = False) -> int:
-    if is_port_free(host, default_port):
-        return default_port
-
-    if not quiet:
-        print(f"{C_YELLOW}[!] Порт {default_port} ({name}) занят.{C_RESET}")
+    print(f"[start] доустанавливаю {len(missing)} пакетов строго по requirements.txt: "
+          + ", ".join(f"{n}=={v}" for n, v in missing))
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", REQ_FILE])
     try:
-        new_port = find_free_port(host, default_port + 1)
-    except RuntimeError as e:
-        print(f"{C_RED}[!] {e}{C_RESET}")
-        sys.exit(1)
-
-    if not quiet:
-        print(f"{C_GREEN}[✓]{C_RESET} Использую свободный порт: {C_CYAN}{new_port}{C_RESET}")
-    return new_port
+        import weasyprint  # noqa: F401
+    except Exception:
+        print("[start] ВНИМАНИЕ: WeasyPrint не импортируется (нужны системные pango/GTK). "
+              "PDF-экспорт будет недоступен, остальные отчёты работают. В Docker всё вшито.")
 
 
-# ---------- Запуск процессов ----------
-def start_process(module, port, host):
-    cmd = [
-        sys.executable, "-m", "uvicorn",
-        f"{module}:app",
-        "--host", host,
-        "--port", str(port),
-        "--log-level", "warning",
-    ]
-    return subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        env=os.environ.copy(),
-        cwd=os.path.dirname(os.path.abspath(__file__)),
-    )
-
-
-def start_process_with_retry(module, host, default_port, name):
-    last_port = default_port
-    for attempt in range(START_MAX_RETRIES):
-        port = resolve_port(host, last_port, name, quiet=(attempt > 0))
-        proc = start_process(module, port, host)
-        time.sleep(1.5)
-        if proc.poll() is None:
-            return port, proc
-
-        print(f"{C_YELLOW}[!] {name} не поднялся на порту {port}, пробую следующий...{C_RESET}")
-        try:
-            proc.terminate()
-            proc.wait(timeout=1)
-        except Exception:
+def _free_port(preferred):
+    for port in range(preferred, preferred + 50):
+        with socket.socket() as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
-                proc.kill()
-            except Exception:
-                pass
-        last_port = port + 1
-
-    print(f"{C_RED}[!] Не удалось запустить {name} за {START_MAX_RETRIES} попыток.{C_RESET}")
-    sys.exit(1)
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError("не нашёл свободный порт")
 
 
-def stream_logs(proc, prefix, color):
-    for line in iter(proc.stdout.readline, ""):
-        if line.strip():
-            print(f"{color}[{prefix}]{C_RESET} {line.rstrip()}")
-
-
-def open_browser_later(url, delay=2.5):
-    def _open():
-        time.sleep(delay)
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
-    threading.Thread(target=_open, daemon=True).start()
-
-
-# ---------- Точка входа ----------
 def main():
-    # КРИТИЧНО: работаем из папки скрипта, а не из cwd вызывающего.
-    # Иначе uvicorn не найдёт templates/ и static/ при запуске
-    # из другой рабочей директории.
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
+    args = sys.argv[1:]
+    if "--skip-install" not in args:
+        ensure_dependencies()
 
-    banner()
-    ensure_dependencies()
+    import uvicorn
+    from main import app as target_app
+    from scanner.app import app as scanner_app
 
-    print(f"\n{C_BLUE}[*] Запуск уязвимого API...{C_RESET}")
-    api_port, api_proc = start_process_with_retry("main", API_HOST, API_PORT_DEFAULT, "API")
-    threading.Thread(
-        target=stream_logs,
-        args=(api_proc, "API", C_YELLOW),
-        daemon=True,
-    ).start()
+    api_port = _free_port(int(os.environ.get("API_PORT", "8000")))
+    web_port = _free_port(int(os.environ.get("SCANNER_PORT", "8001")))
+    api_host = os.environ.get("API_HOST", "127.0.0.1")
+    web_host = os.environ.get("SCANNER_HOST", "127.0.0.1")
 
-    print(f"{C_GREEN}[✓]{C_RESET} API запущен:      {C_CYAN}http://{API_HOST}:{api_port}{C_RESET}")
-    print(f"{C_GREEN}[✓]{C_RESET} Swagger UI:       {C_CYAN}http://{API_HOST}:{api_port}/docs{C_RESET}")
+    servers = [
+        uvicorn.Server(uvicorn.Config(target_app, host=api_host, port=api_port, log_level="warning")),
+        uvicorn.Server(uvicorn.Config(scanner_app, host=web_host, port=web_port, log_level="warning")),
+    ]
+    threads = [threading.Thread(target=s.run, daemon=True) for s in servers]
+    for t in threads:
+        t.start()
+    for s in servers:
+        for _ in range(100):
+            if s.started:
+                break
+            time.sleep(0.1)
 
-    print(f"\n{C_BLUE}[*] Запуск веб-интерфейса сканера...{C_RESET}")
-    scanner_port, scanner_proc = start_process_with_retry(
-        "web_app", SCANNER_HOST, SCANNER_PORT_DEFAULT, "Scanner"
-    )
-    threading.Thread(
-        target=stream_logs,
-        args=(scanner_proc, "SCAN", C_GREEN),
-        daemon=True,
-    ).start()
-
-    print(f"{C_GREEN}[✓]{C_RESET} Сканер запущен:   {C_CYAN}http://{SCANNER_HOST}:{scanner_port}{C_RESET}")
-
-    print(f"""
-{C_BOLD}{C_GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{C_RESET}
-{C_BOLD}  🎯  Всё готово! Открываю браузер...{C_RESET}
-{C_BOLD}{C_GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{C_RESET}
-
-  API (цель):    {C_CYAN}http://{API_HOST}:{api_port}{C_RESET}
-  Сканер:        {C_CYAN}http://{SCANNER_HOST}:{scanner_port}{C_RESET}
-
-  Для остановки нажмите {C_BOLD}Ctrl + C{C_RESET}
-""")
-
-    open_browser_later(f"http://{SCANNER_HOST}:{scanner_port}")
-
-    def shutdown(signum=None, frame=None):
-        print(f"\n{C_YELLOW}[*] Остановка серверов...{C_RESET}")
-        for p in (api_proc, scanner_proc):
-            try:
-                p.terminate()
-            except Exception:
-                pass
-        for p in (api_proc, scanner_proc):
-            try:
-                p.wait(timeout=2)
-            except Exception:
-                try:
-                    p.kill()
-                except Exception:
-                    pass
-        print(f"{C_GREEN}[✓]{C_RESET} Все процессы остановлены. До связи!")
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
-
+    url = f"http://{'127.0.0.1' if web_host == '0.0.0.0' else web_host}:{web_port}"
+    print("\n\033[32m=== DevSecOps Scanner запущен ===\033[0m")
+    print(f"  Цель (уязвимое API): http://127.0.0.1:{api_port}  (Swagger: /docs)")
+    print(f"  Сканер:              {url}")
+    print("  Вход: admin / admin  (пароль можно задать через SCANNER_ADMIN_PASSWORD)")
+    print("  Ctrl+C — остановить оба сервиса\n")
+    if "--no-browser" not in args:
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     try:
-        while True:
+        while any(t.is_alive() for t in threads):
             time.sleep(0.5)
-            if api_proc.poll() is not None:
-                print(f"{C_RED}[!] API неожиданно завершился.{C_RESET}")
-                shutdown()
-            if scanner_proc.poll() is not None:
-                print(f"{C_RED}[!] Сканер неожиданно завершился.{C_RESET}")
-                shutdown()
     except KeyboardInterrupt:
-        shutdown()
+        print("\n[start] останавливаю сервисы...")
+        for s in servers:
+            s.should_exit = True
+        for t in threads:
+            t.join(timeout=5)
 
 
 if __name__ == "__main__":
