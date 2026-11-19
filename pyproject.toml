@@ -30,3 +30,4 @@ show_missing = true
 [tool.ruff.lint.per-file-ignores]
 # __init__.py — хабы реэкспорта публичного API (checks, scanner, routes).
 "__init__.py" = ["F401"]
+"web_app.py" = ["F401"]

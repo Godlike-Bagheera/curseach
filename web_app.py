@@ -25,24 +25,34 @@ from scanner.config import (  # noqa: F401
 )
 from scanner.reporting import (  # noqa: F401
     build_chart_context as _build_chart_context,
+    build_scan_bundle,
+    inline_chartjs as _inline_chartjs,
+    render_report,
+    results_to_sarif as _results_to_sarif,
 )
 from scanner.security import (  # noqa: F401
     authenticate,
+    check_login_rate as _check_login_rate,
     create_session,
     destroy_session,
     get_current_user,
     require_admin,
     require_user,
+    safe_host_for_filename as _safe_host_for_filename,
     sessions,
+    ssrf_check_host as _ssrf_check_host,
+    validate_target_url as _validate_target_url,
 )
 from scanner.tasks import (  # noqa: F401
     AccountConfig,
     ScanRequest,
     ScanTask,
+    login_and_get_token as _login_and_get_token,
     run_scan_in_thread,
     scan_engine,
     tasks,
 )
+
 
 if __name__ == "__main__":
     from scanner.app import _run_server
