@@ -29,6 +29,7 @@ from .base import (
     enrich_findings,
     ev,
 )
+from .cookies import check_cookie_flags
 from .data import check_osv_sca, check_sca, check_sensitive_data
 from .descriptions import VULN_DESCRIPTIONS, get_vuln_info
 from .headers import (
@@ -53,6 +54,7 @@ from .misc import (
 )
 from .ssrf import check_ssrf
 from .surface import Surface, build_surfaces, sample_from_schema
+from .traversal import check_open_redirect, check_path_traversal
 from .xss import check_xss
 
 ALL_CHECKS: list[Callable[..., Awaitable[list[dict]]]] = [
@@ -83,6 +85,9 @@ ALL_CHECKS: list[Callable[..., Awaitable[list[dict]]]] = [
     check_graphql_introspection,
     check_osv_sca,
     check_ssrf,
+    check_path_traversal,
+    check_open_redirect,
+    check_cookie_flags,
 ]
 
 
@@ -114,6 +119,9 @@ CHECK_METADATA = {
     "check_graphql_introspection": {"name": "GraphQL-интроспекция", "quick": False, "level": "MEDIUM"},
     "check_osv_sca": {"name": "SCA: уязвимые зависимости (OSV)", "quick": False, "level": "CRITICAL"},
     "check_ssrf": {"name": "SSRF (запросы от имени сервера)", "quick": False, "level": "HIGH"},
+    "check_path_traversal": {"name": "Path Traversal / LFI", "quick": True, "level": "HIGH"},
+    "check_open_redirect": {"name": "Открытый редирект", "quick": True, "level": "MEDIUM"},
+    "check_cookie_flags": {"name": "Флаги cookie", "quick": True, "level": "MEDIUM"},
 }
 
 
