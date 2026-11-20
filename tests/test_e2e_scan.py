@@ -99,6 +99,12 @@ def test_seeded_quick_scan_finds_known_vulns(target_url):
     assert task.budget.per_check_cap == expected_cap
     assert task.budget.per_check, "запросы не посчитаны по проверкам"
     assert sum(task.budget.per_check.values()) <= task.budget.used
+    # Статистика покрытия доступна в задаче и в to_dict.
+    assert task.endpoints_count > 0 and task.surfaces_count > 0
+    d = task.to_dict()
+    assert d["endpoints_count"] == task.endpoints_count
+    assert d["surfaces_count"] == task.surfaces_count
+    assert d["requests_used"] == task.budget.used
 
 
 def test_scan_cancellation(target_url):

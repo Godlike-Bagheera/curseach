@@ -470,6 +470,12 @@
                     <td class="key">Всего находок</td>
                     <td class="value">{{ total }}</td>
                 </tr>
+                {% if endpoints_count or requests_max %}
+                <tr>
+                    <td class="key">Покрытие</td>
+                    <td class="value">эндпоинтов {{ endpoints_count }}, поверхностей {{ surfaces_count }}, запросов {{ requests_used }}/бюджет {{ requests_max }}</td>
+                </tr>
+                {% endif %}
             </table>
         </div>
 

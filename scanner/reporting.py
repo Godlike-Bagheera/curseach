@@ -41,6 +41,10 @@ def render_report(
     scan_date,
     partial=False,
     partial_reason="",
+    endpoints_count=0,
+    surfaces_count=0,
+    requests_used=0,
+    requests_max=0,
 ):
     return templates.TemplateResponse(
         request,
@@ -59,6 +63,10 @@ def render_report(
             "scan_id": None,
             "partial": partial,
             "partial_reason": partial_reason,
+            "endpoints_count": endpoints_count,
+            "surfaces_count": surfaces_count,
+            "requests_used": requests_used,
+            "requests_max": requests_max,
         },
     )
 
@@ -103,6 +111,10 @@ def build_chart_context(scan: dict, include_findings: bool = False) -> dict:
         "total": total,
         "score": score,
         "types_data": types_data,
+        "endpoints_count": scan.get("endpoints_count", 0),
+        "surfaces_count": scan.get("surfaces_count", 0),
+        "requests_used": scan.get("requests_used", 0),
+        "requests_max": scan.get("requests_max", 0),
     }
 
     if include_findings:

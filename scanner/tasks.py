@@ -114,9 +114,16 @@ class ScanTask:
         self.finished_at: float | None = None
         self.started_at: float | None = None
         self.budget: checks.RequestBudget | None = None
+        self.endpoints_count = 0
+        self.surfaces_count = 0
 
         self.queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=QUEUE_MAXSIZE)
         self.loop: asyncio.AbstractEventLoop | None = None
+
+    @property
+    def requests_used(self) -> int:
+        """Сколько запросов бюджета израсходовано (для отчётов/статуса)."""
+        return self.budget.used if self.budget else 0
 
     def add_log(self, msg: str):
         self.logs.append(msg)
@@ -219,8 +226,10 @@ class ScanTask:
             "medium_count": self.medium_count,
             "low_count": self.low_count,
             "score": self.score,
-            "requests_used": self.budget.used if self.budget else 0,
+            "requests_used": self.requests_used,
             "requests_max": self.budget.max_requests if self.budget else SCAN_MAX_REQUESTS,
+            "endpoints_count": self.endpoints_count,
+            "surfaces_count": self.surfaces_count,
             "scan_results": self.scan_results,
             "error": self.error,
         }
@@ -324,6 +333,8 @@ async def scan_engine(task: ScanTask):
             endpoints = await discover_endpoints(ctx)
             task.add_log(f"[OK] Discovery нашёл путей: {len(endpoints)}")
 
+        task.endpoints_count = len(endpoints)
+        task.surfaces_count = len(checks.build_surfaces(ctx, endpoints, limit=10000))
         task.set_progress(0.1)
         total = len(check_list)
 
@@ -436,6 +447,10 @@ async def scan_engine(task: ScanTask):
                     mode=task.mode,
                     partial=task.partial,
                     partial_reason=task.partial_reason,
+                    endpoints_count=task.endpoints_count,
+                    surfaces_count=task.surfaces_count,
+                    requests_used=task.requests_used,
+                    requests_max=task.budget.max_requests if task.budget else SCAN_MAX_REQUESTS,
                 )
             except sqlite3.OperationalError:
                 database.init_db()  # пересоздаём схему и пробуем ещё раз
@@ -449,6 +464,10 @@ async def scan_engine(task: ScanTask):
                     mode=task.mode,
                     partial=task.partial,
                     partial_reason=task.partial_reason,
+                    endpoints_count=task.endpoints_count,
+                    surfaces_count=task.surfaces_count,
+                    requests_used=task.requests_used,
+                    requests_max=task.budget.max_requests if task.budget else SCAN_MAX_REQUESTS,
                 )
             task.add_log("[OK] Результаты сохранены в историю")
         except Exception as e:
