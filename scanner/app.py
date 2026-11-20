@@ -99,10 +99,11 @@ async def security_middleware(request: Request, call_next):
 # ---------- Роутеры ----------
 app.include_router(auth.router)
 app.include_router(scan.router)
+# planning ДО history: /history/trend должен матчиться раньше /history/{scan_id}
+app.include_router(planning.router)
 app.include_router(history.router)
 app.include_router(misc.router)
 app.include_router(profiles.router)
-app.include_router(planning.router)
 
 
 def _run_server():
