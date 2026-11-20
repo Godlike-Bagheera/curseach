@@ -14,6 +14,7 @@
 - **Per-check квоты бюджета** — SQLi/SSRF больше не съедают весь бюджет раньше остальных — PR #37.
 - **Статистика покрытия в отчёте** — эндпоинты/поверхности/запросы в HTML/PDF-отчётах — PR #38.
 - **Webhook-уведомления** — JSON-сводка по завершении скана (httpx, таймаут, 1 retry) — PR #39.
+- **Supply-chain** — Docker base-image по digest, ```pip --require-hashes``` (hash-locked requirements) — PR #40.
 
 ## Осталось
 
@@ -27,4 +28,3 @@
 
 ### Прочее
 - Генерация ```about.html``` из единого источника проверок.
-- Пиннинг base-image Docker по digest, ```pip --require-hashes```.
