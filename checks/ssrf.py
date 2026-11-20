@@ -16,10 +16,35 @@ from .surface import Surface, build_surfaces, probe
 _VTYPE = "Server-Side Request Forgery"
 
 _URL_MARKERS = (
-    "url", "uri", "link", "href", "src", "endpoint", "webhook", "callback",
-    "image", "avatar", "photo", "logo", "feed", "site", "host", "domain",
-    "fetch", "proxy", "redirect", "next", "target", "dest", "remote",
-    "resource", "load", "download", "import", "address", "addr",
+    "url",
+    "uri",
+    "link",
+    "href",
+    "src",
+    "endpoint",
+    "webhook",
+    "callback",
+    "image",
+    "avatar",
+    "photo",
+    "logo",
+    "feed",
+    "site",
+    "host",
+    "domain",
+    "fetch",
+    "proxy",
+    "redirect",
+    "next",
+    "target",
+    "dest",
+    "remote",
+    "resource",
+    "load",
+    "download",
+    "import",
+    "address",
+    "addr",
 )
 _METADATA_PAYLOADS = (
     "http://169.254.169.254/latest/meta-data/",
@@ -27,9 +52,23 @@ _METADATA_PAYLOADS = (
     "http://metadata.google.internal/computeMetadata/v1/",
     "http://[fd00:ec2::254]/latest/meta-data/",
 )
-_METADATA_SIGS = ("ami-id", "instance-id", "security-credentials", "accesskeyid", "computemetadata", "instance-identity")
+_METADATA_SIGS = (
+    "ami-id",
+    "instance-id",
+    "security-credentials",
+    "accesskeyid",
+    "computemetadata",
+    "instance-identity",
+)
 _INTERNAL_PAYLOADS = ("http://127.0.0.1/", "http://localhost/", "http://0.0.0.0/")
-_INTERNAL_SIGS = ("internal-admin-panel", "internal-service", "server-status", "phpinfo()", "actuator/env", "manager/html")
+_INTERNAL_SIGS = (
+    "internal-admin-panel",
+    "internal-service",
+    "server-status",
+    "phpinfo()",
+    "actuator/env",
+    "manager/html",
+)
 
 
 def _url_like(name: str) -> bool:
@@ -70,9 +109,12 @@ async def _test_param(ctx: ScanContext, s: Surface, kind: str, name: str) -> dic
         hit = next((sig for sig in _METADATA_SIGS if sig in b and sig not in base_body), None)
         if hit:
             return _mk(
-                s, kind, name,
+                s,
+                kind,
+                name,
                 f"SSRF: {kind}-параметр {name} — сервер вернул метаданные облака (payload {payload}, маркер {hit})",
-                ev(r), "high",
+                ev(r),
+                "high",
             )
     for payload in _INTERNAL_PAYLOADS:
         r = await _probe_param(ctx, s, kind, name, payload)
@@ -82,9 +124,12 @@ async def _test_param(ctx: ScanContext, s: Surface, kind: str, name: str) -> dic
         hit = next((sig for sig in _INTERNAL_SIGS if sig in b and sig not in base_body), None)
         if hit:
             return _mk(
-                s, kind, name,
+                s,
+                kind,
+                name,
                 f"SSRF: {kind}-параметр {name} — сервер вернул содержимое внутреннего сервиса (payload {payload}, маркер {hit})",
-                ev(r), "medium",
+                ev(r),
+                "medium",
             )
     return None
 

@@ -12,7 +12,9 @@ _SPEC = {
         "/api/fetch-url": {
             "post": {
                 "requestBody": {
-                    "content": {"application/json": {"schema": {"type": "object", "properties": {"url": {"type": "string"}}}}}
+                    "content": {
+                        "application/json": {"schema": {"type": "object", "properties": {"url": {"type": "string"}}}}
+                    }
                 }
             }
         }

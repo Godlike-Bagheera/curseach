@@ -438,7 +438,9 @@ def fetch_url(body: FetchRequest):
     url = (body.url or "").strip()
     host = (urlparse(url).hostname or "").lower()
     is_meta = host.startswith("169.254.") or host in ("metadata.google.internal", "fd00:ec2::254")
-    is_internal = is_meta or host in ("127.0.0.1", "localhost", "0.0.0.0", "::1") or host.startswith(("10.", "192.168."))
+    is_internal = (
+        is_meta or host in ("127.0.0.1", "localhost", "0.0.0.0", "::1") or host.startswith(("10.", "192.168."))
+    )
 
     if not _profile().get("ssrf_enabled", True):
         # Правильное поведение: внутренние адреса и нестандартные схемы запрещены
@@ -454,9 +456,17 @@ def fetch_url(body: FetchRequest):
             "data": {
                 "ami-id": "ami-0123456789abcdef0",
                 "instance-id": "i-0abcdef1234567890",
-                "iam": {"security-credentials": {"scanner-role": {"AccessKeyId": "ASIAEXAMPLE", "SecretAccessKey": "example"}}},
+                "iam": {
+                    "security-credentials": {
+                        "scanner-role": {"AccessKeyId": "ASIAEXAMPLE", "SecretAccessKey": "example"}
+                    }
+                },
             },
         }
     if is_internal:
-        return {"source": url, "internal": True, "data": {"service": "internal-admin-panel", "users": ["alice", "bob", "admin"]}}
+        return {
+            "source": url,
+            "internal": True,
+            "data": {"service": "internal-admin-panel", "users": ["alice", "bob", "admin"]},
+        }
     return {"source": url, "internal": False, "data": {"title": "Example Domain", "note": "external content"}}
