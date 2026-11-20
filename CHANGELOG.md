@@ -14,6 +14,7 @@
 - httpx2 проверен: легитимный преемник httpx (Pydantic / Tom Christie), нужен starlette TestClient — оставлен.
 - Генерация секции проверок about.html из единого источника (scripts/gen_about.py, CI-гейт --check).
 - Auth-профили: bearer/form/apikey, refresh при 401; таблица auth_profiles + CRUD /auth-profiles + выбор/сохранение в UI.
+- Расписания (повторные сканы, тик/минута), проекты (мульти-цели), тренд-график по истории (/history/trend, Chart.js).
 
 ## 1.2.0
 

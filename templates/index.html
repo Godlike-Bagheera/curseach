@@ -55,6 +55,9 @@
         {% else %}
         <button class="tab-btn" disabled title="Недоступно для гостя">[ ИСТОРИЯ ]</button>
         {% endif %}
+        {% if not is_guest %}
+        <button class="tab-btn" data-tab="planning">[ ОПЕРАЦИИ ]</button>
+        {% endif %}
     </nav>
 
     <section id="scanner" class="tab-content active">
@@ -65,6 +68,11 @@
                 <button id="scanBtn" class="exec-btn" {% if is_guest %}disabled{% endif %}>ЗАПУСТИТЬ</button>
             <button id="cancelBtn" class="exec-btn hidden" style="background:#7a2e2e;" {% if is_guest %}disabled{% endif %}>ОСТАНОВИТЬ</button>
             </div>
+        </div>
+
+        <div class="panel">
+            <label class="panel-label" for="scanProject">&gt; ПРОЕКТ (НЕОБЯЗАТЕЛЬНО)</label>
+            <select id="scanProject" class="auth-field" {% if is_guest %}disabled{% endif %}><option value="">— без проекта —</option></select>
         </div>
 
         <div class="panel">
@@ -283,6 +291,35 @@
                 <button id="refreshHistoryBtn" class="action-btn">ОБНОВИТЬ</button>
                 <button id="diffHistoryBtn" class="action-btn" disabled>СРАВНИТЬ (0/2)</button>
             </div>
+        </div>
+    </section>
+    <section id="planning" class="tab-content">
+        <div class="panel">
+            <div class="panel-label">&gt; ПРОЕКТЫ (МУЛЬТИ-ЦЕЛИ)</div>
+            <div class="input-row">
+                <input type="text" id="projectName" placeholder="название проекта…" spellcheck="false" autocomplete="off">
+                <button id="addProjectBtn" class="exec-btn">ДОБАВИТЬ</button>
+            </div>
+            <div id="projectsList" class="checks-list"></div>
+        </div>
+        <div class="panel">
+            <div class="panel-label">&gt; РАСПИСАНИЯ (ПОВТОРНЫЕ СКАНЫ)</div>
+            <div class="auth-row-2col">
+                <div><label class="auth-label" for="schedUrl">ЦЕЛЕВОЙ URL</label><input id="schedUrl" class="auth-field" placeholder="http://127.0.0.1:8000" autocomplete="off"></div>
+                <div><label class="auth-label" for="schedInterval">ИНТЕРВАЛ (МИН)</label><input id="schedInterval" class="auth-field" type="number" value="60" min="1"></div>
+                <div><label class="auth-label" for="schedMode">РЕЖИМ</label><select id="schedMode" class="auth-field"><option value="quick">БЫСТРЫЙ</option><option value="full" selected>ПОЛНЫЙ</option></select></div>
+                <div><label class="auth-label" for="schedProfile">AUTH-ПРОФИЛЬ</label><select id="schedProfile" class="auth-field"><option value="">— без авторизации —</option></select></div>
+            </div>
+            <button id="addScheduleBtn" class="exec-btn">ДОБАВИТЬ РАСПИСАНИЕ</button>
+            <div id="schedulesList" class="checks-list"></div>
+        </div>
+        <div class="panel">
+            <div class="panel-label">&gt; ТРЕНД ПО ИСТОРИИ</div>
+            <div class="input-row">
+                <select id="trendProject" class="auth-field"><option value="">все проекты</option></select>
+                <button id="refreshTrendBtn" class="exec-btn">ОБНОВИТЬ</button>
+            </div>
+            <div class="chart-wrapper"><canvas id="trendChart"></canvas><div id="trendEmpty" class="chart-empty" style="display:none;">Недостаточно данных для тренда (нужно минимум 2 дня).</div></div>
         </div>
     </section>
 </div>

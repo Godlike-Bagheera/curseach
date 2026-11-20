@@ -17,11 +17,10 @@
 - **Supply-chain** — Docker base-image по digest, ```pip --require-hashes``` (hash-locked requirements) — PR #40.
 - **Генерация about.html** — секция проверок из CHECK_METADATA + descriptions.py (gen_about.py --check в CI) — PR #41.
 - **Auth-профили** — bearer/form/apikey, refresh при 401, сохранение профилей (auth_profiles + CRUD + UI) — PR #42.
+- **Расписания/проекты/тренд** — повторные сканы по интервалу, мульти-цели, тренд-график (Chart.js) — PR #43.
 
 ## Осталось
 
 ### Операционные фичи
-- Расписание / повторные сканы.
-- Проекты / мульти-цели, тренд-график по истории.
 - i18n (EN-toggle) — опционально, проект RU-first.
 

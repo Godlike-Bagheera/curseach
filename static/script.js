@@ -148,6 +148,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'history' && !isGuest) { loadHistory(); loadHistoryChart(); }
+        if (btn.dataset.tab === 'planning' && !isGuest) { loadProjects(); loadSchedules(); loadSchedProfiles(); loadTrend(); }
     });
 });
 
@@ -462,6 +463,8 @@ async function startScan() {
 
     try {
         const body = { url, mode };
+        const projEl = $('scanProject');
+        if (projEl && projEl.value) body.project_id = parseInt(projEl.value, 10);
         if (checks_) body.checks = checks_;
 
         const a1 = buildAccount(acc1User, acc1Pass, 'acc1');
@@ -874,6 +877,7 @@ function exportHistory() {
 // ---------- Wire up ----------
 if (!isGuest) {
     initAuthUI();
+    initPlanningUI();
     scanBtn.addEventListener('click', startScan);
     if (cancelBtn) cancelBtn.addEventListener('click', cancelScan);
     urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') startScan(); });
@@ -904,6 +908,141 @@ if (!isGuest) {
     if ($('refreshHistoryBtn')) $('refreshHistoryBtn').disabled = true;
     if ($('clearAllHistoryBtn')) $('clearAllHistoryBtn').disabled = true;
     if ($('exportHistoryBtn')) $('exportHistoryBtn').disabled = true;
+}
+
+
+// ---------- Планировщик: проекты / расписания / тренд ----------
+let trendChart = null;
+
+async function loadProjects() {
+    if (isGuest) return;
+    try {
+        const resp = await fetch('/projects');
+        if (!resp.ok) return;
+        const projects = await resp.json();
+        for (const selId of ['scanProject', 'trendProject']) {
+            const sel = $(selId);
+            if (!sel) continue;
+            const cur = sel.value;
+            clear(sel);
+            sel.appendChild(el('option', { value: '', text: selId === 'trendProject' ? 'все проекты' : '— без проекта —' }));
+            for (const p of projects) sel.appendChild(el('option', { value: String(p.id), text: p.name }));
+            sel.value = cur;
+        }
+        const list = $('projectsList');
+        if (list) {
+            clear(list);
+            for (const p of projects) {
+                list.appendChild(el('div', { className: 'check-item' }, [
+                    el('span', { className: 'name', text: p.name }),
+                    el('button', { className: 'mini-btn', text: 'УДАЛИТЬ', onclick: async () => { await fetch('/projects/' + p.id, { method: 'DELETE' }); loadProjects(); } }),
+                ]));
+            }
+        }
+    } catch (e) { /* проекты не критичны */ }
+}
+
+async function addProject() {
+    const inp = $('projectName');
+    const name = (inp.value || '').trim();
+    if (!name) return;
+    await fetch('/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    inp.value = '';
+    loadProjects();
+}
+
+async function loadSchedProfiles() {
+    const sel = $('schedProfile');
+    if (!sel) return;
+    try {
+        const resp = await fetch('/auth-profiles');
+        if (!resp.ok) return;
+        const profiles = await resp.json();
+        const cur = sel.value;
+        clear(sel);
+        sel.appendChild(el('option', { value: '', text: '— без авторизации —' }));
+        for (const p of profiles) sel.appendChild(el('option', { value: String(p.id), text: p.name }));
+        sel.value = cur;
+    } catch (e) { /* ignore */ }
+}
+
+async function loadSchedules() {
+    if (isGuest) return;
+    const list = $('schedulesList');
+    if (!list) return;
+    try {
+        const resp = await fetch('/schedules');
+        if (!resp.ok) return;
+        const schedules = await resp.json();
+        clear(list);
+        if (!schedules.length) { list.appendChild(el('div', { className: 'empty-history', text: 'Расписаний нет' })); return; }
+        for (const s of schedules) {
+            const last = s.last_run ? new Date(s.last_run * 1000).toISOString().slice(0, 16).replace('T', ' ') : '—';
+            list.appendChild(el('div', { className: 'check-item' }, [
+                el('span', { className: 'name', text: s.target_url + ' · ' + s.mode + ' · каждые ' + s.interval + ' мин · ' + (s.enabled ? 'вкл' : 'выкл') + ' · посл: ' + last }),
+                el('button', { className: 'mini-btn', text: 'УДАЛИТЬ', onclick: async () => { await fetch('/schedules/' + s.id, { method: 'DELETE' }); loadSchedules(); } }),
+            ]));
+        }
+    } catch (e) { /* ignore */ }
+}
+
+async function addSchedule() {
+    const url = ($('schedUrl').value || '').trim();
+    if (!url) { alert('Укажите URL'); return; }
+    const body = { target_url: url, mode: $('schedMode').value, interval: parseInt($('schedInterval').value, 10) || 60, profile_id: $('schedProfile').value ? parseInt($('schedProfile').value, 10) : null };
+    const resp = await fetch('/schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!resp.ok) { const e = await resp.json().catch(() => ({})); alert('Ошибка: ' + (e.detail || resp.status)); return; }
+    loadSchedules();
+}
+
+async function loadTrend() {
+    if (isGuest) return;
+    const sel = $('trendProject');
+    const pid = sel && sel.value ? sel.value : '';
+    try {
+        const resp = await fetch('/history/trend' + (pid ? '?project_id=' + pid : ''));
+        if (!resp.ok) return;
+        renderTrendChart(await resp.json());
+    } catch (e) { /* ignore */ }
+}
+
+function renderTrendChart(data) {
+    const canvas = $('trendChart');
+    const emptyEl = $('trendEmpty');
+    if (!canvas) return;
+    if (typeof Chart === 'undefined' || !data || data.length < 2) {
+        canvas.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'block';
+        if (trendChart) { trendChart.destroy(); trendChart = null; }
+        return;
+    }
+    canvas.style.display = 'block';
+    if (emptyEl) emptyEl.style.display = 'none';
+    const labels = data.map(d => d.date);
+    const mono = 'JetBrains Mono, monospace';
+    if (trendChart) trendChart.destroy();
+    trendChart = new Chart(canvas, {
+        type: 'line',
+        data: { labels, datasets: [
+            { label: 'ОЦЕНКА', data: data.map(d => d.score), borderColor: '#00bfff', backgroundColor: 'rgba(0,191,255,0.12)', borderWidth: 3, tension: 0.3, pointRadius: 4, yAxisID: 'yScore' },
+            { label: 'КРИТИЧНО', data: data.map(d => d.critical), borderColor: '#ff0044', backgroundColor: 'rgba(255,0,68,0.15)', borderWidth: 2, tension: 0.25, pointRadius: 4, yAxisID: 'y' },
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { labels: { color: '#00ff41', font: { family: mono, size: 13, weight: '800' } } } },
+            scales: {
+                x: { ticks: { color: '#7fbf80', font: { family: mono, size: 11 } }, grid: { color: 'rgba(31,95,31,0.4)' } },
+                y: { beginAtZero: true, position: 'left', ticks: { color: '#7fbf80', stepSize: 1 }, grid: { color: 'rgba(31,95,31,0.4)' } },
+                yScore: { beginAtZero: true, max: 100, position: 'right', ticks: { color: '#00bfff', stepSize: 20 }, grid: { display: false } },
+            } },
+    });
+}
+
+function initPlanningUI() {
+    const ap = $('addProjectBtn'); if (ap) ap.addEventListener('click', addProject);
+    const as = $('addScheduleBtn'); if (as) as.addEventListener('click', addSchedule);
+    const rt = $('refreshTrendBtn'); if (rt) rt.addEventListener('click', loadTrend);
+    const tp = $('trendProject'); if (tp) tp.addEventListener('change', loadTrend);
+    loadProjects(); loadSchedules(); loadSchedProfiles(); loadTrend();
 }
 
 // ---------- Старт при загрузке страницы ----------
