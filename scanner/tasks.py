@@ -102,8 +102,6 @@ class ScanTask:
         self.status = "pending"
         self.partial = False
         self.partial_reason = ""
-        self.partial = False
-        self.partial_reason = ""
         self.progress = 0.0
         self.logs: list[str] = []
         self.critical_count = 0
@@ -318,6 +316,13 @@ async def scan_engine(task: ScanTask):
                 task.add_log("[ВНИМАНИЕ] Не удалось разобрать openapi.json")
         else:
             task.add_log(f"[ВНИМАНИЕ] Статус openapi.json: {res.status_code}")
+
+        if not endpoints:
+            from checks.discovery import discover_endpoints
+
+            task.add_log("[ИНФО] Спеки нет — discovery (robots.txt / sitemap.xml / common-paths)...")
+            endpoints = await discover_endpoints(ctx)
+            task.add_log(f"[OK] Discovery нашёл путей: {len(endpoints)}")
 
         task.set_progress(0.1)
         total = len(check_list)

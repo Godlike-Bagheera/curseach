@@ -1,44 +1,35 @@
-# Roadmap: оставшиеся улучшения
+# Roadmap: улучшения сканера
 
-Уже сделано (PR #31, #32, #33): точность детектирования (A), hardening сканера (B),
-учебная цель покрывает почти все проверки (C), качество/CI/доки/a11y (E/F),
-CORS reflection + качество CSP (D-bounded), баннер частичного скана.
+## Уже сделано
 
-## Новые проверки (D)
+- **Точность детектирования (A)** и **hardening (B)** — PR #31, #32.
+- **Учебная цель** покрывает почти все проверки (C) — PR #31.
+- **Качество/CI/доки/a11y (E/F)**, CORS reflection, качество CSP — PR #32.
+- **Баннер частичного скана** — PR #33.
+- **Новые проверки (PR #34):** Path Traversal/LFI (CWE-22), Open Redirect (CWE-601),
+  Insecure Cookie Flags (CWE-614/1004), Stored XSS (CWE-79), JWT Expiration Not Verified (CWE-613).
+- **CLI-сканер** ```python scripts/cli.py --url … --fail-on high``` с exit-code гейтом.
+- **Discovery без OpenAPI** — robots.txt / sitemap.xml / common-paths.
 
-- **Path Traversal / LFI** — probing параметров путевыми payload (`../../etc/passwd`,
-  `..%2f..%2f`) с сигнатурами ответов; отдельный тип + CWE-22.
-- **Insecure Cookie Flags** — анализ `Set-Cookie` (Secure/HttpOnly/SameSite); CWE-614/1004.
-- **Open Redirect** — параметры `redirect/next/url` с внешним Location; CWE-601.
-- **JWT exp / weak-secret** — истёкшие токены, подбор слабого HMAC-секрета (wordlist).
-- **Stored XSS** — POST payload → GET списка, проверка отражения.
+## Осталось
+
+### Проверки
 - **security.txt / CSP report-only** — информационные проверки.
+- **JWT weak-secret** — подбор слабого HMAC-секрета (wordlist) + проверка exp на валидной подписи.
 
-Каждая: описание в `descriptions.py`, `CHECK_METADATA`, `CHECK_VULN`, тесты
-(MockTransport) + эндпоинт учебной цели для демонстрации.
-
-## Бюджет и покрытие (D)
-
+### Бюджет и покрытие
 - Per-check квоты бюджета (сейчас first-come-first-served: SQLi/SSRF съедают бюджет).
 - Статистика покрытия в отчёте: поверхностей протестировано N из M.
+- Персистентность ```partial``` в историю (колонка БД) — сейчас баннер только для активного скана.
 
-## Discovery без OpenAPI (D)
+### Auth-профили
+- Form-login, cookie-сессии, API-key header, refresh токена; сохранение профилей сканирования.
 
-- Fallback: robots.txt, sitemap.xml, crawl ссылок, common-paths — когда спеки нет.
-
-## Auth-профили (D)
-
-- Form-login, cookie-сессии, API-key header, refresh токена; сохранение профилей.
-
-## Операционные фичи (D)
-
-- CLI-режим с exit-code гейтом (`curseach scan --url … --fail-on high`).
+### Операционные фичи
 - Расписание / повторные сканы, webhook-уведомления.
 - Проекты / мульти-цели, тренд-график по истории.
 - i18n (EN-toggle) — опционально, проект RU-first.
 
-## Прочее
-
-- Персистентность `partial` в историю (колонка БД) — сейчас баннер только для активного скана.
-- Генерация `about.html` из единого источника проверок.
-- Пиннинг base-image Docker по digest, `pip --require-hashes`.
+### Прочее
+- Генерация ```about.html``` из единого источника проверок.
+- Пиннинг base-image Docker по digest, ```pip --require-hashes```.

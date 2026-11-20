@@ -147,6 +147,31 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
             "и точечно разрешайте нужные источники."
         ),
     },
+    "Path Traversal": {
+        "plain": "Параметр запроса (file/path/page…) подставляется в путь к файлу без проверки. Payload ../../etc/passwd заставляет сервер прочитать произвольный файл за пределами разрешённой папки.",
+        "example": "GET /api/file?name=../../../../etc/passwd — сервер отдаёт содержимое /etc/passwd (строки root:x:0:0…).",
+        "recommendation": "Не стройте путь к файлу из пользовательского ввода. Используйте allowlist имён, каноникализуйте путь (realpath) и проверяйте, что он внутри базовой директории; отклоняйте .. и абсолютные пути.",
+    },
+    "Open Redirect": {
+        "plain": "Параметр redirect/next/url задаёт адрес перехода без проверки. Атакующий подставляет свой домен — жертва переходит с доверенного сайта на фишинговый.",
+        "example": "GET /api/redirect?next=https://evil.example — сервер отвечает 302 Location: https://evil.example.",
+        "recommendation": "Разрешайте редиректы только по allowlist относительных путей/доверенных доменов; отклоняйте внешние URL и схемы javascript:/data:.",
+    },
+    "Insecure Cookie Flags": {
+        "plain": "Cookie сессии выставлена без флагов Secure/HttpOnly/SameSite: её можно перехватить по HTTP, прочитать через XSS (нет HttpOnly) или отправить в cross-site запросе (нет SameSite).",
+        "example": "Set-Cookie: session_id=abc — без Secure, HttpOnly и SameSite.",
+        "recommendation": "Ставьте session-cookie с Secure; HttpOnly; SameSite=Lax (или Strict); при необходимости — префикс __Host- и Path=/.",
+    },
+    "Stored XSS": {
+        "plain": "Payload, отправленный в POST (комментарий/имя/сообщение), сохраняется и затем отражается в HTML без экранирования — скрипт выполняется у всех, кто откроет страницу.",
+        "example": "POST /api/comments с comment=<script>alert(1337)</script> → GET /api/comments отдаёт <li><script>alert(1337)</script></li>.",
+        "recommendation": "Экранируйте вывод (HTML-escape) во всех шаблонах; используйте автоэскейпинг шаблонизатора, CSP и валидацию ввода.",
+    },
+    "JWT Expiration Not Verified": {
+        "plain": "Сервер принимает JWT с истёкшим exp — украденный токен действует бессрочно, отзыв не работает.",
+        "example": "Поддельный токен с exp=1000000000 (2001 год) принят сервером с HTTP 200.",
+        "recommendation": "Проверяйте exp (и nbf) при валидации JWT; отклоняйте истёкшие токены; настройте короткое время жизни и refresh-токены.",
+    },
     "Weak CSP": {
         "plain": (
             "CSP есть, но ослаблен: script-src/default-src разрешает 'unsafe-inline', 'unsafe-eval' "
@@ -480,6 +505,21 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
 # Классификация: CWE + OWASP API Security Top 10 (2023) + OWASP Top 10 (2021)
 # и confidence по умолчанию для эвристик vs сигнатурных проверок.
 VULN_META: dict[str, dict] = {
+    "Stored XSS": {"cwe": ["CWE-79"], "owasp_api": ["API8:2023"], "owasp_top10": "A03:2021", "confidence": "high"},
+    "JWT Expiration Not Verified": {
+        "cwe": ["CWE-613"],
+        "owasp_api": ["API2:2023"],
+        "owasp_top10": "A07:2021",
+        "confidence": "high",
+    },
+    "Path Traversal": {"cwe": ["CWE-22"], "owasp_api": ["API8:2023"], "owasp_top10": "A01:2021", "confidence": "high"},
+    "Open Redirect": {"cwe": ["CWE-601"], "owasp_api": ["API8:2023"], "owasp_top10": "A01:2021", "confidence": "high"},
+    "Insecure Cookie Flags": {
+        "cwe": ["CWE-614", "CWE-1004"],
+        "owasp_api": ["API8:2023"],
+        "owasp_top10": "A05:2021",
+        "confidence": "high",
+    },
     "Weak CSP": {"cwe": ["CWE-693"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "high"},
     "SQL Injection": {"cwe": ["CWE-89"], "owasp_api": ["API8:2023"], "owasp_top10": "A03:2021", "confidence": "high"},
     "OS Command Injection": {
