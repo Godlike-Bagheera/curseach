@@ -177,6 +177,11 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "example": "GET /.well-known/security.txt и /security.txt → 404.",
         "recommendation": "Опубликуйте /.well-known/security.txt с полями Contact, Expires, Policy иPreferred-Language; подпишите PGP при желании.",
     },
+    "JWT Weak Secret": {
+        "plain": "JWT подписывается HMAC-секретом из словаря (secret/key/password…). Атакующий подбирает секрет и подписывает токены с любыми правами.",
+        "example": "HS256-токен, подписанный секретом «secret», принят сервером с HTTP 200.",
+        "recommendation": "Используйте криптостойкий случайный секрет (≥256 бит) или асимметричную подпись (RS256/ES256); храните секрет в vault, ротуйте.",
+    },
     "Weak CSP": {
         "plain": (
             "CSP есть, но ослаблен: script-src/default-src разрешает 'unsafe-inline', 'unsafe-eval' "
@@ -510,6 +515,12 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
 # Классификация: CWE + OWASP API Security Top 10 (2023) + OWASP Top 10 (2021)
 # и confidence по умолчанию для эвристик vs сигнатурных проверок.
 VULN_META: dict[str, dict] = {
+    "JWT Weak Secret": {
+        "cwe": ["CWE-326", "CWE-347"],
+        "owasp_api": ["API2:2023"],
+        "owasp_top10": "A02:2021",
+        "confidence": "high",
+    },
     "Missing security.txt": {
         "cwe": ["CWE-1059"],
         "owasp_api": ["API8:2023"],
