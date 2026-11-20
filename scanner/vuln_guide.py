@@ -2,6 +2,9 @@
 
 Реестр строится из CHECK_METADATA (checks/__init__.py) + descriptions.py, поэтому
 страница /vulns никогда не разъезжается с реальным набором проверок.
+
+Карточки понятны новичку: уровень опасности простым языком, пример из жизни,
+а коды CWE / OWASP снабжены человеческими названиями и подсказками-расшифровками.
 """
 
 import re
@@ -43,28 +46,6 @@ CHECKED_BY = {
     "Lack of Rate Limiting": "check_rate_limiting",
     "Server-Side Request Forgery": None,
 }
-EXTRA = {
-    "Broken Function Level Authorization": {
-        "plain": "Обычный пользователь вызывает функции, доступные только другой роли "
-        "(например, админские эндпоинты): сервер проверяет «кто вошёл», но не "
-        "«кому можно это действие».",
-        "recommendation": "Проверяй роль/права на каждом эндпоинте, а не только факт "
-        "аутентификации; deny-by-default для привилегированных операций.",
-        "cwe": ["CWE-862"],
-        "owasp_api": ["API5:2023"],
-        "owasp_top10": "A01:2021",
-    },
-    "Server-Side Request Forgery": {
-        "plain": "Сервер сам ходит по URL, который подсунул атакующий: так можно достучаться "
-        "до внутренних сервисов и облачных metadata-эндпоинтов, украсть токены или "
-        "просканировать сеть изнутри.",
-        "recommendation": "Валидируй схему/хост/порт, запрещай private и link-local диапазоны, "
-        "пинни проверенный IP (защита от DNS-rebinding), отключи редиректы.",
-        "cwe": ["CWE-918"],
-        "owasp_api": [],
-        "owasp_top10": "A10:2021",
-    },
-}
 CHECK_VULN = {
     "check_sqli": "SQL Injection",
     "check_xss": "Reflected XSS",
@@ -94,6 +75,88 @@ CHECK_VULN = {
     "check_osv_sca": "Vulnerable Dependency (OSV)",
 }
 
+# ---------- Уровни опасности: понятные подписи и подсказки ----------
+LEVEL_ORDER = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+LEVEL_INFO = {
+    "CRITICAL": {
+        "ru": "КРИТИЧЕСКИЙ",
+        "hint": (
+            "Критический риск (CRITICAL): взлом возможен уже сейчас — могут украсть всю базу "
+            "или захватить сервер. Исправлять немедленно."
+        ),
+    },
+    "HIGH": {
+        "ru": "ВЫСОКИЙ",
+        "hint": (
+            "Высокий риск (HIGH): реальная утечка данных или доступ к чужим аккаунтам. "
+            "Исправлять в ближайшее время."
+        ),
+    },
+    "MEDIUM": {
+        "ru": "СРЕДНИЙ",
+        "hint": (
+            "Средний риск (MEDIUM): заметно повышает опасность, но для вреда обычно нужны "
+            "дополнительные условия. Плановое исправление."
+        ),
+    },
+    "LOW": {
+        "ru": "НИЗКИЙ",
+        "hint": "Низкий риск (LOW): мелкие недочёты и «гигиена» безопасности. Исправить при случае.",
+    },
+}
+# Для уязвимостей без автоматической проверки уровень задаётся вручную.
+GUIDE_LEVEL_FALLBACK = {"Server-Side Request Forgery": "HIGH"}
+
+# ---------- Человеческие расшифровки кодов ----------
+CWE_RU = {
+    "CWE-20": "Некорректная проверка ввода",
+    "CWE-78": "Инъекция команд ОС",
+    "CWE-79": "Межсайтовый скриптинг (XSS)",
+    "CWE-89": "SQL-инъекция",
+    "CWE-200": "Раскрытие секретной информации",
+    "CWE-209": "Утечка через сообщения об ошибках",
+    "CWE-295": "Неверная проверка сертификата",
+    "CWE-307": "Нет защиты от перебора паролей",
+    "CWE-319": "Передача данных открытым текстом",
+    "CWE-326": "Слабое шифрование (старый TLS)",
+    "CWE-347": "Нет проверки цифровой подписи",
+    "CWE-352": "Подделка запросов (CSRF)",
+    "CWE-639": "Доступ по чужому номеру (IDOR)",
+    "CWE-650": "Опасные HTTP-методы",
+    "CWE-693": "Отключены механизмы защиты",
+    "CWE-770": "Ресурсы без ограничений",
+    "CWE-840": "Нарушение бизнес-правил",
+    "CWE-862": "Нет проверки прав на действие",
+    "CWE-915": "Массовое присваивание полей",
+    "CWE-918": "Подделка запросов сервером (SSRF)",
+    "CWE-942": "Слишком открытый CORS",
+    "CWE-1104": "Уязвимая сторонняя библиотека",
+}
+OWASP_API_RU = {
+    "API1": "Доступ к чужим объектам (BOLA)",
+    "API2": "Сломанная аутентификация",
+    "API3": "Доступ к чужим полям данных",
+    "API4": "Расход ресурсов без лимитов",
+    "API5": "Доступ к чужим функциям (BFLA)",
+    "API6": "Доступ к чувствительным бизнес-процессам",
+    "API7": "Подделка запросов сервером (SSRF)",
+    "API8": "Небезопасная конфигурация",
+    "API9": "Неучтённые («теневые») API",
+    "API10": "Небезопасное использование внешних API",
+}
+OWASP_TOP10_RU = {
+    "A01": "Сломанный контроль доступа",
+    "A02": "Проблемы шифрования",
+    "A03": "Инъекции",
+    "A04": "Небезопасный дизайн",
+    "A05": "Небезопасная конфигурация",
+    "A06": "Уязвимые компоненты",
+    "A07": "Сломанная аутентификация",
+    "A08": "Нарушение целостности данных",
+    "A09": "Пробелы в логировании",
+    "A10": "Подделка запросов сервером (SSRF)",
+}
+
 
 def slugify(en: str) -> str:
     """Стабильный якорь карточки: 'JWT alg=none' -> 'jwt-alg-none'."""
@@ -101,38 +164,110 @@ def slugify(en: str) -> str:
 
 
 def _info(vuln_type: str) -> dict:
-    return dict(EXTRA.get(vuln_type) or get_vuln_info(vuln_type))
+    return dict(get_vuln_info(vuln_type))
+
+
+def _cwe_tags(codes: list[str]) -> list[dict]:
+    return [
+        {
+            "code": c,
+            "name": CWE_RU.get(c, "тип ошибки"),
+            "title": f"{c} — {CWE_RU.get(c, 'тип ошибки')}. CWE: международный каталог типов ошибок безопасности (MITRE).",
+        }
+        for c in codes
+    ]
+
+
+def _api_tags(codes: list[str]) -> list[dict]:
+    tags = []
+    for code in codes:
+        short = code.split(":")[0]
+        name = OWASP_API_RU.get(short, "риск API")
+        tags.append(
+            {
+                "code": code,
+                "name": name,
+                "title": f"OWASP API Security Top 10 (2023) — {short}: {name}. Рейтинг 10 главных рисков безопасности API.",
+            }
+        )
+    return tags
+
+
+def _top10_tag(code: str) -> dict | None:
+    if not code:
+        return None
+    short = code.split(":")[0]
+    name = OWASP_TOP10_RU.get(short, "риск веб-приложений")
+    return {
+        "code": code,
+        "name": name,
+        "title": f"OWASP Top 10 (2021) — {short}: {name}. Рейтинг 10 главных рисков безопасности веб-приложений.",
+    }
+
+
+def _related_checks(checked: str | None) -> list[str]:
+    return re.findall(r"check_\w+", checked or "")
+
+
+def _guide_level(en: str, check_ids: list[str]) -> str:
+    levels = [CHECK_METADATA.get(cid, {}).get("level", "MEDIUM") for cid in check_ids]
+    if levels:
+        return max(levels, key=lambda lv: LEVEL_ORDER.get(lv, 1))
+    return GUIDE_LEVEL_FALLBACK.get(en, "MEDIUM")
+
+
+def _search_text(*parts: str) -> str:
+    return " ".join(p for p in parts if p).lower()
 
 
 def build_guide():
-    """Популярные уязвимости: EN + RU-название + RU-смысл + классификация."""
+    """Популярные уязвимости: EN + RU + смысл + пример + уровень опасности + расшифровка кодов."""
     guide = []
     for en, ru in RU_NAMES.items():
         info = _info(en)
         checked = CHECKED_BY.get(en)
-        search = " ".join(
-            [
-                en,
-                ru,
-                info.get("plain", ""),
-                info.get("recommendation", ""),
-                checked or "",
-                *info.get("cwe", []),
-                *info.get("owasp_api", []),
-                info.get("owasp_top10", ""),
-            ]
-        ).lower()
+        check_ids = _related_checks(checked)
+        level = _guide_level(en, check_ids)
+        quick = any(CHECK_METADATA.get(cid, {}).get("quick") for cid in check_ids)
+        cwe = info.get("cwe", [])
+        owasp_api = info.get("owasp_api", [])
+        owasp_top10 = info.get("owasp_top10", "")
+        search = _search_text(
+            en,
+            ru,
+            info.get("plain", ""),
+            info.get("example", ""),
+            info.get("recommendation", ""),
+            checked or "",
+            level,
+            LEVEL_INFO[level]["ru"],
+            *cwe,
+            *[CWE_RU.get(c, "") for c in cwe],
+            *owasp_api,
+            *[OWASP_API_RU.get(o.split(":")[0], "") for o in owasp_api],
+            owasp_top10,
+            OWASP_TOP10_RU.get(owasp_top10.split(":")[0], ""),
+        )
         guide.append(
             {
                 "en": en,
                 "ru": ru,
                 "slug": slugify(en),
                 "meaning": info.get("plain", ""),
+                "example": info.get("example", ""),
                 "recommendation": info.get("recommendation", ""),
-                "cwe": info.get("cwe", []),
-                "owasp_api": info.get("owasp_api", []),
-                "owasp_top10": info.get("owasp_top10", ""),
+                "level": level,
+                "level_ru": LEVEL_INFO[level]["ru"],
+                "level_hint": LEVEL_INFO[level]["hint"],
+                "quick": quick,
+                "cwe": cwe,
+                "owasp_api": owasp_api,
+                "owasp_top10": owasp_top10,
+                "cwe_tags": _cwe_tags(cwe),
+                "api_tags": _api_tags(owasp_api),
+                "top10_tag": _top10_tag(owasp_top10),
                 "checked_by": checked,
+                "checks": check_ids,
                 "search": search,
             }
         )
@@ -146,22 +281,44 @@ def build_registry():
         vt = CHECK_VULN.get(cid, "")
         info = _info(vt) if vt else {}
         meaning = info.get("plain", "")
+        recommendation = info.get("recommendation", "")
         cwe = info.get("cwe", [])
         owasp_api = info.get("owasp_api", [])
         owasp_top10 = info.get("owasp_top10", "")
-        search = " ".join([cid, meta.get("name", ""), vt, meaning, *cwe, *owasp_api, owasp_top10]).lower()
+        level = meta.get("level", "MEDIUM")
+        search = _search_text(
+            cid,
+            meta.get("name", ""),
+            vt,
+            meaning,
+            recommendation,
+            level,
+            LEVEL_INFO.get(level, {}).get("ru", ""),
+            *cwe,
+            *[CWE_RU.get(c, "") for c in cwe],
+            *owasp_api,
+            *[OWASP_API_RU.get(o.split(":")[0], "") for o in owasp_api],
+            owasp_top10,
+            OWASP_TOP10_RU.get(owasp_top10.split(":")[0], ""),
+        )
         registry.append(
             {
                 "id": cid,
                 "name": meta.get("name", cid),
-                "level": meta.get("level", "MEDIUM"),
+                "level": level,
+                "level_ru": LEVEL_INFO.get(level, LEVEL_INFO["MEDIUM"])["ru"],
+                "level_hint": LEVEL_INFO.get(level, LEVEL_INFO["MEDIUM"])["hint"],
                 "quick": bool(meta.get("quick")),
                 "vuln_type": vt,
                 "meaning": meaning,
-                "recommendation": info.get("recommendation", ""),
+                "example": info.get("example", ""),
+                "recommendation": recommendation,
                 "cwe": cwe,
                 "owasp_api": owasp_api,
                 "owasp_top10": owasp_top10,
+                "cwe_tags": _cwe_tags(cwe),
+                "api_tags": _api_tags(owasp_api),
+                "top10_tag": _top10_tag(owasp_top10),
                 "guide_slug": slugify(vt) if vt in RU_NAMES else None,
                 "search": search,
             }
