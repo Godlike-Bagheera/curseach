@@ -7,6 +7,7 @@ import threading
 import time
 import uuid
 from contextlib import AsyncExitStack
+from dataclasses import dataclass
 
 import httpx
 
@@ -43,6 +44,11 @@ from pydantic import BaseModel  # noqa: E402
 class AccountConfig(BaseModel):
     username: str | None = None
     password: str | None = None
+    auth_type: str = "bearer"  # bearer | form | apikey
+    api_key_header: str | None = None
+    api_key_value: str | None = None
+    form_fields: dict[str, str] | None = None
+    login_path: str | None = None
 
 
 class ScanRequest(BaseModel):
@@ -53,21 +59,42 @@ class ScanRequest(BaseModel):
     account2: AccountConfig | None = None
     seed: int | None = None  # детерминированный профиль учебной цели (X-Scan-Seed)
     webhook_url: str | None = None  # JSON-сводка по завершении скана
+    account1_profile_id: int | None = None  # сохранённый auth-профиль (БД)
+    account2_profile_id: int | None = None
 
 
-async def login_and_get_token(target_url: str, account: AccountConfig | None) -> str | None:
-    if account is None or not account.username or not account.password:
+@dataclass
+class AuthState:
+    """Результат авторизации аккаунта: заголовки/cookies/токен для клиента сканера."""
+
+    headers: dict
+    cookies: dict
+    token: str | None
+    ok: bool
+
+
+def _client_kw(target_url: str, transport) -> dict:
+    kw = {"timeout": 10.0, "follow_redirects": False, **pinned_client_kwargs(target_url)}
+    if transport is not None:
+        kw["transport"] = transport
+    return kw
+
+
+async def login_and_get_token(target_url: str, account: AccountConfig | None, *, transport=None) -> str | None:
+    """Логин → токен. Ветки: bearer (JSON), form (форма), apikey (логин не нужен)."""
+    if account is None:
+        return None
+    at = (account.auth_type or "bearer").lower()
+    if at == "apikey":
+        return None
+    if at == "form":
+        return (await _form_login(target_url, account, transport=transport)).token
+    if not account.username or not account.password:
         return None
     url = f"{target_url.rstrip('/')}{LOGIN_PATH}"
     try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False, **pinned_client_kwargs(target_url)) as c:
-            r = await c.post(
-                url,
-                json={
-                    "username": account.username,
-                    "password": account.password,
-                },
-            )
+        async with httpx.AsyncClient(**_client_kw(target_url, transport)) as c:
+            r = await c.post(url, json={"username": account.username, "password": account.password})
         if r.status_code != 200:
             return None
         data = r.json()
@@ -79,6 +106,74 @@ async def login_and_get_token(target_url: str, account: AccountConfig | None) ->
     if not token:
         return None
     return str(token)
+
+
+async def _form_login(target_url: str, account: AccountConfig, *, transport=None) -> AuthState:
+    """Form-логин: POST формы (form_fields + username/password) → cookie-сессия / токен."""
+    path = account.login_path or LOGIN_PATH
+    url = f"{target_url.rstrip('/')}{path}"
+    fields = dict(account.form_fields or {})
+    if account.username:
+        fields.setdefault("username", account.username)
+    if account.password:
+        fields.setdefault("password", account.password)
+    try:
+        async with httpx.AsyncClient(**_client_kw(target_url, transport)) as c:
+            r = await c.post(url, data=fields)
+    except Exception:
+        return AuthState({}, {}, None, False)
+    cookies = dict(r.cookies)
+    token = None
+    try:
+        data = r.json()
+        if isinstance(data, dict) and data.get(LOGIN_TOKEN_FIELD):
+            token = str(data[LOGIN_TOKEN_FIELD])
+    except Exception:
+        pass
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    ok = r.status_code in (200, 201, 302, 303) and bool(cookies or token)
+    return AuthState(headers, cookies, token, ok)
+
+
+async def authenticate_account(target_url: str, account: AccountConfig | None, *, transport=None) -> AuthState:
+    """Авторизация аккаунта: bearer | form | apikey → заголовки/cookies для клиента."""
+    if account is None:
+        return AuthState({}, {}, None, False)
+    at = (account.auth_type or "bearer").lower()
+    if at == "apikey":
+        if account.api_key_header and account.api_key_value:
+            return AuthState({account.api_key_header: account.api_key_value}, {}, None, True)
+        return AuthState({}, {}, None, False)
+    if at == "form":
+        return await _form_login(target_url, account, transport=transport)
+    token = await login_and_get_token(target_url, account, transport=transport)
+    if token:
+        return AuthState({"Authorization": f"Bearer {token}"}, {}, token, True)
+    return AuthState({}, {}, None, False)
+
+
+async def refresh_auth(target_url: str, account: AccountConfig | None, *, transport=None) -> AuthState:
+    """Повторная авторизация (refresh) — например, при 401."""
+    return await authenticate_account(target_url, account, transport=transport)
+
+
+def _attach_refresh(client: httpx.AsyncClient, target_url: str, account: AccountConfig | None, *, transport=None):
+    """Повторный логин при 401: обновляет headers/cookies клиента (apikey не refresh'ится)."""
+    if account is None or (account.auth_type or "bearer").lower() == "apikey":
+        return
+
+    async def _on_response(response: httpx.Response):
+        if response.status_code != 401:
+            return
+        try:
+            new = await authenticate_account(target_url, account, transport=transport)
+        except Exception:
+            return
+        if new.ok:
+            client.headers.update(new.headers)
+            client.cookies.update(new.cookies)
+
+    client.event_hooks["response"].append(_on_response)
 
 
 # ---------- Задача сканирования ----------
@@ -242,31 +337,25 @@ async def scan_engine(task: ScanTask):
     task.set_status("running")
     task.add_log(f"=== ЗАПУСК {MODE_TITLES_RU.get(task.mode, 'ПОЛНОГО СКАНИРОВАНИЯ')} ===")
 
-    token1 = None
-    token2 = None
+    auth1 = await authenticate_account(task.target_url, task.account1)
+    auth2 = await authenticate_account(task.target_url, task.account2)
+    has_auth1 = auth1.ok
+    has_auth2 = auth2.ok
 
-    if task.account1 is not None and task.account1.username:
-        task.add_log(f"[ИНФО] Аккаунт 1: логин ({task.account1.username})...")
-        token1 = await login_and_get_token(task.target_url, task.account1)
-        if token1:
-            task.add_log("[ИНФО] Аккаунт 1: OK, токен получен")
-        else:
-            task.add_log("[ОШИБКА] Аккаунт 1: логин не удался")
+    if task.account1 is not None and (task.account1.username or (task.account1.auth_type or "bearer") == "apikey"):
+        task.add_log(f"[ИНФО] Аккаунт 1: {'OK' if has_auth1 else 'ОШИБКА'} ({task.account1.auth_type})")
     else:
         task.add_log("[ИНФО] Аккаунт 1: без авторизации")
 
-    if task.account2 is not None and task.account2.username:
-        task.add_log(f"[ИНФО] Аккаунт 2: логин ({task.account2.username})...")
-        token2 = await login_and_get_token(task.target_url, task.account2)
-        if token2:
-            task.add_log("[ИНФО] Аккаунт 2: OK, токен получен")
-        else:
-            task.add_log("[ОШИБКА] Аккаунт 2: логин не удался")
+    if task.account2 is not None and (task.account2.username or (task.account2.auth_type or "bearer") == "apikey"):
+        task.add_log(f"[ИНФО] Аккаунт 2: {'OK' if has_auth2 else 'ОШИБКА'} ({task.account2.auth_type})")
     else:
         task.add_log("[ИНФО] Аккаунт 2: не используется")
 
-    auth_headers = {"Authorization": f"Bearer {token1}"} if token1 else {}
-    auth2_headers = {"Authorization": f"Bearer {token2}"} if token2 else {}
+    auth_headers = auth1.headers
+    auth_cookies = auth1.cookies
+    auth2_headers = auth2.headers
+    auth2_cookies = auth2.cookies
 
     task.set_progress(0.05)
 
@@ -283,21 +372,28 @@ async def scan_engine(task: ScanTask):
         pin_kw = pinned_client_kwargs(task.target_url)
         anon_client = await stack.enter_async_context(httpx.AsyncClient(timeout=10.0, follow_redirects=False, **pin_kw))
         auth_client = await stack.enter_async_context(
-            httpx.AsyncClient(timeout=10.0, headers=auth_headers, follow_redirects=False, **pin_kw)
+            httpx.AsyncClient(
+                timeout=10.0, headers=auth_headers, cookies=auth_cookies, follow_redirects=False, **pin_kw
+            )
         )
         auth2_client: httpx.AsyncClient | None = None
-        if auth2_headers:
+        if has_auth2:
             auth2_client = await stack.enter_async_context(
-                httpx.AsyncClient(timeout=10.0, headers=auth2_headers, follow_redirects=False, **pin_kw)
+                httpx.AsyncClient(
+                    timeout=10.0, headers=auth2_headers, cookies=auth2_cookies, follow_redirects=False, **pin_kw
+                )
             )
+        _attach_refresh(auth_client, task.target_url, task.account1)
+        if auth2_client is not None:
+            _attach_refresh(auth2_client, task.target_url, task.account2)
 
         ctx = checks.ScanContext(
             target_url=task.target_url,
-            client=auth_client if auth_headers else anon_client,
+            client=auth_client if has_auth1 else anon_client,
             anon_client=anon_client,
-            has_auth=bool(auth_headers),
+            has_auth=has_auth1,
             secondary_client=auth2_client,
-            has_auth_secondary=bool(auth2_headers),
+            has_auth_secondary=has_auth2,
         )
 
         task.add_log("[ИНФО] Получение спецификации OpenAPI...")

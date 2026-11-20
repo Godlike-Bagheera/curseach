@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config
 from .config import origin_allowed
-from .routes import auth, common, history, misc, scan
+from .routes import auth, common, history, misc, profiles, scan
 from .security import get_current_user
 from .tasks import gc_loop
 from .vuln_guide import slugify
@@ -94,6 +94,7 @@ app.include_router(auth.router)
 app.include_router(scan.router)
 app.include_router(history.router)
 app.include_router(misc.router)
+app.include_router(profiles.router)
 
 
 def _run_server():

@@ -8,13 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSoc
 from fastapi.responses import HTMLResponse, JSONResponse
 
 import checks
+import database
 import report_csv
 import report_xlsx
 
 from ..config import SCAN_MAX_REQUESTS, SESSION_TTL_SECONDS
 from ..reporting import render_report
 from ..security import origin_allowed, require_admin, safe_host_for_filename, sessions, validate_target_url
-from ..tasks import ScanRequest, ScanTask, run_scan_in_thread, tasks
+from ..tasks import AccountConfig, ScanRequest, ScanTask, run_scan_in_thread, tasks
 
 router = APIRouter()
 
@@ -41,12 +42,23 @@ async def start_scan(req: ScanRequest, user: str = Depends(require_admin)):
         if wh_err:
             raise HTTPException(status_code=400, detail=f"webhook: {wh_err}")
 
+    acc1 = req.account1
+    if req.account1_profile_id:
+        p1 = database.get_auth_profile(req.account1_profile_id)
+        if p1:
+            acc1 = AccountConfig(**database.profile_to_account(p1))
+    acc2 = req.account2
+    if req.account2_profile_id:
+        p2 = database.get_auth_profile(req.account2_profile_id)
+        if p2:
+            acc2 = AccountConfig(**database.profile_to_account(p2))
+
     task = ScanTask(
         req.url.strip(),
         mode=req.mode,
         selected_checks=req.checks,
-        account1=req.account1,
-        account2=req.account2,
+        account1=acc1,
+        account2=acc2,
         seed=req.seed,
         webhook_url=webhook_url,
     )
