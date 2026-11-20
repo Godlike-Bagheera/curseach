@@ -25,10 +25,20 @@ import sqlite3
 import time
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 
 app = FastAPI(title="Damn Vulnerable API", version="1.0")
+
+# УЯЗВИМОСТЬ: Open CORS — разрешаем любые источники (ловится check_cors).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ---------- Тестовая БД в памяти ----------
 conn = sqlite3.connect("file::memory:?cache=shared", uri=True, check_same_thread=False)
@@ -132,6 +142,14 @@ def _new_scan(seed: int | None = None):
         "seeded": seed is not None,
         "ssrf_enabled": rng.random() < 0.80,  # /api/fetch-url: без проверки URL
     }
+    # Демо-режим «всё включено» (X-Scan-Seed: 0): все уязвимости активны,
+    # заголовки безопасности отсутствуют — удобно показывать все проверки сразу.
+    if seed == 0:
+        for key in _state["profile"]:
+            if key.endswith("_enabled"):
+                _state["profile"][key] = True
+        _state["profile"]["headers_present"] = set()
+        _state["profile"]["seeded"] = True
 
 
 _new_scan()  # инициализация при старте сервера
@@ -470,3 +488,154 @@ def fetch_url(body: FetchRequest):
             "data": {"service": "internal-admin-panel", "users": ["alice", "bob", "admin"]},
         }
     return {"source": url, "internal": False, "data": {"title": "Example Domain", "note": "external content"}}
+
+
+# =====================================================================
+# Дополнительные учебные уязвимости (симулированные, безопасные).
+# Показывают проверки, которые раньше не срабатывали на встроенной цели:
+# XSS, Command Injection, GraphQL, SCA, Pagination, Mass Assignment,
+# CSRF, Unsafe Methods, Content-Type, Hidden Paths, Open CORS.
+# =====================================================================
+
+
+# ---------- УЯЗВИМОСТЬ: Reflected XSS (HTML-эхо) ----------
+@app.get("/api/echo")
+def echo(msg: str = ""):
+    """Эхо-страница. УЯЗВИМОСТЬ: ввод отражается в HTML без экранирования."""
+    return HTMLResponse(f"<html><body><h1>Результат: {msg}</h1></body></html>")
+
+
+# ---------- УЯЗВИМОСТЬ: OS Command Injection (симуляция, без реального exec) ----------
+@app.get("/api/ping")
+def ping(host: str = ""):
+    """«Пинг» хоста. УЯЗВИМОСТЬ: shell-метасимволы в host «выполняют» команду."""
+    if any(c in host for c in ";|&$`"):
+        return {"host": host, "output": "uid=0(root) gid=0(root) groups=0(root)"}
+    return {"host": host, "output": f"PING {host}: 64 bytes, time=1ms"}
+
+
+# ---------- УЯЗВИМОСТЬ: GraphQL Introspection ----------
+_GRAPHQL_SCHEMA = {
+    "data": {
+        "__schema": {
+            "queryType": {"name": "Query"},
+            "types": [
+                {"name": "Query", "kind": "OBJECT"},
+                {"name": "User", "kind": "OBJECT", "fields": [{"name": "id"}, {"name": "secret"}]},
+            ],
+        }
+    }
+}
+
+
+@app.post("/graphql")
+def graphql_post(body: dict):
+    """УЯЗВИМОСТЬ: интроспекция схемы доступна без аутентификации."""
+    return _GRAPHQL_SCHEMA
+
+
+@app.get("/graphql")
+def graphql_get(query: str = ""):
+    return _GRAPHQL_SCHEMA
+
+
+# ---------- УЯЗВИМОСТЬ: Dependency Manifest Exposed + SCA ----------
+@app.get("/requirements.txt", response_class=PlainTextResponse)
+def requirements():
+    """УЯЗВИМОСТЬ: манифест с устаревшими пиннами доступен извне."""
+    return "flask==0.12\nrequests==2.19.1\npyyaml==5.1\n"
+
+
+# ---------- УЯЗВИМОСТЬ: Missing Pagination ----------
+_PRODUCTS = [{"id": i, "name": f"product-{i}", "price": i * 10} for i in range(1, 251)]
+
+
+@app.get("/api/products")
+def products(limit: int = 10000, offset: int = 0):
+    """УЯЗВИМОСТЬ: коллекция отдаётся целиком, пагинация не работает."""
+    return {"data": _PRODUCTS[offset : offset + limit], "total": len(_PRODUCTS)}
+
+
+# ---------- УЯЗВИМОСТЬ: Mass Assignment ----------
+_PROFILES: dict[int, dict] = {}
+
+
+@app.post("/api/profile")
+async def create_profile(request: Request, authorization: str = Header(None)):
+    """УЯЗВИМОСТЬ: сервер принимает и СОХРАНЯЕТ лишние поля (role/is_admin)."""
+    uid = _resolve_token(authorization)
+    if uid is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    profile = {"id": uid, "name": data.get("name", "test")}
+    if "role" in data:
+        profile["role"] = data["role"]
+    if "is_admin" in data:
+        profile["is_admin"] = data["is_admin"]
+    _PROFILES[uid] = profile
+    return profile
+
+
+@app.get("/api/profile")
+def get_profile(authorization: str = Header(None)):
+    uid = _resolve_token(authorization)
+    if uid is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return _PROFILES.get(uid, {"id": uid, "name": "test"})
+
+
+# ---------- УЯЗВИМОСТЬ: Unsafe HTTP Methods + Content-Type validation ----------
+@app.options("/api/legacy")
+def legacy_options():
+    """УЯЗВИМОСТЬ: разрешены TRACE (XST) и WebDAV-методы."""
+    return Response(status_code=200, headers={"Allow": "GET, POST, PUT, DELETE, TRACE, PROPFIND"})
+
+
+@app.options("/")
+def root_options():
+    return Response(status_code=200, headers={"Allow": "GET, HEAD, OPTIONS, TRACE"})
+
+
+@app.post("/api/legacy")
+async def legacy_post(request: Request):
+    """УЯЗВИМОСТЬ: принимает любой Content-Type (в т.ч. text/plain)."""
+    raw = await request.body()
+    return {"ok": True, "received": len(raw), "content_type": request.headers.get("content-type", "")}
+
+
+# ---------- УЯЗВИМОСТЬ: Missing CSRF Protection ----------
+@app.post("/api/session/action")
+def session_action():
+    """State-changing эндпоинт без CSRF-токена (подразумевается cookie-сессия)."""
+    return {"ok": True, "action": "performed"}
+
+
+# ---------- УЯЗВИМОСТЬ: Hidden Paths (не документированы в OpenAPI) ----------
+@app.get("/admin", include_in_schema=False)
+def hidden_admin():
+    return HTMLResponse("<html><body>Admin panel (unlisted)</body></html>")
+
+
+@app.get("/.env", include_in_schema=False, response_class=PlainTextResponse)
+def hidden_env():
+    return "DB_PASSWORD=supersecret\nAWS_SECRET_ACCESS_KEY=example\n"
+
+
+@app.get("/backup", include_in_schema=False)
+def hidden_backup():
+    return {"backup": "db-2024-01-01.sql", "size": 1048576}
+
+
+@app.get("/metrics", include_in_schema=False)
+def hidden_metrics():
+    return PlainTextResponse("requests_total 12345\nerrors_total 3\n")
+
+
+@app.get("/server-status", include_in_schema=False)
+def hidden_status():
+    return HTMLResponse("<html><body>Apache server-status</body></html>")
