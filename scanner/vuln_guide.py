@@ -76,6 +76,32 @@ CHECK_VULN = {
     "check_ssrf": "Server-Side Request Forgery",
 }
 
+# Русские названия типов без отдельной карточки в «популярных» — для заголовков реестра.
+REGISTRY_RU: dict[str, str] = {
+    "Hidden Path": "Скрытые пути",
+    "Open CORS": "Открытый CORS",
+    "HTTP without HTTPS": "HTTP без HTTPS",
+    "Unsafe HTTP Methods": "Опасные HTTP-методы",
+    "Missing Content-Type Validation": "Проверка Content-Type",
+    "Dependency Manifest Exposed": "Манифест зависимостей наружу",
+    "Lack of CAPTCHA": "Нет CAPTCHA",
+    "Business Logic Error": "Ошибки бизнес-логики",
+    "Missing Pagination": "Нет пагинации",
+    "GraphQL Introspection": "GraphQL-интроспекция",
+}
+
+# Дополнительные якоря реестра: одна проверка ловит несколько типов из VULN_DESCRIPTIONS,
+# и ссылки отчётов /vulns#<slug> должны попадать на её карточку.
+EXTRA_ANCHORS: dict[str, list[str]] = {
+    "check_security_headers": ["Missing CSP", "Missing HSTS"],
+    "check_tls_version": [
+        "TLS Certificate Expired",
+        "TLS Certificate Expiring Soon",
+        "TLS Certificate Untrusted",
+    ],
+    "check_sca": ["Vulnerable Dependencies (SCA)"],
+}
+
 # ---------- Уровни опасности: понятные подписи и подсказки ----------
 LEVEL_ORDER = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
 LEVEL_INFO = {
@@ -133,11 +159,11 @@ CWE_RU = {
     "CWE-1104": "Уязвимая сторонняя библиотека",
 }
 OWASP_API_RU = {
-    "API1": "Доступ к чужим объектам (BOLA)",
+    "API1": "Нарушение авторизации на уровне объекта (BOLA)",
     "API2": "Сломанная аутентификация",
-    "API3": "Доступ к чужим полям данных",
+    "API3": "Нарушение авторизации на уровне полей объекта (BOPLA)",
     "API4": "Расход ресурсов без лимитов",
-    "API5": "Доступ к чужим функциям (BFLA)",
+    "API5": "Нарушение авторизации на уровне функций (BFLA)",
     "API6": "Доступ к чувствительным бизнес-процессам",
     "API7": "Подделка запросов сервером (SSRF)",
     "API8": "Небезопасная конфигурация",
@@ -286,10 +312,16 @@ def build_registry():
         owasp_api = info.get("owasp_api", [])
         owasp_top10 = info.get("owasp_top10", "")
         level = meta.get("level", "MEDIUM")
+        title_en = vt or meta.get("name", cid)
+        title_ru = RU_NAMES.get(vt) or REGISTRY_RU.get(vt) or meta.get("name", cid)
+        # Якоря для типов без карточки в «популярных»: ссылки отчётов /vulns#<slug> ведут сюда.
+        anchors = [slugify(vt)] if vt and vt not in RU_NAMES else []
+        anchors += [slugify(t) for t in EXTRA_ANCHORS.get(cid, [])]
         search = _search_text(
             cid,
             meta.get("name", ""),
-            vt,
+            title_en,
+            title_ru,
             meaning,
             recommendation,
             level,
@@ -305,6 +337,9 @@ def build_registry():
             {
                 "id": cid,
                 "name": meta.get("name", cid),
+                "title_en": title_en,
+                "title_ru": title_ru,
+                "anchors": anchors,
                 "level": level,
                 "level_ru": LEVEL_INFO.get(level, LEVEL_INFO["MEDIUM"])["ru"],
                 "level_hint": LEVEL_INFO.get(level, LEVEL_INFO["MEDIUM"])["hint"],
