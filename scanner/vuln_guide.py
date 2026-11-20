@@ -79,6 +79,7 @@ CHECK_VULN = {
     "check_cookie_flags": "Insecure Cookie Flags",
     "check_stored_xss": "Stored XSS",
     "check_jwt_exp": "JWT Expiration Not Verified",
+    "check_security_txt": "Missing security.txt",
 }
 
 # Русские названия типов без отдельной карточки в «популярных» — для заголовков реестра.
