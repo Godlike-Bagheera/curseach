@@ -105,6 +105,9 @@ def main():
     )
     api_host = os.environ.get("API_HOST", "127.0.0.1")
     web_host = os.environ.get("SCANNER_HOST", "127.0.0.1")
+    if web_host not in ("127.0.0.1", "localhost", "::1") and not os.environ.get("SCANNER_ADMIN_PASSWORD"):
+        print("\n\033[31m[ВНИМАНИЕ] Сканер слушает публичный интерфейс с паролем по умолчанию admin/admin!\033[0m")
+        print("  Задайте SCANNER_ADMIN_PASSWORD и SCANNER_GUEST_PASSWORD перед публичным деплоем.\n")
 
     servers = [
         uvicorn.Server(uvicorn.Config(target_app, host=api_host, port=api_port, log_level="warning")),

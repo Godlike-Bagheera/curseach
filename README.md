@@ -109,6 +109,23 @@ coverage, smoke-import. Отдельный workflow **Security Scan** скани
 - `tests/` — pytest: юнит-тесты проверок и роутов + e2e-скан
 - `Dockerfile`, `.devcontainer/`, `.github/workflows/` — контейнер, Codespaces, CI и Security Scan
 
+## Безопасность при публичном деплое
+
+Сканер по умолчанию локальный (`127.0.0.1`, admin/admin). Если выставляете его наружу:
+
+- задайте `SCANNER_ADMIN_PASSWORD` и `SCANNER_GUEST_PASSWORD` (start.py предупредит, если забыли);
+- `SCANNER_COOKIE_SECURE=1`, `SCANNER_HSTS=1`, за TLS-прокси — `SCANNER_TRUST_PROXY=1`;
+- `SCANNER_ALLOW_PRIVATE_TARGETS=0` — строгая SSRF-защита (fail-closed);
+- ограничьте `ALLOWED_HOSTS` своим доменом.
+
+Учебную цель (`main.py`) **не публикуйте** — она уязвима по замыслу. Подробнее: [SECURITY.md](SECURITY.md).
+
+## Покрытие проверок учебной целью
+
+Все 27 проверок демонстрируются на встроенной цели (кроме TLS — нужна https-цель).
+Матрица «проверка ↔ эндпоинт ↔ условие»: [docs/COVERAGE.md](docs/COVERAGE.md).
+Демо-режим «всё включено»: заголовок `X-Scan-Seed: 0`.
+
 ## Лицензия
 
 MIT — см. [LICENSE](LICENSE).
