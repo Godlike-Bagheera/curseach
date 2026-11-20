@@ -172,6 +172,10 @@ async def get_html_report(task_id: str, request: Request, user: str = Depends(re
         scan_date=scan_dt.strftime("%Y-%m-%d %H:%M:%S"),
         partial=task.partial,
         partial_reason=task.partial_reason,
+        endpoints_count=task.endpoints_count,
+        surfaces_count=task.surfaces_count,
+        requests_used=task.requests_used,
+        requests_max=task.budget.max_requests if task.budget else SCAN_MAX_REQUESTS,
     )
 
 

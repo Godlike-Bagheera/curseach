@@ -12,11 +12,9 @@
 - **CLI-сканер** ```python scripts/cli.py --url … --fail-on high``` с exit-code гейтом — PR #34.
 - **Discovery без OpenAPI** — robots.txt / sitemap.xml / common-paths — PR #34.
 - **Per-check квоты бюджета** — SQLi/SSRF больше не съедают весь бюджет раньше остальных — PR #37.
+- **Статистика покрытия в отчёте** — эндпоинты/поверхности/запросы в HTML/PDF-отчётах — PR #38.
 
 ## Осталось
-
-### Бюджет и покрытие
-- Статистика покрытия в отчёте: поверхностей протестировано N из M.
 
 ### Auth-профили
 - Form-login, cookie-сессии, API-key header, refresh токена; сохранение профилей сканирования.

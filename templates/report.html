@@ -381,6 +381,12 @@
                     <td class="key">Дата и время</td>
                     <td class="value">{{ scan_date }}</td>
                 </tr>
+                {% if endpoints_count or requests_max %}
+                <tr>
+                    <td class="key">Покрытие</td>
+                    <td class="value">эндпоинтов {{ endpoints_count }}, поверхностей {{ surfaces_count }}, запросов {{ requests_used }}/бюджет {{ requests_max }}</td>
+                </tr>
+                {% endif %}
             </table>
         </div>
 

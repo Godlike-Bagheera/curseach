@@ -200,6 +200,10 @@ async def view_history_report(scan_id: int, request: Request, user: str = Depend
             "scan_date": scan["scan_date"].replace("T", " ")[:19],
             "source": "history",
             "scan_id": scan["id"],
+            "endpoints_count": scan.get("endpoints_count", 0),
+            "surfaces_count": scan.get("surfaces_count", 0),
+            "requests_used": scan.get("requests_used", 0),
+            "requests_max": scan.get("requests_max", 0),
         },
     )
 
@@ -273,6 +277,10 @@ async def download_history_view_pdf(scan_id: int, user: str = Depends(require_ad
         "scan_date": scan["scan_date"].replace("T", " ")[:19],
         "source": "history",
         "scan_id": scan["id"],
+        "endpoints_count": scan.get("endpoints_count", 0),
+        "surfaces_count": scan.get("surfaces_count", 0),
+        "requests_used": scan.get("requests_used", 0),
+        "requests_max": scan.get("requests_max", 0),
     }
     return _render_pdf("report.html", ctx, f"scan_{scan_id}_report.pdf")
 

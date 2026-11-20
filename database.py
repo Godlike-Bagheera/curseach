@@ -51,7 +51,11 @@ def init_db():
                 results_json TEXT NOT NULL,
                 mode TEXT DEFAULT 'full',
                 partial INTEGER DEFAULT 0,
-                partial_reason TEXT DEFAULT ''
+                partial_reason TEXT DEFAULT '',
+                endpoints_count INTEGER DEFAULT 0,
+                surfaces_count INTEGER DEFAULT 0,
+                requests_used INTEGER DEFAULT 0,
+                requests_max INTEGER DEFAULT 0
             )
         """)
         c.execute("PRAGMA table_info(scans)")
@@ -63,6 +67,11 @@ def init_db():
         if "partial" not in cols:
             c.execute("ALTER TABLE scans ADD COLUMN partial INTEGER DEFAULT 0")
             c.execute("ALTER TABLE scans ADD COLUMN partial_reason TEXT DEFAULT ''")
+        if "endpoints_count" not in cols:
+            c.execute("ALTER TABLE scans ADD COLUMN endpoints_count INTEGER DEFAULT 0")
+            c.execute("ALTER TABLE scans ADD COLUMN surfaces_count INTEGER DEFAULT 0")
+            c.execute("ALTER TABLE scans ADD COLUMN requests_used INTEGER DEFAULT 0")
+            c.execute("ALTER TABLE scans ADD COLUMN requests_max INTEGER DEFAULT 0")
         c.execute("CREATE INDEX IF NOT EXISTS idx_scans_scan_date ON scans(scan_date DESC)")
 
 
@@ -76,16 +85,36 @@ def save_scan(
     mode: str = "full",
     partial: bool = False,
     partial_reason: str = "",
+    endpoints_count: int = 0,
+    surfaces_count: int = 0,
+    requests_used: int = 0,
+    requests_max: int = 0,
 ):
     scan_date = datetime.datetime.now(datetime.timezone.utc).isoformat()
     results_json = json.dumps(results, ensure_ascii=False)
     with _db() as conn:
         conn.execute(
             """
-            INSERT INTO scans (target_url, scan_date, critical, high, medium, low, results_json, mode, partial, partial_reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scans (target_url, scan_date, critical, high, medium, low, results_json, mode, partial,
+                               partial_reason, endpoints_count, surfaces_count, requests_used, requests_max)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-            (target_url, scan_date, critical, high, medium, low, results_json, mode, int(partial), partial_reason),
+            (
+                target_url,
+                scan_date,
+                critical,
+                high,
+                medium,
+                low,
+                results_json,
+                mode,
+                int(partial),
+                partial_reason,
+                int(endpoints_count),
+                int(surfaces_count),
+                int(requests_used),
+                int(requests_max),
+            ),
         )
 
 
@@ -140,8 +169,8 @@ def get_scans_with_results(limit: int = 20) -> list[dict]:
     with _db() as conn:
         c = conn.cursor()
         c.execute(
-            "SELECT id, target_url, scan_date, critical, high, medium, low, results_json, mode, partial, partial_reason "
-            "FROM scans ORDER BY id DESC LIMIT ?",
+            "SELECT id, target_url, scan_date, critical, high, medium, low, results_json, mode, partial, partial_reason, "
+            "endpoints_count, surfaces_count, requests_used, requests_max FROM scans ORDER BY id DESC LIMIT ?",
             (int(limit),),
         )
         rows = c.fetchall()
@@ -161,6 +190,10 @@ def get_scans_with_results(limit: int = 20) -> list[dict]:
                 "mode": row[8] or "full",
                 "partial": bool(row[9]),
                 "partial_reason": row[10] or "",
+                "endpoints_count": row[11] or 0,
+                "surfaces_count": row[12] or 0,
+                "requests_used": row[13] or 0,
+                "requests_max": row[14] or 0,
             }
         )
     out.reverse()
@@ -171,7 +204,8 @@ def get_scan(scan_id: int) -> dict | None:
     with _db() as conn:
         c = conn.cursor()
         c.execute(
-            "SELECT id, target_url, scan_date, critical, high, medium, low, results_json, mode, partial, partial_reason FROM scans WHERE id = ?",
+            "SELECT id, target_url, scan_date, critical, high, medium, low, results_json, mode, partial, partial_reason, "
+            "endpoints_count, surfaces_count, requests_used, requests_max FROM scans WHERE id = ?",
             (scan_id,),
         )
         row = c.fetchone()
@@ -188,6 +222,10 @@ def get_scan(scan_id: int) -> dict | None:
             "mode": row[8] or "full",
             "partial": bool(row[9]),
             "partial_reason": row[10] or "",
+            "endpoints_count": row[11] or 0,
+            "surfaces_count": row[12] or 0,
+            "requests_used": row[13] or 0,
+            "requests_max": row[14] or 0,
         }
     return None
 
