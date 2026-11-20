@@ -76,6 +76,8 @@ def build_chart_context(scan: dict, include_findings: bool = False) -> dict:
     ]
 
     ctx = {
+        "partial": scan.get("partial", False),
+        "partial_reason": scan.get("partial_reason", ""),
         "scan_id": scan["id"],
         "target_url": scan["target_url"],
         "scan_date": scan["scan_date"].replace("T", " ")[:19],

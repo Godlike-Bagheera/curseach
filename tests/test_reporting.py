@@ -56,3 +56,21 @@ def test_inline_chartjs_replaces():
     out = reporting.inline_chartjs(html)
     assert "/static/chart.umd.min.js" not in out
     assert "<script>" in out
+
+
+def test_chart_context_partial_default():
+    from scanner.reporting import build_chart_context
+
+    ctx = build_chart_context(
+        {
+            "id": 1,
+            "target_url": "http://t",
+            "scan_date": "2026-01-01T00:00:00",
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "results": [],
+        }
+    )
+    assert ctx["partial"] is False and ctx["partial_reason"] == ""
