@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Cookie, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from ..config import SESSION_TTL_SECONDS
+from ..config import SESSION_TTL_SECONDS, client_ip, request_is_https
 from ..security import (
     authenticate,
     check_login_rate,
@@ -29,8 +29,8 @@ async def login_post(
     username: str = Form(...),
     password: str = Form(...),
 ):
-    client_ip = request.client.host if request.client else "unknown"
-    if not check_login_rate(client_ip):
+    ip = client_ip(request)
+    if not check_login_rate(ip):
         return common.templates.TemplateResponse(
             request,
             "login.html",
@@ -52,14 +52,14 @@ async def login_post(
         value=sid,
         httponly=True,
         samesite="lax",
-        secure=request.url.scheme == "https",
+        secure=request_is_https(request),
         max_age=SESSION_TTL_SECONDS,
         path="/",
     )
     return resp
 
 
-@router.get("/logout")
+@router.post("/logout")
 async def logout(session_id: str | None = Cookie(None)):
     destroy_session(session_id)
     resp = RedirectResponse(url="/login", status_code=303)

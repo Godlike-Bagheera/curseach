@@ -41,3 +41,20 @@ def test_csp_nonce_no_unsafe_inline(tmp_path, monkeypatch):
     nonce2 = re.search(r"nonce-([A-Za-z0-9_\-]+)", csp2).group(1)
     assert nonce1 != nonce2  # nonce уникальный на каждый запрос
     assert f'nonce="{nonce2}"' in chart.text  # inline Chart.js несёт тот же nonce
+
+
+def test_security_headers_present_on_scanner():
+    client = TestClient(web_app.app)
+    r = client.get("/login")
+    assert r.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert "geolocation=()" in r.headers["permissions-policy"]
+    csp = r.headers["content-security-policy"]
+    assert "form-action 'self'" in csp
+
+
+def test_logout_requires_post():
+    client = TestClient(web_app.app)
+    client.post("/login", data={"username": "admin", "password": "admin"})
+    # GET больше не разлогинивает (защита от logout-CSRF через ссылку/картинку)
+    assert client.get("/logout").status_code == 405
+    assert client.post("/logout", follow_redirects=False).status_code == 303
