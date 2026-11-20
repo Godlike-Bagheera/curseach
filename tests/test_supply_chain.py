@@ -26,7 +26,13 @@ def test_requirements_all_hashed():
 
 def test_requirements_direct_pins_kept():
     txt = open(os.path.join(ROOT, "requirements.txt"), encoding="utf-8").read()
-    for pin in ("fastapi==0.163.1", "httpx==0.28.1", "pydantic==2.14.3", "weasyprint==70.0", "uvicorn[standard]==0.54.0"):
+    for pin in (
+        "fastapi==0.163.1",
+        "httpx==0.28.1",
+        "pydantic==2.14.3",
+        "weasyprint==70.0",
+        "uvicorn[standard]==0.54.0",
+    ):
         assert pin in txt
 
 
