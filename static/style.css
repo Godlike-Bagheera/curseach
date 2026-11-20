@@ -604,7 +604,7 @@ body {
 }
 .history-table .col-target { width: auto; }
 .history-table .col-sev { width: 62px; text-align: center; }
-.history-table .col-actions { width: 296px; text-align: right; }
+.history-table .col-actions { width: 296px; text-align: center; }
 
 .history-table .url-cell {
     white-space: nowrap;
@@ -624,7 +624,7 @@ body {
     display: grid;
     grid-template-columns: repeat(2, 132px);
     gap: 6px;
-    justify-content: end;
+    justify-content: center;
 }
 .btn-view,
 .btn-chart,

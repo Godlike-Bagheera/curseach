@@ -29,16 +29,23 @@
   }
   q.addEventListener('input', apply);
   apply();
+  var current = null, timer = null;
   function highlight() {
     var id = (location.hash || '').slice(1);
     if (!id) return;
     var el = document.getElementById(id);
-    if (el && (el.classList.contains('vg-card') || el.classList.contains('vr-card'))) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('vg-target');
-      setTimeout(function () { el.classList.remove('vg-target'); }, 2400);
-    }
+    if (!el || !(el.classList.contains('vg-card') || el.classList.contains('vr-card'))) return;
+    if (current) current.classList.remove('vg-target');
+    if (timer) clearTimeout(timer);
+    current = el;
+    el.classList.add('vg-target');
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    timer = setTimeout(function () { el.classList.remove('vg-target'); current = null; }, 6000);
   }
   window.addEventListener('hashchange', highlight);
+  document.addEventListener('click', function (e) {
+    var a = e.target instanceof Element ? e.target.closest('a.vr-link') : null;
+    if (a) setTimeout(highlight, 60);
+  });
   highlight();
 })();
