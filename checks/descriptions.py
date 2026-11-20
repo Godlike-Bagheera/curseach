@@ -172,6 +172,11 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "example": "Поддельный токен с exp=1000000000 (2001 год) принят сервером с HTTP 200.",
         "recommendation": "Проверяйте exp (и nbf) при валидации JWT; отклоняйте истёкшие токены; настройте короткое время жизни и refresh-токены.",
     },
+    "Missing security.txt": {
+        "plain": "Файл security.txt (RFC 9116) не опубликован — исследователям некуда сообщать об уязвимостях, нет контактов и политики раскрытия.",
+        "example": "GET /.well-known/security.txt и /security.txt → 404.",
+        "recommendation": "Опубликуйте /.well-known/security.txt с полями Contact, Expires, Policy иPreferred-Language; подпишите PGP при желании.",
+    },
     "Weak CSP": {
         "plain": (
             "CSP есть, но ослаблен: script-src/default-src разрешает 'unsafe-inline', 'unsafe-eval' "
@@ -505,6 +510,12 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
 # Классификация: CWE + OWASP API Security Top 10 (2023) + OWASP Top 10 (2021)
 # и confidence по умолчанию для эвристик vs сигнатурных проверок.
 VULN_META: dict[str, dict] = {
+    "Missing security.txt": {
+        "cwe": ["CWE-1059"],
+        "owasp_api": ["API8:2023"],
+        "owasp_top10": "A05:2021",
+        "confidence": "high",
+    },
     "Stored XSS": {"cwe": ["CWE-79"], "owasp_api": ["API8:2023"], "owasp_top10": "A03:2021", "confidence": "high"},
     "JWT Expiration Not Verified": {
         "cwe": ["CWE-613"],

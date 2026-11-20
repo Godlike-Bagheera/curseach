@@ -51,6 +51,7 @@ from .misc import (
     check_hidden_paths,
     check_http_only,
     check_rate_limiting,
+    check_security_txt,
 )
 from .ssrf import check_ssrf
 from .surface import Surface, build_surfaces, sample_from_schema
@@ -90,6 +91,7 @@ ALL_CHECKS: list[Callable[..., Awaitable[list[dict]]]] = [
     check_cookie_flags,
     check_stored_xss,
     check_jwt_exp,
+    check_security_txt,
 ]
 
 
@@ -126,6 +128,7 @@ CHECK_METADATA = {
     "check_cookie_flags": {"name": "Флаги cookie", "quick": True, "level": "MEDIUM"},
     "check_stored_xss": {"name": "Хранимый XSS", "quick": False, "level": "HIGH"},
     "check_jwt_exp": {"name": "JWT: срок действия", "quick": True, "level": "HIGH"},
+    "check_security_txt": {"name": "security.txt", "quick": False, "level": "LOW"},
 }
 
 

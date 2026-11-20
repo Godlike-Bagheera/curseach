@@ -53,3 +53,13 @@ def test_mode_roundtrip():
     full = database.get_scan(latest["id"])
     assert full["mode"] == "quick"
     database.delete_scan(latest["id"])
+
+
+def test_partial_roundtrip():
+    database.init_db()
+    database.save_scan("http://partial.example", 0, 0, 0, 0, [], mode="quick", partial=True, partial_reason="таймаут")
+    latest = database.get_all_scans()[0]
+    assert latest["partial"] is True and latest["partial_reason"] == "таймаут"
+    full = database.get_scan(latest["id"])
+    assert full["partial"] is True
+    database.delete_scan(latest["id"])

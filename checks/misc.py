@@ -156,3 +156,22 @@ async def check_rate_limiting(ctx: ScanContext, endpoints: list[str] | None = No
             }
         )
     return findings
+
+
+async def check_security_txt(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
+    """security.txt (RFC 9116): опубликованы ли контакты для сообщения об уязвимостях."""
+    findings: list = []
+    for path in ("/.well-known/security.txt", "/security.txt"):
+        r = await _safe_get(ctx.client, f"{ctx.target_url}{path}")
+        if r is not None and r.status_code == 200 and "contact:" in (r.text or "").lower():
+            return findings
+    findings.append(
+        {
+            "level": "LOW",
+            "type": "Missing security.txt",
+            "endpoint": "/.well-known/security.txt",
+            "desc": "Нет security.txt (RFC 9116) — контакты для сообщения об уязвимостях не опубликованы",
+            "details": get_vuln_info("Missing security.txt"),
+        }
+    )
+    return findings
