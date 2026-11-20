@@ -339,6 +339,7 @@
 </style>
 </head>
 <body>
+    {% if partial %}<div class="partial-banner" style="margin:12px 0;padding:10px 14px;border:1px solid #ffc531;background:rgba(255,197,49,.12);color:#ffc531;border-radius:6px;font-size:13px">⚠ ЧАСТИЧНЫЙ СКАН{% if partial_reason %}: {{ partial_reason }}{% endif %}. Покрыты не все проверки/поверхности — результаты неполные.</div>{% endif %}
 
     <div class="toolbar">
         <div class="toolbar-buttons">
