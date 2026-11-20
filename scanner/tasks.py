@@ -329,14 +329,15 @@ async def scan_engine(task: ScanTask):
 
         # Инфраструктура: параллелизм, бюджет, RPS, отмена.
         ctx.semaphore = asyncio.Semaphore(SCAN_CONCURRENCY)
-        ctx.budget = checks.RequestBudget(SCAN_MAX_REQUESTS)
+        per_check_cap = max(60, SCAN_MAX_REQUESTS // len(check_list) * 4)
+        ctx.budget = checks.RequestBudget(SCAN_MAX_REQUESTS, per_check_cap=per_check_cap)
         task.budget = ctx.budget
         ctx.limiter = checks.RateLimiter(SCAN_RPS) if SCAN_RPS > 0 else None
         ctx.cancel_event = task.cancel_event
         ctx.scan_seed = task.seed
         task.add_log(
-            f"[ИНФО] Параллелизм: {SCAN_CONCURRENCY} запросов, бюджет {SCAN_MAX_REQUESTS}, "
-            f"RPS {SCAN_RPS:g}, таймаут {SCAN_TOTAL_TIMEOUT}s"
+            f"[ИНФО] Параллелизм: {SCAN_CONCURRENCY} запросов, бюджет {SCAN_MAX_REQUESTS} "
+            f"(квота на проверку: {per_check_cap}), RPS {SCAN_RPS:g}, таймаут {SCAN_TOTAL_TIMEOUT}s"
         )
 
         done = 0
@@ -349,6 +350,7 @@ async def scan_engine(task: ScanTask):
             evidence_log: list[dict] = []
             tok_ctx = checks._SCAN_CTX.set(ctx)
             tok_log = checks._EVIDENCE_LOG.set(evidence_log)
+            tok_name = checks._CHECK_NAME.set(check_func.__name__)
             try:
                 findings = await check_func(ctx, endpoints)
             except checks.ScanCancelled:
@@ -359,6 +361,7 @@ async def scan_engine(task: ScanTask):
             finally:
                 checks._SCAN_CTX.reset(tok_ctx)
                 checks._EVIDENCE_LOG.reset(tok_log)
+                checks._CHECK_NAME.reset(tok_name)
             findings = checks.enrich_findings(findings or [], evidence_log)
             if findings:
                 task.scan_results.extend(findings)
@@ -391,6 +394,10 @@ async def scan_engine(task: ScanTask):
             task.partial_reason = "скан отменён"
             task.partial = True
             task.partial_reason = "скан отменён"
+
+        if ctx.budget is not None and ctx.budget.per_check_capped:
+            capped = ", ".join(sorted(ctx.budget.per_check_capped))
+            task.add_log(f"[ВНИМАНИЕ] Квота запросов исчерпана для проверок: {capped} — часть их запросов пропущена")
 
         if ctx.budget is not None and ctx.budget.exhausted:
             task.partial = True

@@ -11,11 +11,11 @@
   security.txt (RFC 9116, CWE-1059) — PR #35; JWT Weak Secret (CWE-326/347) — PR #36.
 - **CLI-сканер** ```python scripts/cli.py --url … --fail-on high``` с exit-code гейтом — PR #34.
 - **Discovery без OpenAPI** — robots.txt / sitemap.xml / common-paths — PR #34.
+- **Per-check квоты бюджета** — SQLi/SSRF больше не съедают весь бюджет раньше остальных — PR #37.
 
 ## Осталось
 
 ### Бюджет и покрытие
-- Per-check квоты бюджета (сейчас first-come-first-served: SQLi/SSRF съедают бюджет).
 - Статистика покрытия в отчёте: поверхностей протестировано N из M.
 
 ### Auth-профили

@@ -89,6 +89,16 @@ def test_seeded_quick_scan_finds_known_vulns(target_url):
     assert all((f.get("details") or {}).get("cwe") for f in sqli)
     keys = [(f["type"], f["endpoint"], f.get("param", ""), f.get("method", "")) for f in task.scan_results]
     assert len(keys) == len(set(keys)), "дедупликация не сработала"
+    # Per-check квоты: движок задаёт cap, запросы посчитаны по проверкам,
+    # обязательные детекции (выше) не потеряны.
+    import checks
+    from scanner.config import SCAN_MAX_REQUESTS
+
+    expected_cap = max(60, SCAN_MAX_REQUESTS // len(checks.get_checks_by_mode("quick")) * 4)
+    assert task.budget is not None
+    assert task.budget.per_check_cap == expected_cap
+    assert task.budget.per_check, "запросы не посчитаны по проверкам"
+    assert sum(task.budget.per_check.values()) <= task.budget.used
 
 
 def test_scan_cancellation(target_url):
@@ -98,3 +108,24 @@ def test_scan_cancellation(target_url):
     task.cancel_event.set()  # отмена до старта
     asyncio.run(scan_engine(task))
     assert task.status == "cancelled"
+
+
+def test_small_budget_keeps_mandatory_detections(target_url, monkeypatch):
+    """Маленький общий бюджет + per-check квоты: обязательные детекции не теряются."""
+    import scanner.tasks as st
+    from scanner.tasks import AccountConfig, ScanTask, scan_engine
+
+    monkeypatch.setattr(st, "SCAN_MAX_REQUESTS", 400)
+    task = ScanTask(
+        target_url,
+        mode="quick",
+        seed=SEED,
+        account1=AccountConfig(username="alice", password="alice123"),
+        account2=AccountConfig(username="bob", password="bob123"),
+    )
+    asyncio.run(scan_engine(task))
+    assert task.status == "completed", task.error
+    types = {f["type"] for f in task.scan_results}
+    assert "SQL Injection" in types
+    assert "Broken Access Control" in types
+    assert "JWT alg=none" in types
