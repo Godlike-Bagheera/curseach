@@ -42,3 +42,13 @@
   возвращает пусто (не падает).
 - Симулированные уязвимости (Command Injection, SSRF) **не выполняют** реальных
   опасных действий — вывод canned, безопасно для обучения.
+
+## Новые проверки (PR #34)
+
+| Проверка | Эндпоинт цели | Условие |
+|---|---|---|
+| ```check_path_traversal``` | ```/api/file?name=``` | всегда; симулированное чтение /etc/passwd |
+| ```check_open_redirect``` | ```/api/redirect?next=``` | всегда; 302 на произвольный URL |
+| ```check_cookie_flags``` | ```/api/session/login``` | всегда; cookie без Secure/HttpOnly/SameSite |
+| ```check_stored_xss``` | ```/api/comments``` | всегда; POST→GET HTML без экранирования |
+| ```check_jwt_exp``` | ```/api/reports/{id}``` | профиль jwt_none_enabled; истёкший exp |
