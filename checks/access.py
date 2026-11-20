@@ -180,6 +180,22 @@ async def check_cors(ctx: ScanContext, endpoints: list[str] | None = None) -> li
                 "details": get_vuln_info("Open CORS"),
             }
         )
+    # Reflection произвольного Origin + credentials опаснее wildcard: позволяет
+    # любому сайту читать ответы с cookies/авторизацией пользователя.
+    probe = await _safe_get(ctx.client, ctx.target_url, headers={"Origin": "https://evil.example"})
+    if probe is not None:
+        reflected = probe.headers.get("access-control-allow-origin", "").strip()
+        creds = probe.headers.get("access-control-allow-credentials", "").strip().lower() == "true"
+        if reflected == "https://evil.example" and creds:
+            findings.append(
+                {
+                    "level": "HIGH",
+                    "type": "Open CORS",
+                    "endpoint": "/",
+                    "desc": "CORS отражает произвольный Origin с Allow-Credentials: true — чтение ответов с cookies из любого сайта",
+                    "details": get_vuln_info("Open CORS"),
+                }
+            )
     return findings
 
 
