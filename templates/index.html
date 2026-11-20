@@ -140,6 +140,12 @@
         </div>
 
         <div class="panel">
+            <div class="panel-label">&gt; УВЕДОМЛЕНИЯ</div>
+            <div class="auth-hint">После завершения скана сканер отправит короткую JSON-сводку на этот адрес (webhook). Поле необязательное.</div>
+            <input type="text" id="webhookInput" class="auth-field" placeholder="https://example.com/webhook" spellcheck="false" autocomplete="off" {% if is_guest %}disabled{% endif %}>
+        </div>
+
+        <div class="panel">
             <div class="stats-row">
                 <div class="stat-box stat-critical">
                     <div class="stat-label">КРИТИЧНО</div>

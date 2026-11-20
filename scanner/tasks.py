@@ -52,6 +52,7 @@ class ScanRequest(BaseModel):
     account1: AccountConfig | None = None
     account2: AccountConfig | None = None
     seed: int | None = None  # детерминированный профиль учебной цели (X-Scan-Seed)
+    webhook_url: str | None = None  # JSON-сводка по завершении скана
 
 
 async def login_and_get_token(target_url: str, account: AccountConfig | None) -> str | None:
@@ -90,9 +91,11 @@ class ScanTask:
         account1: AccountConfig | None = None,
         account2: AccountConfig | None = None,
         seed: int | None = None,
+        webhook_url: str | None = None,
     ):
         self.id = str(uuid.uuid4())
         self.seed = seed
+        self.webhook_url = webhook_url
         self.cancel_event = threading.Event()
         self.target_url = target_url
         self.mode = mode
@@ -451,6 +454,7 @@ async def scan_engine(task: ScanTask):
                     surfaces_count=task.surfaces_count,
                     requests_used=task.requests_used,
                     requests_max=task.budget.max_requests if task.budget else SCAN_MAX_REQUESTS,
+                    webhook_url=task.webhook_url or "",
                 )
             except sqlite3.OperationalError:
                 database.init_db()  # пересоздаём схему и пробуем ещё раз
@@ -468,10 +472,23 @@ async def scan_engine(task: ScanTask):
                     surfaces_count=task.surfaces_count,
                     requests_used=task.requests_used,
                     requests_max=task.budget.max_requests if task.budget else SCAN_MAX_REQUESTS,
+                    webhook_url=task.webhook_url or "",
                 )
             task.add_log("[OK] Результаты сохранены в историю")
         except Exception as e:
             task.add_log(f"[ОШИБКА] Не удалось сохранить: {e}")
+
+        if task.webhook_url:
+            try:
+                from .webhook import build_summary, send_webhook
+
+                delivered = await send_webhook(task.webhook_url, build_summary(task))
+                if delivered:
+                    task.add_log("[OK] Webhook-уведомление отправлено")
+                else:
+                    task.add_log("[ВНИМАНИЕ] Webhook не доставлен — результаты скана сохранены")
+            except Exception as e:
+                task.add_log(f"[ВНИМАНИЕ] Webhook ошибка: {e}")
 
         task.set_status("completed")
 

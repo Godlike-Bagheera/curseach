@@ -35,6 +35,12 @@ async def start_scan(req: ScanRequest, user: str = Depends(require_admin)):
     if url_err:
         raise HTTPException(status_code=400, detail=url_err)
 
+    webhook_url = (req.webhook_url or "").strip() or None
+    if webhook_url:
+        wh_err = validate_target_url(webhook_url)
+        if wh_err:
+            raise HTTPException(status_code=400, detail=f"webhook: {wh_err}")
+
     task = ScanTask(
         req.url.strip(),
         mode=req.mode,
@@ -42,6 +48,7 @@ async def start_scan(req: ScanRequest, user: str = Depends(require_admin)):
         account1=req.account1,
         account2=req.account2,
         seed=req.seed,
+        webhook_url=webhook_url,
     )
     task.loop = asyncio.get_running_loop()
     tasks[task.id] = task
