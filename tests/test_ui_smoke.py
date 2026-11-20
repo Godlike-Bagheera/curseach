@@ -78,6 +78,13 @@ def test_ui_smoke():
             page.goto(url + "/vulns")
             page.fill("#vg-q", "SQL")
             assert page.locator(".vg-card:visible").count() >= 1
+            # Якоря отчётов подсвечивают карточку реестра; бейджи RU+EN; счётчик секций
+            page.goto(url + "/vulns#open-cors")
+            page.wait_for_timeout(400)
+            assert page.locator(".vr-card.vg-target").count() >= 1
+            assert "уязвимостей" in page.locator("#vg-count").inner_text()
+            assert page.locator(".vg-card .lvl b").count() >= 1
+            assert page.locator(".vg-card .lvl i").count() >= 1
             # История: панель фильтра дат присутствует в DOM
             page.goto(url + "/")
             assert page.locator(".hf-panel").count() == 1

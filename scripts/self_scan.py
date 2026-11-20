@@ -79,6 +79,16 @@ def main() -> int:
             account2=AccountConfig(username="bob", password="bob123"),
         )
         asyncio.run(scan_engine(task))
+        # Гейт регрессии детектора: ключевые типы обязаны находиться на учебной цели.
+        detected = {f.get("type") for f in task.scan_results}
+        expected = {"SQL Injection", "Broken Access Control", "JWT alg=none"}
+        missing = expected - detected
+        if missing:
+            print(
+                f"[self-scan] РЕГРЕССИЯ детектора: не найдены {sorted(missing)}; обнаружено: {sorted(detected)}",
+                file=sys.stderr,
+            )
+            return 1
         sarif = results_to_sarif(url, time.strftime("%Y-%m-%dT%H:%M:%S"), task.scan_results)
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(sarif, f, ensure_ascii=False, indent=2)

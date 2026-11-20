@@ -21,7 +21,7 @@ no_strict_optional = true
 exclude = ["static", "templates"]
 
 [tool.coverage.run]
-source = ["checks", "scanner"]
+source = ["checks", "scanner", "database", "report_csv", "report_xlsx"]
 omit = ["tests/*", "scanner/pdf.py"]
 
 [tool.coverage.report]
