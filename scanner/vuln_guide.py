@@ -44,7 +44,7 @@ CHECKED_BY = {
     "Vulnerable Dependency (OSV)": "check_osv_sca",
     "Mass Assignment": "check_mass_assignment",
     "Lack of Rate Limiting": "check_rate_limiting",
-    "Server-Side Request Forgery": None,
+    "Server-Side Request Forgery": "check_ssrf",
 }
 CHECK_VULN = {
     "check_sqli": "SQL Injection",
@@ -73,6 +73,7 @@ CHECK_VULN = {
     "check_mass_assignment": "Mass Assignment",
     "check_graphql_introspection": "GraphQL Introspection",
     "check_osv_sca": "Vulnerable Dependency (OSV)",
+    "check_ssrf": "Server-Side Request Forgery",
 }
 
 # ---------- Уровни опасности: понятные подписи и подсказки ----------

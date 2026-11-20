@@ -51,6 +51,7 @@ from .misc import (
     check_http_only,
     check_rate_limiting,
 )
+from .ssrf import check_ssrf
 from .surface import Surface, build_surfaces, sample_from_schema
 from .xss import check_xss
 
@@ -81,6 +82,7 @@ ALL_CHECKS: list[Callable[..., Awaitable[list[dict]]]] = [
     check_mass_assignment,
     check_graphql_introspection,
     check_osv_sca,
+    check_ssrf,
 ]
 
 
@@ -111,6 +113,7 @@ CHECK_METADATA = {
     "check_mass_assignment": {"name": "Массовое присвоение", "quick": False, "level": "HIGH"},
     "check_graphql_introspection": {"name": "GraphQL-интроспекция", "quick": False, "level": "MEDIUM"},
     "check_osv_sca": {"name": "SCA: уязвимые зависимости (OSV)", "quick": False, "level": "CRITICAL"},
+    "check_ssrf": {"name": "SSRF (запросы от имени сервера)", "quick": False, "level": "HIGH"},
 }
 
 

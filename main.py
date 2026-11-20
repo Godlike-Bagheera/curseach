@@ -23,6 +23,7 @@ import os
 import random
 import sqlite3
 import time
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
@@ -129,6 +130,7 @@ def _new_scan(seed: int | None = None):
         "jwt_none_enabled": rng.random() < 0.80,  # /api/reports/{id}: JWT alg=none
         "global_bias": 1.0 if seed is not None else rng.uniform(0.7, 1.3),
         "seeded": seed is not None,
+        "ssrf_enabled": rng.random() < 0.80,  # /api/fetch-url: без проверки URL
     }
 
 
@@ -417,3 +419,44 @@ def get_report(report_id: str, authorization: str = Header(None)):
     if owner != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     return {"id": report_id, "owner_id": owner}
+
+
+# ---------- УЯЗВИМОСТЬ: SSRF в загрузке по ссылке ----------
+class FetchRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/fetch-url")
+def fetch_url(body: FetchRequest):
+    """
+    «Загрузить содержимое по ссылке» (аватар, превью, вебхук) — сервер сам ходит по URL.
+
+    УЯЗВИМОСТЬ (SSRF): если ssrf_enabled, адрес не проверяется. Можно подсунуть
+    внутренний адрес (127.0.0.1 / localhost) или cloud-metadata (169.254.169.254) —
+    и сервер вернёт содержимое внутреннего сервиса / метаданные облака.
+    """
+    url = (body.url or "").strip()
+    host = (urlparse(url).hostname or "").lower()
+    is_meta = host.startswith("169.254.") or host in ("metadata.google.internal", "fd00:ec2::254")
+    is_internal = is_meta or host in ("127.0.0.1", "localhost", "0.0.0.0", "::1") or host.startswith(("10.", "192.168."))
+
+    if not _profile().get("ssrf_enabled", True):
+        # Правильное поведение: внутренние адреса и нестандартные схемы запрещены
+        if is_internal or urlparse(url).scheme not in ("http", "https"):
+            raise HTTPException(status_code=400, detail="URL not allowed")
+        return {"source": url, "internal": False, "data": {"title": "Example Domain", "note": "external content"}}
+
+    # УЯЗВИМОСТЬ: без проверки отдаём «внутреннее» содержимое
+    if is_meta:
+        return {
+            "source": url,
+            "internal": True,
+            "data": {
+                "ami-id": "ami-0123456789abcdef0",
+                "instance-id": "i-0abcdef1234567890",
+                "iam": {"security-credentials": {"scanner-role": {"AccessKeyId": "ASIAEXAMPLE", "SecretAccessKey": "example"}}},
+            },
+        }
+    if is_internal:
+        return {"source": url, "internal": True, "data": {"service": "internal-admin-panel", "users": ["alice", "bob", "admin"]}}
+    return {"source": url, "internal": False, "data": {"title": "Example Domain", "note": "external content"}}
