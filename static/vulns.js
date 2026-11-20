@@ -42,8 +42,9 @@
     var id = (location.hash || '').slice(1);
     if (!id) return;
     var el = document.getElementById(id);
-    /* Якорь отчёта — невидимая метка перед карточкой: подсвечиваем саму карточку. */
-    if (el && el.classList.contains('vg-anchor')) el = el.nextElementSibling;
+    /* Якорь отчёта — невидимая метка перед карточкой (их может быть несколько подряд):
+       перешагиваем через все метки и подсвечиваем саму карточку. */
+    while (el && el.classList.contains('vg-anchor')) el = el.nextElementSibling;
     if (!el || !(el.classList.contains('vg-card') || el.classList.contains('vr-card'))) return;
     if (current) current.classList.remove('vg-target');
     if (timer) clearTimeout(timer);
