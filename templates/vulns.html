@@ -57,6 +57,9 @@
   .vg-h2sub{font-size:12px;color:var(--fg-dim);margin:0 0 14px;line-height:1.6}
   .vg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
   /* Невидимые якоря отчётов перед карточками реестра: вне потока сетки, высота 0. */
+  .vg-card,.vr-card{position:relative}
+  .vg-copy{position:absolute;top:8px;right:8px;background:none;border:1px solid var(--border-dim);color:var(--fg-dim);cursor:pointer;font-size:12px;padding:2px 8px;border-radius:4px;line-height:1.4}
+  .vg-copy:hover{color:var(--fg);border-color:var(--fg)}
   .vg-anchor{position:absolute;display:block;height:0;scroll-margin-top:24px}
   .vg-card,.vr-card{border:2px solid var(--border-dim);background:var(--panel);padding:16px;
     display:flex;flex-direction:column;gap:10px;transition:border-color .15s;scroll-margin-top:18px;position:relative}
@@ -171,6 +174,7 @@
   <div class="vg-grid" id="vg-grid">
     {% for v in guide %}
     <article class="vg-card" id="{{ v.slug }}" data-search="{{ v.search }}">
+      <button class="vg-copy" type="button" data-slug="{{ v.slug }}" title="Скопировать ссылку на карточку" aria-label="Скопировать ссылку: {{ v.en }}">🔗</button>
       <div class="vg-badges">
         <span class="lvl lvl-{{ v.level|lower }}" title="{{ v.level_hint }}"><b>{{ v.level_ru }} РИСК</b><i>{{ v.level }}</i></span>
         {% if v.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»">⚡ БЫСТРЫЙ РЕЖИМ</span>{% endif %}
@@ -216,6 +220,7 @@
     {% for r in registry %}
     {% for a in r.anchors %}<span id="{{ a }}" class="vg-anchor" aria-hidden="true"></span>{% endfor %}
     <article class="vr-card" id="reg-{{ r.id }}" data-search="{{ r.search }}">
+      <button class="vg-copy" type="button" data-slug="reg-{{ r.id }}" title="Скопировать ссылку на проверку" aria-label="Скопировать ссылку: {{ r.title_en }}">🔗</button>
       <div class="vr-head">
         <h3 class="vr-name">{{ r.title_en }}</h3>
       </div>

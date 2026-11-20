@@ -37,6 +37,25 @@ async def check_security_headers(ctx: ScanContext, endpoints: list[str] | None =
                     "details": get_vuln_info(vuln_type),
                 }
             )
+    csp = r.headers.get("content-security-policy", "")
+    if csp:
+        directives: dict[str, list[str]] = {}
+        for part in csp.split(";"):
+            toks = part.strip().split()
+            if toks:
+                directives[toks[0].lower()] = [t.lower() for t in toks[1:]]
+        script_src = directives.get("script-src", directives.get("default-src", []))
+        weak = [t for t in script_src if t in ("'unsafe-inline'", "'unsafe-eval'", "*")]
+        if weak:
+            findings.append(
+                {
+                    "level": "MEDIUM",
+                    "type": "Weak CSP",
+                    "endpoint": "/",
+                    "desc": "CSP ослаблен в script-src/default-src: " + ", ".join(weak),
+                    "details": get_vuln_info("Weak CSP"),
+                }
+            )
     return findings
 
 

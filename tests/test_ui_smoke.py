@@ -76,6 +76,14 @@ def test_ui_smoke():
             page.wait_for_url(url + "/", timeout=10000)
             # Справочник: поиск по EN-названию сужает карточки без перезагрузки
             page.goto(url + "/vulns")
+            # Якоря отчётов подсвечивают карточку реестра; бейджи RU+EN; счётчик секций
+            page.goto(url + "/vulns#open-cors")
+            page.wait_for_timeout(400)
+            assert page.locator(".vr-card.vg-target").count() >= 1
+            assert "уязвимостей" in page.locator("#vg-count").inner_text().lower()
+            assert page.locator(".vg-card .lvl b").count() >= 1
+            assert page.locator(".vg-card .lvl i").count() >= 1
+            # Поиск по EN-названию сужает карточки без перезагрузки
             page.fill("#vg-q", "SQL")
             assert page.locator(".vg-card:visible").count() >= 1
             # История: панель фильтра дат присутствует в DOM

@@ -294,7 +294,7 @@ function setStatus(data) {
     if (typeof data.medium_count === 'number' && medCount) medCount.textContent = data.medium_count;
     if (typeof data.low_count === 'number' && lowCount) lowCount.textContent = data.low_count;
     if (typeof data.score === 'number') applyScoreStyle(data.score);
-    if (typeof data.progress === 'number' && progressBar) progressBar.style.width = (data.progress * 100) + '%';
+    if (typeof data.progress === 'number' && progressBar) { progressBar.style.width = (data.progress * 100) + '%'; progressBar.setAttribute('aria-valuenow', String(Math.round(data.progress * 100))); }
     const reqEl = $('progressRequests');
     if (reqEl && typeof data.requests_used === 'number') {
         reqEl.textContent = 'ЗАПРОСОВ ' + data.requests_used + ' / ' + (data.requests_max || '—');
@@ -385,7 +385,7 @@ async function startScan() {
 
     clearTerminal();
     appendTerminal('[SYS] Инициализация сканирования...');
-    progressBar.style.width = '0%';
+    progressBar.style.width = '0%'; progressBar.setAttribute('aria-valuenow', '0');
     critCount.textContent = '0';
     if (highCount) highCount.textContent = '0';
     medCount.textContent = '0';

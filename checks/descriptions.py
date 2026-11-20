@@ -147,6 +147,19 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
             "и точечно разрешайте нужные источники."
         ),
     },
+    "Weak CSP": {
+        "plain": (
+            "CSP есть, но ослаблен: script-src/default-src разрешает 'unsafe-inline', 'unsafe-eval' "
+            "или любой источник (*). Такая политика почти не мешает внедрённому скрипту выполниться."
+        ),
+        "example": (
+            "script-src 'self' 'unsafe-inline' — внедрённый inline-скрипт (XSS) выполнится, несмотря на наличие CSP."
+        ),
+        "recommendation": (
+            "Уберите 'unsafe-inline'/'unsafe-eval' из script-src; используйте nonce или hash "
+            "для легитимных inline-скриптов, перечисляйте конкретные доверенные источники."
+        ),
+    },
     "Missing HSTS": {
         "plain": (
             "HSTS — команда браузеру: «заходи на меня только по HTTPS, даже если ссылка "
@@ -467,6 +480,7 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
 # Классификация: CWE + OWASP API Security Top 10 (2023) + OWASP Top 10 (2021)
 # и confidence по умолчанию для эвристик vs сигнатурных проверок.
 VULN_META: dict[str, dict] = {
+    "Weak CSP": {"cwe": ["CWE-693"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "high"},
     "SQL Injection": {"cwe": ["CWE-89"], "owasp_api": ["API8:2023"], "owasp_top10": "A03:2021", "confidence": "high"},
     "OS Command Injection": {
         "cwe": ["CWE-78"],

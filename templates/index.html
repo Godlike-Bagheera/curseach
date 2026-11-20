@@ -163,16 +163,16 @@
                 </div>
                 <div class="stat-box stat-status">
                     <div class="stat-label">СТАТУС</div>
-                    <div class="stat-value" id="statusValue">ОЖИДАНИЕ</div>
+                    <div class="stat-value" id="statusValue" role="status" aria-live="polite">ОЖИДАНИЕ</div>
                 </div>
             </div>
 
             <div class="progress-container">
-                <div class="progress-bar" id="progressBar"></div>
+                <div class="progress-bar" id="progressBar" role="progressbar" aria-label="Прогресс сканирования" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
             </div>
-            <span class="progress-requests" id="progressRequests">ЗАПРОСОВ 0 / —</span>
+            <span class="progress-requests" id="progressRequests" aria-live="polite">ЗАПРОСОВ 0 / —</span>
 
-            <div class="terminal" id="terminal">
+            <div class="terminal" id="terminal" role="log" aria-live="polite" aria-label="Лог сканирования">
                 <div class="terminal-line terminal-info">&gt; {% if is_guest %}гостевой режим — сканирование недоступно{% else %}ожидание команды...{% endif %}</div>
             </div>
 

@@ -93,7 +93,7 @@ REGISTRY_RU: dict[str, str] = {
 # Дополнительные якоря реестра: одна проверка ловит несколько типов из VULN_DESCRIPTIONS,
 # и ссылки отчётов /vulns#<slug> должны попадать на её карточку.
 EXTRA_ANCHORS: dict[str, list[str]] = {
-    "check_security_headers": ["Missing CSP", "Missing HSTS"],
+    "check_security_headers": ["Missing CSP", "Missing HSTS", "Weak CSP"],
     "check_tls_version": [
         "TLS Certificate Expired",
         "TLS Certificate Expiring Soon",

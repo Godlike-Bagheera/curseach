@@ -127,3 +127,47 @@ def test_mass_assignment_readback_via_get():
 
     f = _run(logic.check_mass_assignment, handler, ["/api/items"], spec=spec)
     assert len(f) == 1 and f[0]["type"] == "Mass Assignment"
+
+
+def test_cors_reflection_with_credentials():
+    from checks.access import check_cors
+
+    def handler(r):
+        return httpx.Response(
+            200,
+            headers={
+                "access-control-allow-origin": r.headers.get("origin", ""),
+                "access-control-allow-credentials": "true",
+            },
+        )
+
+    f = _run(check_cors, handler, [])
+    assert any(x["level"] == "HIGH" and x["type"] == "Open CORS" for x in f)
+
+
+def test_csp_weak_unsafe_inline_flagged():
+    def handler(r):
+        return httpx.Response(
+            200, headers={"content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'"}
+        )
+
+    assert any(x["type"] == "Weak CSP" for x in _run(headers.check_security_headers, handler, []))
+
+
+def test_csp_style_unsafe_inline_not_flagged():
+    def handler(r):
+        return httpx.Response(
+            200,
+            headers={
+                "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+            },
+        )
+
+    assert not any(x["type"] == "Weak CSP" for x in _run(headers.check_security_headers, handler, []))
+
+
+def test_weak_csp_anchor_in_registry():
+    from scanner.vuln_guide import build_registry, slugify
+
+    reg = {r["id"]: r for r in build_registry()}
+    assert slugify("Weak CSP") in reg["check_security_headers"]["anchors"]
