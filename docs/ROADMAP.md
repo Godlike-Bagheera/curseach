@@ -18,9 +18,8 @@
 - **Генерация about.html** — секция проверок из CHECK_METADATA + descriptions.py (gen_about.py --check в CI) — PR #41.
 - **Auth-профили** — bearer/form/apikey, refresh при 401, сохранение профилей (auth_profiles + CRUD + UI) — PR #42.
 - **Расписания/проекты/тренд** — повторные сканы по интервалу, мульти-цели, тренд-график (Chart.js) — PR #43.
+- **i18n (EN-toggle)** — каркас + ключевой экран, переключатель в шапке, localStorage — PR #44.
 
 ## Осталось
 
-### Операционные фичи
-- i18n (EN-toggle) — опционально, проект RU-first.
 
