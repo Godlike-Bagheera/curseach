@@ -10,12 +10,18 @@
     { grid: document.getElementById('vg-grid'), empty: document.getElementById('vg-none'), cls: 'vg-card' },
     { grid: document.getElementById('vr-grid'), empty: document.getElementById('vr-none'), cls: 'vr-card' }
   ];
+  /* Толерантность к раскладке: йцукен ↔ qwerty (опечатки в другой раскладке). */
+  var RU2EN = {й:'q',ц:'w',у:'e',к:'r',е:'t',н:'y',г:'u',ш:'i',щ:'o',з:'p',ф:'a',ы:'s',в:'d',а:'f',п:'g',р:'h',о:'j',л:'k',д:'l',ж:';',э:"'",я:'z',ч:'x',с:'c',м:'v',и:'b',т:'n',ь:'m',б:',',ю:'.'};
+  var EN2RU = {}; Object.keys(RU2EN).forEach(function (k) { EN2RU[RU2EN[k]] = k; });
+  function convert(s, map) { return s.split('').map(function (ch) { return map[ch] || ch; }).join(''); }
   function apply() {
     var s = q.value.trim().toLowerCase();
+    var alt = convert(s, /[а-яё]/.test(s) ? RU2EN : EN2RU);
     var shown = 0;
     var shownGuide = 0;
     cards.forEach(function (c) {
-      var ok = !s || (c.getAttribute('data-search') || '').indexOf(s) !== -1;
+      var hay = c.getAttribute('data-search') || '';
+      var ok = !s || hay.indexOf(s) !== -1 || (alt !== s && hay.indexOf(alt) !== -1);
       c.style.display = ok ? '' : 'none';
       if (ok) {
         shown++;
@@ -53,6 +59,21 @@
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     timer = setTimeout(function () { el.classList.remove('vg-target'); current = null; }, 6000);
   }
+  /* Копирование ссылки на карточку/проверку. */
+  document.addEventListener('click', function (e) {
+    var btn = e.target instanceof Element ? e.target.closest('.vg-copy') : null;
+    if (!btn) return;
+    var url = location.origin + location.pathname + '#' + btn.getAttribute('data-slug');
+    var old = btn.textContent;
+    function done(ok) { btn.textContent = ok ? '✓' : '⚠'; setTimeout(function () { btn.textContent = old; }, 1200); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); });
+    } else {
+      var ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(true); } catch (err) { done(false); }
+      document.body.removeChild(ta);
+    }
+  });
   window.addEventListener('hashchange', highlight);
   document.addEventListener('click', function (e) {
     var a = e.target instanceof Element ? e.target.closest('a.vr-link') : null;
