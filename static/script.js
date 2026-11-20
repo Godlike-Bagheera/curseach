@@ -178,12 +178,71 @@ function getSelectedChecks() {
 }
 
 // ---------- Auth ----------
-function buildAccount(userEl, passEl) {
+function buildAccount(userEl, passEl, prefix) {
     if (isGuest) return null;
+    const profEl = $(prefix + 'Profile');
+    if (profEl && profEl.value) return { profile_id: parseInt(profEl.value, 10) };
+    const typeEl = $(prefix + 'Type');
+    const authType = typeEl ? typeEl.value : 'bearer';
+    if (authType === 'apikey') {
+        const h = ($(prefix + 'KeyHeader').value || '').trim();
+        const v = $(prefix + 'KeyValue').value || '';
+        if (!h || !v) return null;
+        return { auth_type: 'apikey', api_key_header: h, api_key_value: v };
+    }
     const u = (userEl.value || '').trim();
     const p = passEl.value || '';
     if (!u || !p) return null;
-    return { username: u, password: p };
+    const acc = { username: u, password: p, auth_type: authType };
+    if (authType === 'form') {
+        const lp = ($(prefix + 'LoginPath').value || '').trim();
+        if (lp) acc.login_path = lp;
+        const ff = ($(prefix + 'FormFields').value || '').trim();
+        if (ff) { try { acc.form_fields = JSON.parse(ff); } catch (e) { /* невалидный JSON — пропускаем */ } }
+    }
+    return acc;
+}
+
+async function loadAuthProfiles() {
+    if (isGuest) return;
+    try {
+        const resp = await fetch('/auth-profiles');
+        if (!resp.ok) return;
+        const profiles = await resp.json();
+        for (const prefix of ['acc1', 'acc2']) {
+            const sel = $(prefix + 'Profile');
+            if (!sel) continue;
+            const cur = sel.value;
+            clear(sel);
+            sel.appendChild(el('option', { value: '', text: '— вручную —' }));
+            for (const p of profiles) sel.appendChild(el('option', { value: String(p.id), text: p.name + ' (' + p.auth_type + ')' }));
+            sel.value = cur;
+        }
+    } catch (e) { /* профили не критичны */ }
+}
+
+function saveAuthProfile(prefix) {
+    if (isGuest) return;
+    const name = prompt('Имя профиля:');
+    if (!name) return;
+    const acc = buildAccount($(prefix + 'User'), $(prefix + 'Pass'), prefix);
+    if (!acc || acc.profile_id) { alert('Заполните данные аккаунта вручную (не выбирая профиль)'); return; }
+    const body = { name, auth_type: acc.auth_type || 'bearer', username: acc.username || '', password: acc.password || '', api_key_header: acc.api_key_header || '', api_key_value: acc.api_key_value || '', form_fields: acc.form_fields || null, login_path: acc.login_path || '' };
+    fetch('/auth-profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(() => { appendTerminal('[SYS] Профиль сохранён: ' + name); loadAuthProfiles(); })
+        .catch(e => alert('Ошибка сохранения: ' + e.message));
+}
+
+function initAuthUI() {
+    for (const prefix of ['acc1', 'acc2']) {
+        const typeEl = $(prefix + 'Type');
+        const extra = $(prefix + 'Extra');
+        if (typeEl && extra) typeEl.addEventListener('change', () => extra.classList.toggle('hidden', typeEl.value === 'bearer'));
+        const saveBtn = $(prefix + 'SaveProfile');
+        if (saveBtn) saveBtn.addEventListener('click', () => saveAuthProfile(prefix));
+    }
+    loadAuthProfiles();
 }
 
 // ---------- Available checks ----------
@@ -405,18 +464,18 @@ async function startScan() {
         const body = { url, mode };
         if (checks_) body.checks = checks_;
 
-        const a1 = buildAccount(acc1User, acc1Pass);
-        if (a1) body.account1 = a1;
+        const a1 = buildAccount(acc1User, acc1Pass, 'acc1');
+        if (a1) { if (a1.profile_id) body.account1_profile_id = a1.profile_id; else body.account1 = a1; }
 
-        const a2 = buildAccount(acc2User, acc2Pass);
-        if (a2) body.account2 = a2;
+        const a2 = buildAccount(acc2User, acc2Pass, 'acc2');
+        if (a2) { if (a2.profile_id) body.account2_profile_id = a2.profile_id; else body.account2 = a2; }
 
         const webhook = webhookInput ? (webhookInput.value || '').trim() : '';
         if (webhook) body.webhook_url = webhook;
 
-        if (a1) appendTerminal(`[SYS] Аккаунт 1: ${a1.username}`);
+        if (a1) appendTerminal(`[SYS] Аккаунт 1: ${a1.username || ('профиль #' + a1.profile_id)}`);
         else appendTerminal('[SYS] Аккаунт 1: не задан (анонимно)');
-        if (a2) appendTerminal(`[SYS] Аккаунт 2: ${a2.username}`);
+        if (a2) appendTerminal(`[SYS] Аккаунт 2: ${a2.username || ('профиль #' + a2.profile_id)}`);
         else appendTerminal('[SYS] Аккаунт 2: не задан (без cross-user проверок)');
 
         const resp = await fetch('/scan', {
@@ -814,6 +873,7 @@ function exportHistory() {
 
 // ---------- Wire up ----------
 if (!isGuest) {
+    initAuthUI();
     scanBtn.addEventListener('click', startScan);
     if (cancelBtn) cancelBtn.addEventListener('click', cancelScan);
     urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') startScan(); });

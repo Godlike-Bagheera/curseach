@@ -13,6 +13,7 @@
 - Docker base-image запинен по digest; pip install --require-hashes (hash-locked requirements.txt/dev).
 - httpx2 проверен: легитимный преемник httpx (Pydantic / Tom Christie), нужен starlette TestClient — оставлен.
 - Генерация секции проверок about.html из единого источника (scripts/gen_about.py, CI-гейт --check).
+- Auth-профили: bearer/form/apikey, refresh при 401; таблица auth_profiles + CRUD /auth-profiles + выбор/сохранение в UI.
 
 ## 1.2.0
 
