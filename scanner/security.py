@@ -75,6 +75,10 @@ def _is_blocked_ip(ip: str) -> bool:
         addr = ipaddress.ip_address(ip)
     except ValueError:
         return False
+    # IPv4-mapped IPv6 (::ffff:169.254.169.254) нормализуем в IPv4, иначе
+    # always-blocked metadata-правило обходится mapped-формой адреса.
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+        addr = addr.ipv4_mapped
     for net in _ALWAYS_BLOCKED_NETS:
         if addr in net:
             return True
@@ -104,7 +108,10 @@ def ssrf_check_host(host: str) -> str | None:
     try:
         infos = socket.getaddrinfo(host, None)
     except (socket.gaierror, UnicodeError):
-        return None  # не резолвится — пусть дальше упадёт сам запрос
+        # Fail-closed в строгом режиме: неразрешимый хост — возможный DNS-rebinding.
+        if not SSRF_ALLOW_PRIVATE:
+            return f"Не удалось разрешить хост {host} (SSRF protection, fail-closed)"
+        return None
     seen = set()
     for info in infos:
         ip = str(info[4][0])
