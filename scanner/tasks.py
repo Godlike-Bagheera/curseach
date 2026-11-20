@@ -102,8 +102,6 @@ class ScanTask:
         self.status = "pending"
         self.partial = False
         self.partial_reason = ""
-        self.partial = False
-        self.partial_reason = ""
         self.progress = 0.0
         self.logs: list[str] = []
         self.critical_count = 0
