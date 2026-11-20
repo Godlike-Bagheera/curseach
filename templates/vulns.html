@@ -36,12 +36,13 @@
   .lvl{display:inline-block;font-size:10.5px;font-weight:900;letter-spacing:.08em;
     padding:3px 10px;border:2px solid currentColor;background:rgba(0,0,0,.4);
     white-space:nowrap;cursor:help;vertical-align:middle}
+  .lvl b{display:block}
+  .lvl i{font-style:normal;font-size:9px;opacity:.85}
   .lvl-critical{color:var(--error);background:rgba(255,0,68,.08)}
   .lvl-high{color:var(--purple);background:rgba(213,0,249,.08)}
   .lvl-medium{color:var(--warn);background:rgba(255,179,0,.08)}
   .lvl-low{color:var(--fg);background:rgba(0,255,65,.06)}
   .lvl-quick{color:var(--fg);border-color:var(--border-dim)}
-  .lvl-manual{color:var(--fg-dim);border-color:var(--border-dim);border-style:dashed}
   .vg-lvl-row{margin:0 0 10px}
   .vg-lvl-head{display:flex;align-items:center;gap:8px;margin:0 0 5px}
   .vg-lvl-row p{margin:0}
@@ -55,6 +56,8 @@
     border-bottom:2px solid var(--border-dim);padding-bottom:8px;text-transform:uppercase}
   .vg-h2sub{font-size:12px;color:var(--fg-dim);margin:0 0 14px;line-height:1.6}
   .vg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+  /* Невидимые якоря отчётов перед карточками реестра: вне потока сетки, высота 0. */
+  .vg-anchor{position:absolute;display:block;height:0;scroll-margin-top:24px}
   .vg-card,.vr-card{border:2px solid var(--border-dim);background:var(--panel);padding:16px;
     display:flex;flex-direction:column;gap:10px;transition:border-color .15s;scroll-margin-top:18px;position:relative}
   .vg-card:hover,.vr-card:hover{border-color:var(--border)}
@@ -91,6 +94,7 @@
     padding:2px 6px;margin:0 2px;cursor:help;white-space:nowrap}
   .vr-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .vr-name{font-size:14px;color:var(--fg);margin:0;flex:1;min-width:140px}
+  .vr-ru{font-size:12.5px;margin:-6px 0 0;color:var(--fg);opacity:.85}
   .vr-id{font-size:11px;color:var(--cyan);margin:0}
   .vr-id code{cursor:help}
   .vr-link{font-size:11.5px;color:var(--fg);text-decoration:none;border-bottom:1px dashed var(--border-dim);align-self:flex-start}
@@ -109,7 +113,7 @@
   <h1 class="vg-title">СПРАВОЧНИК УЯЗВИМОСТЕЙ</h1>
   <p class="vg-sub">Каждая карточка — одна «дыра» в безопасности сайта или API: что это простыми словами,
     пример из жизни и как её закрыть. Цветной значок показывает, насколько это опасно.
-    Наведите курсор на значок или код-тег — появится подсказка с расшифровкой.</p>
+    Наведите курсор на значок или плашку с кодом — появится подсказка с расшифровкой.</p>
 
   <details class="vg-help" open>
     <summary>Как читать справочник</summary>
@@ -117,31 +121,32 @@
       <section class="vg-help-col">
         <h4>Уровень опасности</h4>
         <div class="vg-lvl-row">
-          <div class="vg-lvl-head"><span class="lvl lvl-critical">КРИТИЧЕСКИЙ</span> <code>CRITICAL</code></div>
+          <div class="vg-lvl-head"><span class="lvl lvl-critical"><b>КРИТИЧЕСКИЙ РИСК</b><i>CRITICAL</i></span></div>
           <p>Взлом возможен уже сейчас: могут украсть всю базу или захватить сервер. Чинить немедленно.</p>
         </div>
         <div class="vg-lvl-row">
-          <div class="vg-lvl-head"><span class="lvl lvl-high">ВЫСОКИЙ</span> <code>HIGH</code></div>
+          <div class="vg-lvl-head"><span class="lvl lvl-high"><b>ВЫСОКИЙ РИСК</b><i>HIGH</i></span></div>
           <p>Реальная утечка данных или доступ к чужим аккаунтам. Чинить в ближайшее время.</p>
         </div>
         <div class="vg-lvl-row">
-          <div class="vg-lvl-head"><span class="lvl lvl-medium">СРЕДНИЙ</span> <code>MEDIUM</code></div>
+          <div class="vg-lvl-head"><span class="lvl lvl-medium"><b>СРЕДНИЙ РИСК</b><i>MEDIUM</i></span></div>
           <p>Заметно повышает риск, но для вреда обычно нужны дополнительные условия. Плановое исправление.</p>
         </div>
         <div class="vg-lvl-row">
-          <div class="vg-lvl-head"><span class="lvl lvl-low">НИЗКИЙ</span> <code>LOW</code></div>
+          <div class="vg-lvl-head"><span class="lvl lvl-low"><b>НИЗКИЙ РИСК</b><i>LOW</i></span></div>
           <p>Мелкие недочёты и «гигиена» безопасности. Исправить при случае.</p>
         </div>
       </section>
       <section class="vg-help-col">
-        <h4>Значок «⚡ БЫСТРАЯ»</h4>
-        <p>Эту уязвимость можно обнаружить в режиме <b>«Быстрый»</b> (экспресс-скан).
-          Без значка уязвимость ловится только в режимах «Полный» и «Свой».</p>
+        <h4>Значок «⚡ БЫСТРЫЙ РЕЖИМ»</h4>
+        <p>Находка ловится в режиме <b>«Быстрый»</b> (экспресс-скан) — значок есть и у карточек
+          уязвимостей, и у проверок реестра. Без значка — только в режимах «Полный» и «Свой».</p>
         <h4>«Ловит проверка»</h4>
         <p>Кодовое имя автоматического теста сканера (например, <code>check_sqli</code>).
           Те же имена — в режиме «Свой» и в отчётах: по ним легко понять, чем именно найдена дыра.</p>
-        <h4>«Нет автопроверки»</h4>
-        <p>Классическая уязвимость, которую сканер пока не ловит автоматически — проверяйте её вручную.</p>
+        <h4>«Служебная проверка»</h4>
+        <p>Служебная проверка — тест без отдельной карточки уязвимости: что он ищет и как
+          закрыться, написано в самой карточке реестра ниже.</p>
       </section>
       <section class="vg-help-col">
         <h4>Коды CWE и OWASP</h4>
@@ -167,9 +172,8 @@
     {% for v in guide %}
     <article class="vg-card" id="{{ v.slug }}" data-search="{{ v.search }}">
       <div class="vg-badges">
-        <span class="lvl lvl-{{ v.level|lower }}" title="{{ v.level_hint }}">{{ v.level_ru }} РИСК</span>
-        {% if v.quick %}<span class="lvl lvl-quick" title="Эту уязвимость можно обнаружить в быстром режиме (экспресс-скан)">⚡ БЫСТРАЯ</span>{% endif %}
-        {% if not v.checked_by %}<span class="lvl lvl-manual" title="Сканер пока не проверяет это автоматически — проверяйте вручную">НЕТ АВТОПРОВЕРКИ</span>{% endif %}
+        <span class="lvl lvl-{{ v.level|lower }}" title="{{ v.level_hint }}"><b>{{ v.level_ru }} РИСК</b><i>{{ v.level }}</i></span>
+        {% if v.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»">⚡ БЫСТРЫЙ РЕЖИМ</span>{% endif %}
       </div>
       <h3 class="vg-en">{{ v.en }}</h3>
       <p class="vg-ru">{{ v.ru }}</p>
@@ -199,7 +203,7 @@
       <div class="vg-check">
         {% if v.checks %}Ловит проверка:
           {% for c in v.checks %}<code title="Автоматический тест сканера; это же имя — в режиме «Свой» и в отчётах">{{ c }}</code>{% endfor %}
-        {% else %}Классическая уязвимость вне автоматических проверок сканера{% endif %}
+        {% endif %}
       </div>
     </article>
     {% endfor %}
@@ -207,18 +211,20 @@
   <div class="vg-none" id="vg-none">Ничего не найдено — попробуй другой запрос</div>
 
   <h2 class="vg-h2">&gt; Все проверки сканера ({{ registry|length }})</h2>
-  <p class="vg-h2sub">Что ищет каждый автоматический тест, насколько опасна его находка и ловится ли она в быстром режиме.</p>
+  <p class="vg-h2sub">Что ищет каждый автоматический тест, насколько опасна его находка и ловится ли она в быстром режиме. Ссылки из отчётов ведут прямо на карточки этого реестра.</p>
   <div class="vg-grid" id="vr-grid">
     {% for r in registry %}
+    {% for a in r.anchors %}<span id="{{ a }}" class="vg-anchor" aria-hidden="true"></span>{% endfor %}
     <article class="vr-card" id="reg-{{ r.id }}" data-search="{{ r.search }}">
       <div class="vr-head">
-        <h3 class="vr-name">{{ r.name }}</h3>
+        <h3 class="vr-name">{{ r.title_en }}</h3>
       </div>
+      <p class="vr-ru">{{ r.title_ru }}</p>
       <div class="vg-badges">
-        <span class="lvl lvl-{{ r.level|lower }}" title="{{ r.level_hint }}">{{ r.level_ru }} РИСК</span>
-        {% if r.quick %}<span class="lvl lvl-quick" title="Эту уязвимость можно обнаружить в быстром режиме (экспресс-скан)">⚡ БЫСТРАЯ</span>{% endif %}
+        <span class="lvl lvl-{{ r.level|lower }}" title="{{ r.level_hint }}"><b>{{ r.level_ru }} РИСК</b><i>{{ r.level }}</i></span>
+        {% if r.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»">⚡ БЫСТРЫЙ РЕЖИМ</span>{% endif %}
       </div>
-      <p class="vr-id"><code title="Кодовое имя проверки — как в режиме «Свой» и в отчётах">{{ r.id }}</code></p>
+      <p class="vr-id"><code title="{{ r.name }} — кодовое имя проверки, как в режиме «Свой» и в отчётах">{{ r.id }}</code></p>
       <p class="vg-meaning"><b>Что ищет:</b> {{ r.meaning }}</p>
       <p class="vg-rec"><b>Как защититься:</b> {{ r.recommendation }}</p>
       <div class="vg-taxonomy">
@@ -242,7 +248,7 @@
         {% endif %}
       </div>
       {% if r.guide_slug %}<a class="vr-link" href="#{{ r.guide_slug }}">Подробнее об уязвимости →</a>
-      {% else %}<span class="vg-check">Служебная проверка сканера</span>{% endif %}
+      {% else %}<span class="vg-check">Служебная проверка — тест без отдельной карточки уязвимости</span>{% endif %}
     </article>
     {% endfor %}
   </div>
