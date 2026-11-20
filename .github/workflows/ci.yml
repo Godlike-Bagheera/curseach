@@ -61,6 +61,14 @@ jobs:
       - name: Smoke — import app
         run: python -c "import web_app; print('app OK')"
 
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build Docker image (digest-pinned base + pip --require-hashes)
+        run: docker build -t curseach:ci .
+
   ui-smoke:
     runs-on: ubuntu-latest
     steps:

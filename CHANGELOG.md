@@ -9,6 +9,10 @@
 ### Операционные фичи
 - Webhook-уведомления: POST JSON-сводки по завершении скана (таймаут 5s, 1 retry, ошибка не валит скан).
 
+### Прочее
+- Docker base-image запинен по digest; pip install --require-hashes (hash-locked requirements.txt/dev).
+- httpx2 проверен: легитимный преемник httpx (Pydantic / Tom Christie), нужен starlette TestClient — оставлен.
+
 ## 1.2.0
 
 ### Точность детектирования
