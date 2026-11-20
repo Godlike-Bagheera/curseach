@@ -55,7 +55,8 @@ def init_db():
                 endpoints_count INTEGER DEFAULT 0,
                 surfaces_count INTEGER DEFAULT 0,
                 requests_used INTEGER DEFAULT 0,
-                requests_max INTEGER DEFAULT 0
+                requests_max INTEGER DEFAULT 0,
+                webhook_url TEXT DEFAULT ''
             )
         """)
         c.execute("PRAGMA table_info(scans)")
@@ -72,6 +73,8 @@ def init_db():
             c.execute("ALTER TABLE scans ADD COLUMN surfaces_count INTEGER DEFAULT 0")
             c.execute("ALTER TABLE scans ADD COLUMN requests_used INTEGER DEFAULT 0")
             c.execute("ALTER TABLE scans ADD COLUMN requests_max INTEGER DEFAULT 0")
+        if "webhook_url" not in cols:
+            c.execute("ALTER TABLE scans ADD COLUMN webhook_url TEXT DEFAULT ''")
         c.execute("CREATE INDEX IF NOT EXISTS idx_scans_scan_date ON scans(scan_date DESC)")
 
 
@@ -89,6 +92,7 @@ def save_scan(
     surfaces_count: int = 0,
     requests_used: int = 0,
     requests_max: int = 0,
+    webhook_url: str = "",
 ):
     scan_date = datetime.datetime.now(datetime.timezone.utc).isoformat()
     results_json = json.dumps(results, ensure_ascii=False)
@@ -96,8 +100,8 @@ def save_scan(
         conn.execute(
             """
             INSERT INTO scans (target_url, scan_date, critical, high, medium, low, results_json, mode, partial,
-                               partial_reason, endpoints_count, surfaces_count, requests_used, requests_max)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               partial_reason, endpoints_count, surfaces_count, requests_used, requests_max, webhook_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 target_url,
@@ -114,6 +118,7 @@ def save_scan(
                 int(surfaces_count),
                 int(requests_used),
                 int(requests_max),
+                webhook_url,
             ),
         )
 

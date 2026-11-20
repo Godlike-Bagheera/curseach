@@ -137,6 +137,7 @@ const acc1User = $('acc1User');
 const acc1Pass = $('acc1Pass');
 const acc2User = $('acc2User');
 const acc2Pass = $('acc2Pass');
+const webhookInput = $('webhookInput');
 
 // ---------- Tabs ----------
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -409,6 +410,9 @@ async function startScan() {
 
         const a2 = buildAccount(acc2User, acc2Pass);
         if (a2) body.account2 = a2;
+
+        const webhook = webhookInput ? (webhookInput.value || '').trim() : '';
+        if (webhook) body.webhook_url = webhook;
 
         if (a1) appendTerminal(`[SYS] Аккаунт 1: ${a1.username}`);
         else appendTerminal('[SYS] Аккаунт 1: не задан (анонимно)');
