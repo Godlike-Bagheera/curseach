@@ -43,3 +43,13 @@ def test_corrupt_json_returns_empty():
     scan = database.get_scan(broken_id)
     assert scan["results"] == []
     database.delete_scan(broken_id)
+
+
+def test_mode_roundtrip():
+    database.init_db()
+    database.save_scan("http://mode.example", 0, 0, 0, 0, [], mode="quick")
+    latest = database.get_all_scans()[0]
+    assert latest["mode"] == "quick"
+    full = database.get_scan(latest["id"])
+    assert full["mode"] == "quick"
+    database.delete_scan(latest["id"])

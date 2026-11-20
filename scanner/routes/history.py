@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 import database
 import report_xlsx
 
-from ..config import calculate_score
+from ..config import MODE_TITLES_REPORT, calculate_score
 from ..reporting import (
     build_chart_context,
     build_scan_bundle,
@@ -196,7 +196,7 @@ async def view_history_report(scan_id: int, request: Request, user: str = Depend
             "medium": scan["medium"],
             "low": scan["low"],
             "score": score,
-            "mode_ru": "ПОЛНАЯ ПРОВЕРКА",
+            "mode_ru": MODE_TITLES_REPORT.get(scan.get("mode") or "full", "ПОЛНАЯ ПРОВЕРКА"),
             "scan_date": scan["scan_date"].replace("T", " ")[:19],
             "source": "history",
             "scan_id": scan["id"],
@@ -269,7 +269,7 @@ async def download_history_view_pdf(scan_id: int, user: str = Depends(require_ad
         "medium": scan["medium"],
         "low": scan["low"],
         "score": score,
-        "mode_ru": "ПОЛНАЯ ПРОВЕРКА",
+        "mode_ru": MODE_TITLES_REPORT.get(scan.get("mode") or "full", "ПОЛНАЯ ПРОВЕРКА"),
         "scan_date": scan["scan_date"].replace("T", " ")[:19],
         "source": "history",
         "scan_id": scan["id"],

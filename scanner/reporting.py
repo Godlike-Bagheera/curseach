@@ -90,7 +90,7 @@ def build_chart_context(scan: dict, include_findings: bool = False) -> dict:
 
     if include_findings:
         ctx["findings"] = results
-        ctx["mode_ru"] = "ПОЛНАЯ ПРОВЕРКА"
+        ctx["mode_ru"] = MODE_TITLES_REPORT.get(scan.get("mode") or "full", "ПОЛНАЯ ПРОВЕРКА")
 
     return ctx
 

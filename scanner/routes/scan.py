@@ -182,7 +182,7 @@ async def get_json_report(task_id: str, user: str = Depends(require_admin)):
         raise HTTPException(status_code=400, detail="Scan not finished")
     return JSONResponse(
         {
-            "scan_date": datetime.datetime.now().isoformat(),
+            "scan_date": datetime.datetime.fromtimestamp(task.finished_at or time.time()).isoformat(),
             "target": task.target_url,
             "mode": task.mode,
             "selected_checks": task.selected_checks,

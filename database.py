@@ -48,26 +48,29 @@ def init_db():
                 high INTEGER DEFAULT 0,
                 medium INTEGER DEFAULT 0,
                 low INTEGER DEFAULT 0,
-                results_json TEXT NOT NULL
+                results_json TEXT NOT NULL,
+                mode TEXT DEFAULT 'full'
             )
         """)
         c.execute("PRAGMA table_info(scans)")
         cols = [row[1] for row in c.fetchall()]
         if "high" not in cols:
             c.execute("ALTER TABLE scans ADD COLUMN high INTEGER DEFAULT 0")
+        if "mode" not in cols:
+            c.execute("ALTER TABLE scans ADD COLUMN mode TEXT DEFAULT 'full'")
         c.execute("CREATE INDEX IF NOT EXISTS idx_scans_scan_date ON scans(scan_date DESC)")
 
 
-def save_scan(target_url: str, critical: int, high: int, medium: int, low: int, results: list[dict]):
+def save_scan(target_url: str, critical: int, high: int, medium: int, low: int, results: list[dict], mode: str = "full"):
     scan_date = datetime.datetime.now(datetime.timezone.utc).isoformat()
     results_json = json.dumps(results, ensure_ascii=False)
     with _db() as conn:
         conn.execute(
             """
-            INSERT INTO scans (target_url, scan_date, critical, high, medium, low, results_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scans (target_url, scan_date, critical, high, medium, low, results_json, mode)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-            (target_url, scan_date, critical, high, medium, low, results_json),
+            (target_url, scan_date, critical, high, medium, low, results_json, mode),
         )
 
 
@@ -76,11 +79,11 @@ def get_all_scans(limit: int = HISTORY_LIMIT_DEFAULT) -> list[dict]:
         c = conn.cursor()
         if limit and limit > 0:
             c.execute(
-                "SELECT id, target_url, scan_date, critical, high, medium, low FROM scans ORDER BY id DESC LIMIT ?",
+                "SELECT id, target_url, scan_date, critical, high, medium, low, mode FROM scans ORDER BY id DESC LIMIT ?",
                 (int(limit),),
             )
         else:
-            c.execute("SELECT id, target_url, scan_date, critical, high, medium, low FROM scans ORDER BY id DESC")
+            c.execute("SELECT id, target_url, scan_date, critical, high, medium, low, mode FROM scans ORDER BY id DESC")
         rows = c.fetchall()
     return [
         {
@@ -91,6 +94,7 @@ def get_all_scans(limit: int = HISTORY_LIMIT_DEFAULT) -> list[dict]:
             "high": row[4],
             "medium": row[5],
             "low": row[6],
+            "mode": row[7] or "full",
         }
         for row in rows
     ]
@@ -117,7 +121,7 @@ def get_scans_with_results(limit: int = 20) -> list[dict]:
     with _db() as conn:
         c = conn.cursor()
         c.execute(
-            "SELECT id, target_url, scan_date, critical, high, medium, low, results_json "
+            "SELECT id, target_url, scan_date, critical, high, medium, low, results_json, mode "
             "FROM scans ORDER BY id DESC LIMIT ?",
             (int(limit),),
         )
@@ -135,6 +139,7 @@ def get_scans_with_results(limit: int = 20) -> list[dict]:
                 "medium": row[5],
                 "low": row[6],
                 "results": _safe_json_loads(row[7]),
+                "mode": row[8] or "full",
             }
         )
     out.reverse()
@@ -145,7 +150,7 @@ def get_scan(scan_id: int) -> dict | None:
     with _db() as conn:
         c = conn.cursor()
         c.execute(
-            "SELECT id, target_url, scan_date, critical, high, medium, low, results_json FROM scans WHERE id = ?",
+            "SELECT id, target_url, scan_date, critical, high, medium, low, results_json, mode FROM scans WHERE id = ?",
             (scan_id,),
         )
         row = c.fetchone()
@@ -159,6 +164,7 @@ def get_scan(scan_id: int) -> dict | None:
             "medium": row[5],
             "low": row[6],
             "results": _safe_json_loads(row[7]),
+            "mode": row[8] or "full",
         }
     return None
 
@@ -192,15 +198,17 @@ def query_scans(date_from=None, date_to=None, target=None, limit=50, offset=0):
         where.append("substr(scan_date, 1, 10) <= ?")
         params.append(date_to)
     if target:
-        where.append("target_url LIKE ?")
-        params.append("%" + target + "%")
+        # Экранируем LIKE-wildcards, чтобы ввод пользователя не менял семантику фильтра.
+        esc = target.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        where.append("target_url LIKE ? ESCAPE '\\'")
+        params.append("%" + esc + "%")
     clause = (" WHERE " + " AND ".join(where)) if where else ""
     with _db() as conn:
         c = conn.cursor()
         c.execute("SELECT COUNT(*) FROM scans" + clause, params)
         total = c.fetchone()[0]
         c.execute(
-            "SELECT id, target_url, scan_date, critical, high, medium, low FROM scans"
+            "SELECT id, target_url, scan_date, critical, high, medium, low, mode FROM scans"
             + clause
             + " ORDER BY id DESC LIMIT ? OFFSET ?",
             params + [int(limit), int(offset)],
@@ -215,6 +223,7 @@ def query_scans(date_from=None, date_to=None, target=None, limit=50, offset=0):
             "high": r[4],
             "medium": r[5],
             "low": r[6],
+            "mode": r[7] or "full",
         }
         for r in rows
     ]
