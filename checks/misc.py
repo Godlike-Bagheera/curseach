@@ -3,6 +3,7 @@
 from .base import (
     ScanContext,
     _method_not_supported,
+    _norm_body,
     _safe_get,
     _safe_post,
     _writable_endpoints,
@@ -11,23 +12,32 @@ from .descriptions import get_vuln_info
 
 
 # ================== Скрытые пути ==================
+_HIDDEN_PATHS = [
+    "/admin", "/backup", "/.env", "/.git/config", "/metrics", "/server-status",
+    "/actuator", "/actuator/env", "/api/v2", "/swagger.json", "/api/swagger",
+    "/web.config", "/backup.zip", "/db.sqlite", "/.DS_Store", "/phpmyadmin",
+    "/wp-admin", "/debug/pprof", "/elmah.axd", "/trace.axd",
+]
+
+
 async def check_hidden_paths(ctx: ScanContext, endpoints: list[str] | None = None) -> list[dict]:
     findings: list = []
-    hidden_paths = [
-        "/admin",
-        "/backup",
-        "/.env",
-        "/metrics",
-        "/api/v2",
-        "/swagger.json",
-        "/api/swagger",
-    ]
-    for path in hidden_paths:
-        r = await _safe_get(ctx.client, f"{ctx.target_url}{path}")
-        if r is None:
+    documented = set(endpoints or [])
+    spec = ctx.openapi if isinstance(ctx.openapi, dict) else {}
+    documented |= set((spec.get("paths") or {}).keys())
+    # Baseline несуществующего пути: SPA/catch-all отдаёт тот же 200 на любой URL.
+    base = await _safe_get(ctx.client, f"{ctx.target_url}/__nonexistent_baseline_7f3a__")
+    base_status = base.status_code if base is not None else None
+    base_body = _norm_body(base) if base is not None else ""
+    for path in _HIDDEN_PATHS:
+        if path in documented:
             continue
-        if r.status_code in (200, 401, 403):
-            findings.append(
+        r = await _safe_get(ctx.client, f"{ctx.target_url}{path}")
+        if r is None or r.status_code not in (200, 401, 403):
+            continue
+        if base_status is not None and r.status_code == base_status and _norm_body(r) == base_body:
+            continue
+        findings.append(
                 {
                     "level": "MEDIUM",
                     "type": "Hidden Path",
@@ -119,7 +129,8 @@ async def check_rate_limiting(ctx: ScanContext, endpoints: list[str] | None = No
     if got_429:
         return findings
 
-    if statuses and len(set(statuses)) == 1:
+    # Равномерные non-200 (все 404) — не признак отсутствия rate-limit.
+    if statuses and len(set(statuses)) == 1 and statuses[0] == 200:
         findings.append(
             {
                 "level": "LOW",

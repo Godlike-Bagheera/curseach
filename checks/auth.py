@@ -9,12 +9,24 @@ import httpx
 from .base import (
     ScanContext,
     _content_hash,
+    _endpoint_requires_security,
+    _norm_hash,
     _safe_get,
 )
 from .descriptions import get_vuln_info
 
 # ---------- Вспомогательное ----------
 _ID_RANGE = list(range(1, 11))
+
+_IDOR_SENSITIVE = ("order", "profile", "account", "invoice", "cart", "message", "payment", "report", "document")
+
+
+def _idor_candidate(ctx: ScanContext, ep: str) -> bool:
+    """Проверять объект на cross-user IDOR, если он требует auth по спеке или
+    выглядит пользовательским. Публичные данные без security не трогаем (FP)."""
+    if _endpoint_requires_security(ctx, ep):
+        return True
+    return any(k in ep.lower() for k in _IDOR_SENSITIVE)
 
 
 def _b64url_nopad(data: bytes) -> str:
@@ -32,11 +44,15 @@ async def check_jwt_none(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     """
     findings: list = []
     # Приоритетные цели: пути, где в спецификации есть 401/403 (требуют auth)
-    try:
-        spec = await ctx.client.get(f"{ctx.target_url}/openapi.json")
-        paths = spec.json().get("paths", {}) if spec.status_code == 200 else {}
-    except Exception:
-        paths = {}
+    # Спека уже загружена движком (ctx.openapi) — не дублируем запрос.
+    paths = (ctx.openapi or {}).get("paths", {}) if isinstance(ctx.openapi, dict) else {}
+    if not paths:
+        spec = await _safe_get(ctx.client, f"{ctx.target_url}/openapi.json")
+        if spec is not None and spec.status_code == 200:
+            try:
+                paths = spec.json().get("paths", {})
+            except ValueError:
+                paths = {}
 
     def _needs_auth(item: dict) -> bool:
         for method, op in item.items():
@@ -182,8 +198,7 @@ async def check_cross_user_idor(ctx: ScanContext, endpoints: list[str]) -> list[
         param_endpoints = [p for p in endpoints if "{" in p and "}" in p]
 
         for ep in param_endpoints:
-            # Пропускаем /api/users/{...} — там SQLi, отдельная проверка
-            if "/api/users/" in ep:
+            if not _idor_candidate(ctx, ep):
                 continue
 
             param_name = ep[ep.find("{") + 1 : ep.find("}")]
@@ -217,7 +232,7 @@ async def check_cross_user_idor(ctx: ScanContext, endpoints: list[str]) -> list[
     param_endpoints = [p for p in endpoints if "{" in p and "}" in p]
 
     for ep in param_endpoints:
-        if "/api/users/" in ep:
+        if not _idor_candidate(ctx, ep):
             continue
 
         param_name = ep[ep.find("{") + 1 : ep.find("}")]
@@ -234,7 +249,7 @@ async def check_cross_user_idor(ctx: ScanContext, endpoints: list[str]) -> list[
         if len(shared_ids) < 2:
             continue
 
-        same_content = sum(1 for oid in shared_ids if _content_hash(user1_ok[oid]) == _content_hash(user2_ok[oid]))
+        same_content = sum(1 for oid in shared_ids if _norm_hash(user1_ok[oid]) == _norm_hash(user2_ok[oid]))
 
         if same_content == len(shared_ids):
             findings.append(
@@ -296,13 +311,13 @@ async def check_bfla(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
                     findings.append(
                         {
                             "level": "CRITICAL",
-                            "type": "Broken Access Control",
+                            "type": "Broken Function Level Authorization",
                             "endpoint": ep,
                             "desc": (
                                 f"BFLA: обычные пользователи (user1 и user2) получают "
                                 f"доступ к административному эндпоинту {ep}"
                             ),
-                            "details": get_vuln_info("Broken Access Control"),
+                            "details": get_vuln_info("Broken Function Level Authorization"),
                         }
                     )
                     continue
@@ -318,12 +333,12 @@ async def check_bfla(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
                 findings.append(
                     {
                         "level": "HIGH",
-                        "type": "Broken Access Control",
+                        "type": "Broken Function Level Authorization",
                         "endpoint": ep,
                         "desc": (
                             f"BFLA (эвристика): эндпоинт {ep} выглядит административным, но доступен обычному токену"
                         ),
-                        "details": get_vuln_info("Broken Access Control"),
+                        "details": get_vuln_info("Broken Function Level Authorization"),
                     }
                 )
 

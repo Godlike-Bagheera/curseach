@@ -91,6 +91,37 @@ _SCAN_CTX: contextvars.ContextVar = contextvars.ContextVar("scan_ctx", default=N
 _EVIDENCE_LOG: contextvars.ContextVar = contextvars.ContextVar("evidence_log", default=None)
 
 
+_SENSITIVE_JSON_RE = re.compile(
+    r'("(?:password|passwd|pwd|secret|token|api_?key|authorization|access_?token|refresh_?token|client_?secret)"\s*:\s*")[^"]*(")',
+    re.IGNORECASE,
+)
+_PEM_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.DOTALL)
+_AWS_KEY_RE = re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")
+_BEARER_RE = re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._\-]+")
+
+
+def _redact_text(text: str | None) -> str | None:
+    """Маскирует секреты в evidence (пароли/токены/ключи) перед сохранением и экспортом."""
+    if not text:
+        return text
+    text = _SENSITIVE_JSON_RE.sub(r"\1***\2", text)
+    text = _PEM_RE.sub("***PRIVATE KEY***", text)
+    text = _AWS_KEY_RE.sub("***AWS KEY***", text)
+    text = _BEARER_RE.sub(r"\1***", text)
+    return text
+
+
+def redact_evidence(evd: dict | None) -> dict | None:
+    if not isinstance(evd, dict):
+        return evd
+    out = dict(evd)
+    if out.get("request_body"):
+        out["request_body"] = _redact_text(out["request_body"])
+    if out.get("response_body"):
+        out["response_body"] = _redact_text(out["response_body"])
+    return out
+
+
 def _make_evidence(method: str, url: str, kwargs: dict, r: httpx.Response, elapsed_ms: int) -> dict:
     req_body = None
     if kwargs.get("json") is not None:
@@ -108,10 +139,10 @@ def _make_evidence(method: str, url: str, kwargs: dict, r: httpx.Response, elaps
     return {
         "method": method.upper(),
         "url": str(url),
-        "request_body": req_body,
+        "request_body": _redact_text(req_body),
         "status": r.status_code,
         "content_type": r.headers.get("content-type", ""),
-        "response_body": resp_body,
+        "response_body": _redact_text(resp_body),
         "elapsed_ms": elapsed_ms,
     }
 
@@ -190,6 +221,28 @@ def _content_hash(resp: httpx.Response | None) -> str:
         return ""
 
 
+def _norm_body(r) -> str:
+    """Нормализует динамику (timestamps/UUID/nonce) перед хеш-сравнением."""
+    try:
+        text = r.text
+    except (UnicodeDecodeError, LookupError):
+        return ""
+    text = re.sub(r"\b\d{10,13}\b", "<TS>", text)
+    text = re.sub(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "<UUID>", text)
+    text = re.sub(
+        r'"(timestamp|ts|time|date|nonce|request_id|trace_id|expires?)"\s*:\s*("[^"]*"|\d+)',
+        r'"\1":<DYN>',
+        text,
+        flags=re.IGNORECASE,
+    )
+    return text.lower()
+
+
+def _norm_hash(r) -> str:
+    """Хеш нормализованного тела — для сравнения ответов с динамикой."""
+    return hashlib.md5(_norm_body(r).encode("utf-8", "replace")).hexdigest()
+
+
 def _method_not_supported(resp: httpx.Response | None) -> bool:
     if resp is None:
         return True
@@ -206,20 +259,13 @@ def _build_path(ep: str, param_name: str, payload: str) -> str:
 # и content-type-валидацию: логин по определению принимает произвольный
 # ввод без CSRF-токена и не является state-changing операцией,
 # требующей CSRF-защиты.
-_AUTH_PATH_MARKERS = (
-    "/auth",
-    "/login",
-    "/logout",
-    "/signin",
-    "/signup",
-    "/register",
-)
+_AUTH_SEGMENTS = {"auth", "login", "logout", "signin", "signup", "register", "oauth", "token"}
 
 
 def _is_auth_endpoint(path: str) -> bool:
-    """True, если путь относится к аутентификации / регистрации."""
-    p = (path or "").lower()
-    return any(m in p for m in _AUTH_PATH_MARKERS)
+    """True, если путь относится к аутентификации / регистрации (по сегментам, не подстроке)."""
+    segments = {s for s in (path or "").lower().split("/") if s}
+    return bool(segments & _AUTH_SEGMENTS)
 
 
 SQL_ERROR_PATTERNS = [
@@ -326,12 +372,16 @@ def pick_evidence(log: list[dict] | None, endpoint: str) -> dict | None:
 def enrich_findings(findings: list[dict], log: list[dict] | None = None) -> list[dict]:
     """Проставляет confidence по умолчанию и evidence из лога запросов."""
     for f in findings:
+        f.setdefault("method", "")
+        f.setdefault("param", "")
         if not f.get("confidence"):
             f["confidence"] = default_confidence(f)
         if not f.get("evidence") and log:
             picked = pick_evidence(log, f.get("endpoint", ""))
             if picked:
                 f["evidence"] = picked
+        if f.get("evidence"):
+            f["evidence"] = redact_evidence(f["evidence"])
     return findings
 
 

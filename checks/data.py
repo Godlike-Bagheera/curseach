@@ -2,11 +2,12 @@
 
 import asyncio
 import json
+import math
 import re
 
 import httpx
 
-from .base import ScanContext, _safe_get
+from .base import ScanCancelled, ScanContext, _safe_get
 from .descriptions import get_vuln_info
 
 
@@ -46,13 +47,41 @@ async def check_sensitive_data(ctx: ScanContext, endpoints: list[str]) -> list[d
 
 
 # ================== SCA ==================
+def _looks_like_manifest(path: str, text: str) -> bool:
+    """Голый HTTP 200 не доказывает манифест: SPA/catch-all вернёт index.html.
+    Валидируем содержимое, чтобы не было ложных срабатываний."""
+    t = (text or "").strip()
+    if not t:
+        return False
+    low = t[:300].lower()
+    if "<html" in low or "<!doctype html" in low:
+        return False
+    if path.endswith(".json"):
+        try:
+            data = json.loads(t)
+        except ValueError:
+            return False
+        return isinstance(data, dict) and any(k in data for k in ("dependencies", "devDependencies", "name", "packages"))
+    if path.endswith("requirements.txt"):
+        return bool(_REQ_PIN_RE.search(t)) or bool(re.search(r"^\s*[A-Za-z0-9_.\-]+\s*[><=~!]", t, re.MULTILINE))
+    if path.endswith(".xml"):
+        return "<project" in low or "<packages" in low or "<?xml" in low
+    if path.endswith(".gradle"):
+        return any(k in low for k in ("dependencies", "implementation", "compile"))
+    return False
+
+
 async def check_sca(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     findings: list = []
     for path in ("/package.json", "/requirements.txt", "/pom.xml", "/build.gradle"):
         r = await _safe_get(ctx.client, f"{ctx.target_url}{path}")
         if r is None:
             continue
-        if r.status_code == 200:
+        try:
+            text = r.text
+        except (UnicodeDecodeError, LookupError):
+            continue
+        if r.status_code == 200 and _looks_like_manifest(path, text):
             findings.append(
                 {
                     "level": "MEDIUM",
@@ -92,11 +121,39 @@ def parse_package_json(text: str) -> list[tuple[str, str]]:
         for name, ver in deps.items():
             if not isinstance(ver, str):
                 continue
-            v = ver.lstrip("^~>=<v ").strip()
-            if not v or not v[0].isdigit() or any(c in v for c in " *|") or "git" in v or "http" in v:
+            v = ver.strip()
+            # Только ТОЧНЫЕ пины (x.y.z). Диапазоны (^4.17.4, >=1.2.3, *)
+            # не являются установленной версией — OSV по ним даёт FP/FN.
+            if not re.fullmatch(r"v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.\-]+)?", v):
                 continue
-            out.append((name, v))
+            out.append((name, v.lstrip("v")))
     return out
+
+
+def _cvss_v3_score(vector: str) -> float | None:
+    """Базовый балл CVSS v3.x из вектора (CVSS:3.1/AV:N/…). Без внешних зависимостей."""
+    parts = {}
+    for chunk in (vector or "").split("/"):
+        if ":" in chunk:
+            k, _, val = chunk.partition(":")
+            parts[k.upper()] = val.upper()
+    av = {"N": 0.85, "A": 0.62, "L": 0.55, "P": 0.20}.get(parts.get("AV", ""))
+    ac = {"L": 0.77, "H": 0.44}.get(parts.get("AC", ""))
+    ui = {"N": 0.85, "R": 0.62}.get(parts.get("UI", ""))
+    scope = parts.get("S", "")
+    cia = {"H": 0.56, "L": 0.22, "N": 0.0}
+    c, i, a = (cia.get(parts.get(k, "")) for k in ("C", "I", "A"))
+    pr_map = {"N": 0.85, "L": 0.68 if scope == "C" else 0.62, "H": 0.50 if scope == "C" else 0.27}
+    pr = pr_map.get(parts.get("PR", ""))
+    if None in (av, ac, ui, pr, c, i, a) or scope not in ("U", "C"):
+        return None
+    iss = 1 - (1 - c) * (1 - i) * (1 - a)
+    impact = 6.42 * iss if scope == "U" else 7.52 * (iss - 0.029) - 3.25 * (iss - 0.02) ** 15
+    exploit = 8.22 * av * ac * pr * ui
+    if impact <= 0:
+        return 0.0
+    raw = min(impact + exploit, 10) if scope == "U" else min(1.08 * (impact + exploit), 10)
+    return math.ceil(round(raw, 6) * 10) / 10.0
 
 
 def _osv_severity(doc: dict) -> tuple[str, str]:
@@ -107,17 +164,23 @@ def _osv_severity(doc: dict) -> tuple[str, str]:
         return mapping[db_sev], db_sev
     for s in doc.get("severity") or []:
         score = str(s.get("score", ""))
+        val = None
         try:
             val = float(score)
-            if val >= 9.0:
-                return "CRITICAL", score
-            if val >= 7.0:
-                return "HIGH", score
-            if val >= 4.0:
-                return "MEDIUM", score
-            return "LOW", score
         except ValueError:
+            # OSV часто отдаёт CVSS-ВЕКТОР, а не число: раньше float() падал
+            # и всё сваливалось в консервативный HIGH.
+            if score.upper().startswith("CVSS:3"):
+                val = _cvss_v3_score(score)
+        if val is None:
             continue
+        if val >= 9.0:
+            return "CRITICAL", score
+        if val >= 7.0:
+            return "HIGH", score
+        if val >= 4.0:
+            return "MEDIUM", score
+        return "LOW", score
     # Уязвимость подтверждена базой OSV, но severity не указан — консервативно HIGH.
     return "HIGH", ""
 
@@ -135,10 +198,16 @@ def _fixed_versions(doc: dict, name: str, ecosystem: str) -> list[str]:
     return sorted(set(fixed))
 
 
-async def _osv_lookup(deps: list[tuple[str, str, str]], client=None) -> list[tuple[tuple[str, str, str], dict]]:
-    """deps: (name, version, ecosystem). Возвращает пары (dep, vuln_doc)."""
+async def _osv_lookup(deps: list[tuple[str, str, str]], client=None, cancel_event=None) -> list[tuple[tuple[str, str, str], dict]]:
+    """deps: (name, version, ecosystem). Возвращает пары (dep, vuln_doc).
+
+    Запросы идут во внешний API OSV (не к цели), поэтому в бюджет цели не
+    засчитываются; но отмена скана должна прерывать и их (cancel_event).
+    """
     if not deps:
         return []
+    if cancel_event is not None and cancel_event.is_set():
+        raise ScanCancelled()
     own = client is None
     if own:
         client = httpx.AsyncClient(timeout=10.0)
@@ -162,6 +231,8 @@ async def _osv_lookup(deps: list[tuple[str, str, str]], client=None) -> list[tup
 
         async def get_doc(vid: str):
             async with sem:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise ScanCancelled()
                 try:
                     rr = await client.get(f"{_OSV_API}/vulns/{vid}")
                     if rr.status_code == 200:
@@ -203,7 +274,7 @@ async def check_osv_sca(ctx: ScanContext, endpoints: list[str], osv_client=None)
     if not deps:
         return []
 
-    pairs = await _osv_lookup(deps, client=osv_client)
+    pairs = await _osv_lookup(deps, client=osv_client, cancel_event=ctx.cancel_event)
     findings: list[dict] = []
     for (n, v, eco), doc in pairs:
         level, score = _osv_severity(doc)

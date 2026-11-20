@@ -9,7 +9,7 @@ import hashlib
 import re
 import time
 
-from .base import SQL_ERROR_PATTERNS, ScanContext, _body, ev
+from .base import SQL_ERROR_PATTERNS, ScanContext, _body, _norm_body, _norm_hash, ev
 from .descriptions import get_vuln_info
 from .surface import Surface, build_surfaces, probe
 
@@ -47,25 +47,6 @@ async def _probe_param(ctx: ScanContext, s: Surface, kind: str, name: str, value
     return await probe(ctx, s, body_over={name: value})
 
 
-def _norm_body(r) -> str:
-    """Нормализует динамику (timestamps/UUID/nonce) перед хеш-сравнением."""
-    try:
-        text = r.text
-    except (UnicodeDecodeError, LookupError):
-        return ""
-    text = re.sub(r"\b\d{10,13}\b", "<TS>", text)
-    text = re.sub(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "<UUID>", text)
-    text = re.sub(
-        r'"(timestamp|ts|time|date|nonce|request_id|trace_id|expires?)"\s*:\s*("[^"]*"|\d+)',
-        r'"\1":<DYN>',
-        text,
-        flags=re.IGNORECASE,
-    )
-    return text.lower()
-
-
-def _norm_hash(r) -> str:
-    return hashlib.md5(_norm_body(r).encode("utf-8", "replace")).hexdigest()
 
 
 # ---------- SQLi: error-based ----------

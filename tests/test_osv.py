@@ -22,7 +22,8 @@ def test_parse_requirements():
 
 def test_parse_package_json():
     txt = '{"dependencies":{"lodash":"^4.17.4","a":"*","b":"git+https://x"},"devDependencies":{"jest":"29.0.0"}}'
-    assert parse_package_json(txt) == [("lodash", "4.17.4"), ("jest", "29.0.0")]
+    # Диапазоны (^4.17.4) не являются точным пином — пропускаются (только exact).
+    assert parse_package_json(txt) == [("jest", "29.0.0")]
     assert parse_package_json("not json") == []
 
 

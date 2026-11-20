@@ -22,7 +22,11 @@ async def check_security_headers(ctx: ScanContext, endpoints: list[str] | None =
     r = await _safe_get(ctx.client, ctx.target_url)
     if r is None:
         return findings
+    is_https = ctx.target_url.startswith("https://")
     for hdr, (msg, vuln_type) in required.items():
+        # HSTS имеет смысл только поверх HTTPS (на http это шум).
+        if hdr == "strict-transport-security" and not is_https:
+            continue
         if hdr not in r.headers:
             findings.append(
                 {
@@ -57,8 +61,13 @@ def _tls_probe(host: str, port: int) -> dict:
         if isinstance(not_after, str):
             out["expires_ts"] = ssl.cert_time_to_seconds(not_after)
         out["trusted"] = True
-    except ssl.SSLCertVerificationError:
+    except ssl.SSLCertVerificationError as exc:
         out["trusted"] = False
+        # Истёкший сертификат не проходит verified-handshake → notAfter недоступен.
+        # Классифицируем по сообщению OpenSSL, иначе «Expired» не срабатывал бы.
+        msg = f"{getattr(exc, 'verify_message', '')} {exc}".lower()
+        if "expired" in msg or "not yet valid" in msg:
+            out["expired"] = True
     except (OSError, ssl.SSLError):
         pass
     return out
@@ -88,15 +97,26 @@ async def check_tls_version(ctx: ScanContext, endpoints: list[str]) -> list[dict
             }
         )
     if info.get("trusted") is False:
-        findings.append(
-            {
-                "level": "MEDIUM",
-                "type": "TLS Certificate Untrusted",
-                "endpoint": "/",
-                "desc": "Сертификат не прошёл валидацию (самоподписанный / не тот хост / битая цепочка)",
-                "details": get_vuln_info("TLS Certificate Untrusted"),
-            }
-        )
+        if info.get("expired"):
+            findings.append(
+                {
+                    "level": "HIGH",
+                    "type": "TLS Certificate Expired",
+                    "endpoint": "/",
+                    "desc": "Срок действия TLS-сертификата истёк (сертификат не прошёл валидацию)",
+                    "details": get_vuln_info("TLS Certificate Expired"),
+                }
+            )
+        else:
+            findings.append(
+                {
+                    "level": "MEDIUM",
+                    "type": "TLS Certificate Untrusted",
+                    "endpoint": "/",
+                    "desc": "Сертификат не прошёл валидацию (самоподписанный / не тот хост / битая цепочка)",
+                    "details": get_vuln_info("TLS Certificate Untrusted"),
+                }
+            )
     expires_ts = info.get("expires_ts")
     if expires_ts:
         days_left = (expires_ts - datetime.datetime.now(datetime.timezone.utc).timestamp()) / 86400
@@ -132,7 +152,12 @@ async def check_unsafe_methods(ctx: ScanContext, endpoints: list[str]) -> list[d
     allow = r.headers.get("allow", "")
     if allow:
         methods = [m.strip().upper() for m in allow.split(",")]
-        dangerous = [m for m in methods if m in ("PUT", "DELETE", "TRACE")]
+        # PUT/DELETE — норма для REST. Опасны TRACE/TRACK (XST), CONNECT и WebDAV.
+        dangerous = [
+            m
+            for m in methods
+            if m in ("TRACE", "TRACK", "CONNECT", "PROPFIND", "PROPPATCH", "MKCOL", "COPY", "MOVE", "LOCK", "UNLOCK")
+        ]
         if dangerous:
             findings.append(
                 {
