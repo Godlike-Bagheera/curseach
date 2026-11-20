@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 app = FastAPI(title="Damn Vulnerable API", version="1.0")
@@ -639,3 +639,28 @@ def hidden_metrics():
 @app.get("/server-status", include_in_schema=False)
 def hidden_status():
     return HTMLResponse("<html><body>Apache server-status</body></html>")
+
+
+# ---------- УЯЗВИМОСТЬ: Path Traversal / LFI (симуляция чтения файла) ----------
+@app.get("/api/file")
+def read_file(name: str = ""):
+    """УЯЗВИМОСТЬ: имя файла из запроса без проверки — traversal читает /etc/passwd."""
+    if ".." in name or "passwd" in name.lower() or "win.ini" in name.lower():
+        return PlainTextResponse("root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\n")
+    return {"file": name, "content": "sample document"}
+
+
+# ---------- УЯЗВИМОСТЬ: Open Redirect ----------
+@app.get("/api/redirect")
+def redirect(next: str = "/"):
+    """УЯЗВИМОСТЬ: адрес перехода берётся из параметра next без allowlist."""
+    return RedirectResponse(url=next, status_code=302)
+
+
+# ---------- УЯЗВИМОСТЬ: Insecure Cookie Flags ----------
+@app.post("/api/session/login")
+def session_login():
+    """УЯЗВИМОСТЬ: session-cookie без Secure/HttpOnly/SameSite."""
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie("session_id", "demo-session", path="/")
+    return resp

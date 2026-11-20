@@ -497,7 +497,12 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
 VULN_META: dict[str, dict] = {
     "Path Traversal": {"cwe": ["CWE-22"], "owasp_api": ["API8:2023"], "owasp_top10": "A01:2021", "confidence": "high"},
     "Open Redirect": {"cwe": ["CWE-601"], "owasp_api": ["API8:2023"], "owasp_top10": "A01:2021", "confidence": "high"},
-    "Insecure Cookie Flags": {"cwe": ["CWE-614", "CWE-1004"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "high"},
+    "Insecure Cookie Flags": {
+        "cwe": ["CWE-614", "CWE-1004"],
+        "owasp_api": ["API8:2023"],
+        "owasp_top10": "A05:2021",
+        "confidence": "high",
+    },
     "Weak CSP": {"cwe": ["CWE-693"], "owasp_api": ["API8:2023"], "owasp_top10": "A05:2021", "confidence": "high"},
     "SQL Injection": {"cwe": ["CWE-89"], "owasp_api": ["API8:2023"], "owasp_top10": "A03:2021", "confidence": "high"},
     "OS Command Injection": {

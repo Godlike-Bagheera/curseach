@@ -10,7 +10,24 @@ _TRAVERSAL_PAYLOADS = [
     "....//....//....//....//etc/passwd",
 ]
 _TRAVERSAL_SIGS = ["root:x:0:0", "root:*:0:0", "[boot loader]", "; for 16-bit app support", "/bin/bash", "/bin/sh"]
-_FILE_PARAMS = {"file", "path", "page", "doc", "document", "folder", "dir", "include", "template", "load", "read", "download", "filename", "filepath", "name", "f"}
+_FILE_PARAMS = {
+    "file",
+    "path",
+    "page",
+    "doc",
+    "document",
+    "folder",
+    "dir",
+    "include",
+    "template",
+    "load",
+    "read",
+    "download",
+    "filename",
+    "filepath",
+    "name",
+    "f",
+}
 
 
 async def check_path_traversal(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
@@ -55,7 +72,23 @@ async def check_path_traversal(ctx: ScanContext, endpoints: list[str]) -> list[d
     return findings
 
 
-_REDIRECT_PARAMS = {"redirect", "next", "url", "return", "returnurl", "return_url", "redirect_uri", "redirect_url", "go", "target", "dest", "destination", "forward", "continue", "rurl"}
+_REDIRECT_PARAMS = {
+    "redirect",
+    "next",
+    "url",
+    "return",
+    "returnurl",
+    "return_url",
+    "redirect_uri",
+    "redirect_url",
+    "go",
+    "target",
+    "dest",
+    "destination",
+    "forward",
+    "continue",
+    "rurl",
+}
 _EVIL = "https://evil.example/"
 
 
@@ -80,7 +113,9 @@ async def check_open_redirect(ctx: ScanContext, endpoints: list[str]) -> list[di
             loc = r.headers.get("location", "")
             body = _body(r)
             hit = (300 <= r.status_code < 400 and loc.startswith(_EVIL)) or (
-                r.status_code == 200 and "evil.example" in body and ("url=https://evil.example" in body or "window.location" in body or "http-equiv" in body)
+                r.status_code == 200
+                and "evil.example" in body
+                and ("url=https://evil.example" in body or "window.location" in body or "http-equiv" in body)
             )
             if hit:
                 seen.add((s.path, name))
