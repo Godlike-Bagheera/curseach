@@ -28,7 +28,20 @@ def init_templates(tmpl) -> None:
 
 
 # ---------- HTML-отчёт по активной задаче ----------
-def render_report(request, target_url, results, critical, high, medium, low, score, mode, scan_date, partial=False, partial_reason=""):
+def render_report(
+    request,
+    target_url,
+    results,
+    critical,
+    high,
+    medium,
+    low,
+    score,
+    mode,
+    scan_date,
+    partial=False,
+    partial_reason="",
+):
     return templates.TemplateResponse(
         request,
         "report.html",
