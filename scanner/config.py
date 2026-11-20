@@ -92,6 +92,30 @@ SCAN_TOTAL_TIMEOUT = int(os.environ.get("SCAN_TOTAL_TIMEOUT", "300"))  # общ�
 MAX_CONCURRENT_SCANS = int(os.environ.get("MAX_CONCURRENT_SCANS", "3"))  # одновременных сканов на процесс
 SCAN_PIN_DNS = os.environ.get("SCAN_PIN_DNS", "1") == "1"  # пиннить проверенный IP (anti-DNS-rebinding)
 
+# ---------- Версия / прокси / cookie ----------
+VERSION = "1.2.0"
+TRUST_PROXY = os.environ.get("SCANNER_TRUST_PROXY", "0") == "1"
+FORCE_SECURE_COOKIE = os.environ.get("SCANNER_COOKIE_SECURE", "0") == "1"
+HSTS_ENABLED = os.environ.get("SCANNER_HSTS", "0") == "1"
+PUBLIC_URL = os.environ.get("SCANNER_PUBLIC_URL", "").rstrip("/")
+
+
+def request_is_https(request) -> bool:
+    """HTTPS с учётом доверенного прокси (X-Forwarded-Proto) и env-флага."""
+    if FORCE_SECURE_COOKIE or request.url.scheme == "https":
+        return True
+    return TRUST_PROXY and request.headers.get("x-forwarded-proto", "").lower() == "https"
+
+
+def client_ip(request) -> str:
+    """IP клиента; X-Forwarded-For учитывается только от доверенного прокси."""
+    if TRUST_PROXY:
+        xff = request.headers.get("x-forwarded-for", "")
+        if xff:
+            return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 # ---------- SSRF ----------
 SSRF_ALLOW_PRIVATE = os.environ.get("SCANNER_ALLOW_PRIVATE_TARGETS", "1") == "1"
 
@@ -118,3 +142,6 @@ MODE_TITLES_REPORT = {
 }
 
 LEVEL_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
+# Единый источник русских подписей уровня для табличных отчётов (CSV/XLSX).
+LEVEL_RU_REPORT = {"CRITICAL": "Критично", "HIGH": "Высоко", "MEDIUM": "Средне", "LOW": "Низко"}

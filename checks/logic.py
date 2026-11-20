@@ -78,31 +78,47 @@ def _count_items(node) -> int:
     return 0
 
 
+_COLLECTION_MARKERS = (
+    "items",
+    "products",
+    "orders",
+    "users",
+    "records",
+    "list",
+    "collection",
+    "entries",
+    "goods",
+    "catalog",
+)
+_NON_COLLECTION = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/healthz", "/robots.txt", "/favicon.ico"}
+
+
 async def check_pagination(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     findings: list = []
     static = [e for e in endpoints if "{" not in e and "}" not in e and e.startswith("/")]
-    test_path = static[0] if static else "/"
-    r = await _safe_get(ctx.client, f"{ctx.target_url}{test_path}?limit=10000")
-    if r is None or r.status_code != 200:
-        return findings
-
-    try:
-        payload = r.json()
-    except ValueError:
-        # Не JSON — размер body ни о чём не говорит.
-        return findings
-
-    count = _count_items(payload)
-    if count >= 100:
-        findings.append(
-            {
-                "level": "LOW",
-                "type": "Missing Pagination",
-                "endpoint": test_path,
-                "desc": f"Сервер вернул {count} элементов при limit=10000 — вероятно, пагинация не работает",
-                "details": get_vuln_info("Missing Pagination"),
-            }
-        )
+    candidates = [e for e in static if any(k in e.lower() for k in _COLLECTION_MARKERS)]
+    if not candidates:
+        candidates = [e for e in static if e not in _NON_COLLECTION]
+    for test_path in candidates[:5]:
+        r = await _safe_get(ctx.client, f"{ctx.target_url}{test_path}?limit=10000")
+        if r is None or r.status_code != 200:
+            continue
+        try:
+            payload = r.json()
+        except ValueError:
+            continue
+        count = _count_items(payload)
+        if count >= 100:
+            findings.append(
+                {
+                    "level": "LOW",
+                    "type": "Missing Pagination",
+                    "endpoint": test_path,
+                    "desc": f"Сервер вернул {count} элементов при limit=10000 — вероятно, пагинация не работает",
+                    "details": get_vuln_info("Missing Pagination"),
+                }
+            )
+            break
     return findings
 
 
@@ -125,38 +141,66 @@ async def check_mass_assignment(ctx: ScanContext, endpoints: list[str]) -> list[
         )
         if r is None or _method_not_supported(r):
             continue
-        if r.status_code in (200, 201):
+        if r.status_code not in (200, 201):
+            continue
+        # Большинство API просто ИГНОРИРУЮТ лишние поля — это норма.
+        # Подтверждаем read-back: поле должно реально присвоиться объекту.
+        try:
+            created = r.json()
+        except ValueError:
+            created = {}
+        confirmed = isinstance(created, dict) and (
+            created.get("is_admin") is True or str(created.get("role", "")).lower() == "admin"
+        )
+        if not confirmed:
+            obj_id = created.get("id") if isinstance(created, dict) else None
+            location = r.headers.get("location", "")
+            read_url = None
+            if location:
+                read_url = location if location.startswith("http") else f"{ctx.target_url}{location}"
+            elif obj_id is not None:
+                read_url = f"{ctx.target_url}{test_path}/{obj_id}"
+            if read_url:
+                rr = await _safe_get(ctx.client, read_url)
+                if rr is not None and rr.status_code == 200:
+                    try:
+                        obj = rr.json()
+                    except ValueError:
+                        obj = {}
+                    confirmed = isinstance(obj, dict) and (
+                        obj.get("is_admin") is True or str(obj.get("role", "")).lower() == "admin"
+                    )
+        if confirmed:
             findings.append(
                 {
                     "level": "HIGH",
                     "type": "Mass Assignment",
                     "endpoint": test_path,
-                    "desc": "Эвристика: сервер принял лишние поля",
+                    "desc": "Лишние поля (is_admin/role) реально присваиваются объекту — подтверждено read-back",
                     "details": get_vuln_info("Mass Assignment"),
                 }
             )
-        return findings
+            return findings
     return findings
 
 
 # ================== GraphQL Introspection ==================
 async def check_graphql_introspection(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     findings: list = []
-    r = await _safe_post(
-        ctx.client,
-        f"{ctx.target_url}/graphql",
-        json={"query": "{ __schema { types { name } } }"},
-    )
-    if r is None:
-        return findings
-    if r.status_code == 200 and "__schema" in _body(r):
-        findings.append(
-            {
-                "level": "MEDIUM",
-                "type": "GraphQL Introspection",
-                "endpoint": "/graphql",
-                "desc": "Доступна GraphQL интроспекция",
-                "details": get_vuln_info("GraphQL Introspection"),
-            }
-        )
+    query = "{ __schema { types { name } } }"
+    for path in ("/graphql", "/api/graphql", "/v1/graphql", "/gql"):
+        r = await _safe_post(ctx.client, f"{ctx.target_url}{path}", json={"query": query})
+        if r is None or r.status_code != 200:
+            r = await _safe_get(ctx.client, f"{ctx.target_url}{path}", params={"query": query})
+        if r is not None and r.status_code == 200 and "__schema" in _body(r):
+            findings.append(
+                {
+                    "level": "MEDIUM",
+                    "type": "GraphQL Introspection",
+                    "endpoint": path,
+                    "desc": "Доступна GraphQL интроспекция",
+                    "details": get_vuln_info("GraphQL Introspection"),
+                }
+            )
+            return findings
     return findings

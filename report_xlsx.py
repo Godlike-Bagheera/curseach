@@ -18,14 +18,21 @@ except ImportError:
     pass
 
 
-_LEVEL_RU = {
-    "CRITICAL": "Критично",
-    "HIGH": "Высоко",
-    "MEDIUM": "Средне",
-    "LOW": "Низко",
-}
+from scanner.config import LEVEL_RU_REPORT as _LEVEL_RU
+from scanner.config import MODE_TITLES_REPORT as _MODE_TITLES
+from scanner.config import calculate_score
 
 _LEVEL_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
+
+def _sanitize_formulas(ws) -> None:
+    """XLSX formula injection: экранируем строки, начинающиеся с = + - @ / TAB / CR."""
+    for row in ws.iter_rows():
+        for cell in row:
+            v = cell.value
+            if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r"):
+                cell.value = "'" + v
+
 
 _LEVEL_COLORS = {
     "CRITICAL": ("FBE9E7", "B3261E"),
@@ -34,21 +41,10 @@ _LEVEL_COLORS = {
     "LOW": ("E6F3EA", "1B6E2F"),
 }
 
-_MODE_TITLES = {
-    "quick": "Быстрая проверка",
-    "full": "Полная проверка",
-    "custom": "Выборочная проверка",
-}
-
 
 def is_available() -> bool:
     """True, если openpyxl установлен и можно генерировать XLSX."""
     return _AVAILABLE
-
-
-def calculate_score(critical: int, high: int, medium: int, low: int) -> int:
-    penalty = critical * 20 + high * 10 + medium * 5 + low * 2
-    return max(0, 100 - penalty)
 
 
 def generate_xlsx(
@@ -282,6 +278,7 @@ def generate_xlsx(
     ws.auto_filter.ref = f"A{tbl_header_row}:F{ws.max_row}"
 
     # ---- Сохранение ----
+    _sanitize_formulas(ws)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -421,6 +418,7 @@ def generate_history_xlsx(scans: list[dict[str, Any]]) -> bytes | None:
     ws.auto_filter.ref = f"A{header_row}:{get_column_letter(len(headers))}{ws.max_row}"
     ws.freeze_panes = f"A{header_row + 1}"
 
+    _sanitize_formulas(ws)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

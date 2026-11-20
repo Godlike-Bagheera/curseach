@@ -5,6 +5,7 @@ PDF рендерится на сервере через WeasyPrint (без Chrom
 резервная инструкция по браузерной печати.
 """
 
+import hashlib
 import io
 import json as _json
 import os
@@ -14,7 +15,7 @@ from datetime import datetime
 import report_csv
 import report_xlsx
 
-from .config import LEVEL_RANK, MODE_TITLES_REPORT, calculate_score
+from .config import LEVEL_RANK, MODE_TITLES_REPORT, PUBLIC_URL, VERSION, calculate_score
 
 # JinjaTemplates инжектится из scanner.app через init_templates(),
 # чтобы избежать циклического импорта.
@@ -89,7 +90,7 @@ def build_chart_context(scan: dict, include_findings: bool = False) -> dict:
 
     if include_findings:
         ctx["findings"] = results
-        ctx["mode_ru"] = "ПОЛНАЯ ПРОВЕРКА"
+        ctx["mode_ru"] = MODE_TITLES_REPORT.get(scan.get("mode") or "full", "ПОЛНАЯ ПРОВЕРКА")
 
     return ctx
 
@@ -221,7 +222,13 @@ def _evidence_text(f: dict) -> str:
 
 
 def results_to_sarif(target_url: str, scan_date: str, findings: list[dict]) -> dict:
-    """Конвертирует находки сканера в SARIF 2.1.0 (CWE/OWASP-теги, evidence, confidence)."""
+    """SARIF 2.1.0: evidence редактируется, helpUri ведёт на /vulns,
+    partialFingerprints дают стабильность алертов между сканами."""
+    from checks.base import redact_evidence
+
+    from .vuln_guide import slugify
+
+    public_base = PUBLIC_URL or "http://127.0.0.1:8001"
     rules = {}
     results = []
     for f in findings:
@@ -229,17 +236,17 @@ def results_to_sarif(target_url: str, scan_date: str, findings: list[dict]) -> d
         level = f.get("level", "LOW")
         sarif_level, _ = _SEVERITY_TO_SARIF.get(level, ("note", 0.1))
         details = f.get("details") if isinstance(f.get("details"), dict) else {}
+        evd = redact_evidence(f.get("evidence"))
+        f_msg = {**f, "evidence": evd}
         if vtype not in rules:
             rules[vtype] = {
                 "id": vtype,
                 "name": vtype,
                 "shortDescription": {"text": vtype},
                 "fullDescription": {"text": details.get("plain", vtype)},
+                "helpUri": f"{public_base}/vulns#{slugify(vtype)}",
                 "defaultConfiguration": {"level": sarif_level},
-                "properties": {
-                    "tags": _sarif_tags(details),
-                    "security-severity": _SECURITY_SEVERITY.get(level, "2.0"),
-                },
+                "properties": {"tags": _sarif_tags(details), "security-severity": _SECURITY_SEVERITY.get(level, "2.0")},
             }
         props = {
             "confidence": f.get("confidence", "medium"),
@@ -250,22 +257,20 @@ def results_to_sarif(target_url: str, scan_date: str, findings: list[dict]) -> d
             props["method"] = f["method"]
         if f.get("param"):
             props["param"] = f["param"]
-        if f.get("evidence"):
-            props["evidence"] = f["evidence"]
+        if evd:
+            props["evidence"] = evd
         props["targetUrl"] = target_url
         props["endpoint"] = f.get("endpoint", "")
+        fingerprint = hashlib.sha256(
+            "|".join([vtype, f.get("endpoint", ""), f.get("param", ""), f.get("method", "")]).encode("utf-8")
+        ).hexdigest()
         results.append(
             {
                 "ruleId": vtype,
                 "level": sarif_level,
-                "message": {"text": f.get("desc", "") + _evidence_text(f)},
-                "locations": [
-                    {
-                        "physicalLocation": {
-                            "artifactLocation": {"uri": _sarif_uri(f.get("endpoint", ""))},
-                        },
-                    }
-                ],
+                "message": {"text": f.get("desc", "") + _evidence_text(f_msg)},
+                "locations": [{"physicalLocation": {"artifactLocation": {"uri": _sarif_uri(f.get("endpoint", ""))}}}],
+                "partialFingerprints": {"scannerFinding/v1": fingerprint},
                 "properties": props,
             }
         )
@@ -275,13 +280,7 @@ def results_to_sarif(target_url: str, scan_date: str, findings: list[dict]) -> d
         "version": "2.1.0",
         "runs": [
             {
-                "tool": {
-                    "driver": {
-                        "name": "DevSecOps Scanner",
-                        "version": "1.1",
-                        "rules": list(rules.values()),
-                    },
-                },
+                "tool": {"driver": {"name": "DevSecOps Scanner", "version": VERSION, "rules": list(rules.values())}},
                 "columnKind": "utf16CodeUnits",
                 "results": results,
                 "automationDetails": {"id": f"devsecops/{scan_date}"},

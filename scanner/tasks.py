@@ -407,6 +407,7 @@ async def scan_engine(task: ScanTask):
                     medium=task.medium_count,
                     low=task.low_count,
                     results=task.scan_results,
+                    mode=task.mode,
                 )
             except sqlite3.OperationalError:
                 database.init_db()  # пересоздаём схему и пробуем ещё раз
@@ -417,6 +418,7 @@ async def scan_engine(task: ScanTask):
                     medium=task.medium_count,
                     low=task.low_count,
                     results=task.scan_results,
+                    mode=task.mode,
                 )
             task.add_log("[OK] Результаты сохранены в историю")
         except Exception as e:

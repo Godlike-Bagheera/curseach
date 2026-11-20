@@ -15,7 +15,28 @@ WeasyPrint — чистый Python (pip install weasyprint), весит деся
 from __future__ import annotations
 
 import html as _html
+import os
 import re
+from urllib.parse import urlparse
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _safe_url_fetcher(url, timeout=5, ssl_context=None):
+    """Defense-in-depth: PDF не ходит в сеть/произвольные файлы.
+    Разрешены data: и статика сканера; прочее — пустой ресурс (без SSRF/LFI)."""
+    from weasyprint import default_url_fetcher
+
+    if url.startswith("data:"):
+        return default_url_fetcher(url, timeout, ssl_context)
+    parsed = urlparse(url)
+    if parsed.scheme == "file":
+        path = os.path.realpath(parsed.path)
+        static_root = os.path.realpath(os.path.join(BASE_DIR, "static"))
+        if path == static_root or path.startswith(static_root + os.sep):
+            return default_url_fetcher(url, timeout, ssl_context)
+    return {"string": b"", "mime_type": "text/plain"}
+
 
 _LEVEL_COLORS = {
     "CRITICAL": "#e5484d",
@@ -287,4 +308,4 @@ def html_to_pdf(html_str: str, ctx: dict, base_url: str | None = None) -> bytes:
     doc = _TOOLBAR_RE.sub("", doc)
     doc = _SCRIPT_RE.sub("", doc)
 
-    return HTML(string=doc, base_url=base_url).write_pdf()
+    return HTML(string=doc, base_url=base_url, url_fetcher=_safe_url_fetcher).write_pdf()

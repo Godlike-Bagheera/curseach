@@ -11,6 +11,7 @@ from .base import (
     _endpoint_requires_security,
     _is_auth_endpoint,
     _method_not_supported,
+    _norm_hash,
     _safe_get,
     _safe_options,
     _safe_post,
@@ -59,7 +60,7 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             continue
         if not any(k in ep for k in sensitive_keywords):
             continue
-        if "{" in ep:
+        if "{" in ep or _is_auth_endpoint(ep):
             continue
         r = await _safe_get(ctx.client, f"{ctx.target_url}{ep}")
         if r is None:
@@ -106,7 +107,7 @@ async def check_idor_auth(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
         if r_auth.status_code != 200 or r_anon.status_code != 200:
             continue
 
-        if _content_hash(r_auth) == _content_hash(r_anon):
+        if _norm_hash(r_auth) == _norm_hash(r_anon):
             if _endpoint_requires_security(ctx, ep):
                 level = "CRITICAL"
                 desc = "Эндпоинт требует авторизацию по спеке, но отдаёт идентичный ответ с токеном и без него"

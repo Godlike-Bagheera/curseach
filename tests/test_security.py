@@ -97,3 +97,20 @@ def test_resolve_target_ip_literal():
 def test_pinned_client_kwargs_disabled(monkeypatch):
     monkeypatch.setattr(security, "SCAN_PIN_DNS", False)
     assert security.pinned_client_kwargs("http://example.com") == {}
+
+
+def test_ssrf_ipv4_mapped_metadata_blocked(monkeypatch):
+    monkeypatch.setattr(security, "SSRF_ALLOW_PRIVATE", True)
+    assert security.ssrf_check_host("::ffff:169.254.169.254") is not None
+    assert security._is_blocked_ip("::ffff:169.254.169.254") is True
+
+
+def test_ssrf_octal_hex_obfuscation(monkeypatch):
+    monkeypatch.setattr(security, "SSRF_ALLOW_PRIVATE", False)
+    assert security.ssrf_check_host("0177.0.0.1") is not None
+    assert security.ssrf_check_host("0x7f.0.0.1") is not None
+
+
+def test_ssrf_fail_closed_unresolvable_strict(monkeypatch):
+    monkeypatch.setattr(security, "SSRF_ALLOW_PRIVATE", False)
+    assert security.ssrf_check_host("nonexistent.invalid") is not None

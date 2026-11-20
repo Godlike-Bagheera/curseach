@@ -64,8 +64,25 @@ def test_pagination_ok():
 # ---------- logic: mass assignment ----------
 def test_mass_assignment():
     spec = {"paths": {"/api/items": {"post": {}}}}
-    f = _check(logic.check_mass_assignment, lambda r: httpx.Response(201, json={"ok": True}), ["/api/items"], spec=spec)
+    # Read-back подтверждает присвоение: ответ создания echoed role=admin.
+    f = _check(
+        logic.check_mass_assignment,
+        lambda r: httpx.Response(201, json={"id": 1, "role": "admin"}),
+        ["/api/items"],
+        spec=spec,
+    )
     assert len(f) == 1 and f[0]["type"] == "Mass Assignment"
+
+
+def test_mass_assignment_ignored_fields_not_flagged():
+    spec = {"paths": {"/api/items": {"post": {}}}}
+
+    def handler(r):
+        if r.method == "POST":
+            return httpx.Response(201, json={"id": 1, "name": "test"})
+        return httpx.Response(200, json={"id": 1, "name": "test"})  # role/is_admin НЕ присвоены
+
+    assert _check(logic.check_mass_assignment, handler, ["/api/items"], spec=spec) == []
 
 
 # ---------- logic: graphql ----------
@@ -82,8 +99,15 @@ def test_graphql_absent():
 
 # ---------- headers: security headers ----------
 def test_security_headers_missing():
+    # http-цель: HSTS не проверяется (имеет смысл только поверх HTTPS) → 3 находки.
     f = _check(headers.check_security_headers, lambda r: httpx.Response(200, text="ok"), [])
-    assert len(f) == 4
+    assert len(f) == 3
+    assert all(x["type"] != "Missing HSTS" for x in f)
+
+
+def test_security_headers_missing_https_includes_hsts():
+    f = _check(headers.check_security_headers, lambda r: httpx.Response(200, text="ok"), [], target="https://t")
+    assert len(f) == 4 and any(x["type"] == "Missing HSTS" for x in f)
 
 
 def test_security_headers_present():
