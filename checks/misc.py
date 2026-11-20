@@ -10,13 +10,28 @@ from .base import (
 )
 from .descriptions import get_vuln_info
 
-
 # ================== Скрытые пути ==================
 _HIDDEN_PATHS = [
-    "/admin", "/backup", "/.env", "/.git/config", "/metrics", "/server-status",
-    "/actuator", "/actuator/env", "/api/v2", "/swagger.json", "/api/swagger",
-    "/web.config", "/backup.zip", "/db.sqlite", "/.DS_Store", "/phpmyadmin",
-    "/wp-admin", "/debug/pprof", "/elmah.axd", "/trace.axd",
+    "/admin",
+    "/backup",
+    "/.env",
+    "/.git/config",
+    "/metrics",
+    "/server-status",
+    "/actuator",
+    "/actuator/env",
+    "/api/v2",
+    "/swagger.json",
+    "/api/swagger",
+    "/web.config",
+    "/backup.zip",
+    "/db.sqlite",
+    "/.DS_Store",
+    "/phpmyadmin",
+    "/wp-admin",
+    "/debug/pprof",
+    "/elmah.axd",
+    "/trace.axd",
 ]
 
 
@@ -38,14 +53,14 @@ async def check_hidden_paths(ctx: ScanContext, endpoints: list[str] | None = Non
         if base_status is not None and r.status_code == base_status and _norm_body(r) == base_body:
             continue
         findings.append(
-                {
-                    "level": "MEDIUM",
-                    "type": "Hidden Path",
-                    "endpoint": path,
-                    "desc": f"Обнаружен незадокументированный путь (HTTP {r.status_code})",
-                    "details": get_vuln_info("Hidden Path"),
-                }
-            )
+            {
+                "level": "MEDIUM",
+                "type": "Hidden Path",
+                "endpoint": path,
+                "desc": f"Обнаружен незадокументированный путь (HTTP {r.status_code})",
+                "details": get_vuln_info("Hidden Path"),
+            }
+        )
     return findings
 
 

@@ -91,11 +91,17 @@ def test_rate_limiting_non200_not_flagged():
 
 
 def test_unsafe_methods_rest_put_delete_ok():
-    assert _run(headers.check_unsafe_methods, lambda r: httpx.Response(200, headers={"allow": "GET, PUT, DELETE"}), ["/"]) == []
+    assert (
+        _run(headers.check_unsafe_methods, lambda r: httpx.Response(200, headers={"allow": "GET, PUT, DELETE"}), ["/"])
+        == []
+    )
 
 
 def test_unsafe_methods_trace_flagged():
-    assert len(_run(headers.check_unsafe_methods, lambda r: httpx.Response(200, headers={"allow": "GET, TRACE"}), ["/"])) == 1
+    assert (
+        len(_run(headers.check_unsafe_methods, lambda r: httpx.Response(200, headers={"allow": "GET, TRACE"}), ["/"]))
+        == 1
+    )
 
 
 def test_evidence_redaction():
@@ -113,7 +119,11 @@ def test_mass_assignment_readback_via_get():
     spec = {"paths": {"/api/items": {"post": {}}}}
 
     def handler(r):
-        return httpx.Response(201, json={"id": 7}) if r.method == "POST" else httpx.Response(200, json={"id": 7, "is_admin": True})
+        return (
+            httpx.Response(201, json={"id": 7})
+            if r.method == "POST"
+            else httpx.Response(200, json={"id": 7, "is_admin": True})
+        )
 
     f = _run(logic.check_mass_assignment, handler, ["/api/items"], spec=spec)
     assert len(f) == 1 and f[0]["type"] == "Mass Assignment"

@@ -61,7 +61,9 @@ def init_db():
         c.execute("CREATE INDEX IF NOT EXISTS idx_scans_scan_date ON scans(scan_date DESC)")
 
 
-def save_scan(target_url: str, critical: int, high: int, medium: int, low: int, results: list[dict], mode: str = "full"):
+def save_scan(
+    target_url: str, critical: int, high: int, medium: int, low: int, results: list[dict], mode: str = "full"
+):
     scan_date = datetime.datetime.now(datetime.timezone.utc).isoformat()
     results_json = json.dumps(results, ensure_ascii=False)
     with _db() as conn:

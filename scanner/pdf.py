@@ -37,6 +37,7 @@ def _safe_url_fetcher(url, timeout=5, ssl_context=None):
             return default_url_fetcher(url, timeout, ssl_context)
     return {"string": b"", "mime_type": "text/plain"}
 
+
 _LEVEL_COLORS = {
     "CRITICAL": "#e5484d",
     "HIGH": "#f76b15",

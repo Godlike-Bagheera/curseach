@@ -79,7 +79,16 @@ def _count_items(node) -> int:
 
 
 _COLLECTION_MARKERS = (
-    "items", "products", "orders", "users", "records", "list", "collection", "entries", "goods", "catalog",
+    "items",
+    "products",
+    "orders",
+    "users",
+    "records",
+    "list",
+    "collection",
+    "entries",
+    "goods",
+    "catalog",
 )
 _NON_COLLECTION = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/healthz", "/robots.txt", "/favicon.ico"}
 

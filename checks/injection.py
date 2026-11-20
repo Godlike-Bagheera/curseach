@@ -5,11 +5,9 @@ GET/POST/PUT/PATCH/DELETE. Поверхности строятся в checks.sur
 """
 
 import asyncio
-import hashlib
-import re
 import time
 
-from .base import SQL_ERROR_PATTERNS, ScanContext, _body, _norm_body, _norm_hash, ev
+from .base import SQL_ERROR_PATTERNS, ScanContext, _body, _norm_hash, ev
 from .descriptions import get_vuln_info
 from .surface import Surface, build_surfaces, probe
 
@@ -45,8 +43,6 @@ async def _probe_param(ctx: ScanContext, s: Surface, kind: str, name: str, value
     if kind == "query":
         return await probe(ctx, s, query_over={name: value})
     return await probe(ctx, s, body_over={name: value})
-
-
 
 
 # ---------- SQLi: error-based ----------

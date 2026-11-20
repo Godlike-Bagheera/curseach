@@ -10,8 +10,8 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config
 from .config import origin_allowed
-from .security import get_current_user
 from .routes import auth, common, history, misc, scan
+from .security import get_current_user
 from .tasks import gc_loop
 from .vuln_guide import slugify
 

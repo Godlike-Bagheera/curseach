@@ -61,7 +61,9 @@ def _looks_like_manifest(path: str, text: str) -> bool:
             data = json.loads(t)
         except ValueError:
             return False
-        return isinstance(data, dict) and any(k in data for k in ("dependencies", "devDependencies", "name", "packages"))
+        return isinstance(data, dict) and any(
+            k in data for k in ("dependencies", "devDependencies", "name", "packages")
+        )
     if path.endswith("requirements.txt"):
         return bool(_REQ_PIN_RE.search(t)) or bool(re.search(r"^\s*[A-Za-z0-9_.\-]+\s*[><=~!]", t, re.MULTILINE))
     if path.endswith(".xml"):
@@ -198,7 +200,9 @@ def _fixed_versions(doc: dict, name: str, ecosystem: str) -> list[str]:
     return sorted(set(fixed))
 
 
-async def _osv_lookup(deps: list[tuple[str, str, str]], client=None, cancel_event=None) -> list[tuple[tuple[str, str, str], dict]]:
+async def _osv_lookup(
+    deps: list[tuple[str, str, str]], client=None, cancel_event=None
+) -> list[tuple[tuple[str, str, str], dict]]:
     """deps: (name, version, ecosystem). Возвращает пары (dep, vuln_doc).
 
     Запросы идут во внешний API OSV (не к цели), поэтому в бюджет цели не

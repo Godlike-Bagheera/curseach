@@ -33,12 +33,14 @@ def _sanitize_formulas(ws) -> None:
             if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r"):
                 cell.value = "'" + v
 
+
 _LEVEL_COLORS = {
     "CRITICAL": ("FBE9E7", "B3261E"),
     "HIGH": ("F4E6F8", "7A1FA2"),
     "MEDIUM": ("FDF0DC", "B87300"),
     "LOW": ("E6F3EA", "1B6E2F"),
 }
+
 
 def is_available() -> bool:
     """True, если openpyxl установлен и можно генерировать XLSX."""
