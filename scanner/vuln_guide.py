@@ -80,6 +80,7 @@ CHECK_VULN = {
     "check_stored_xss": "Stored XSS",
     "check_jwt_exp": "JWT Expiration Not Verified",
     "check_security_txt": "Missing security.txt",
+    "check_jwt_weak_secret": "JWT Weak Secret",
 }
 
 # Русские названия типов без отдельной карточки в «популярных» — для заголовков реестра.

@@ -689,3 +689,27 @@ def list_comments():
     """УЯЗВИМОСТЬ: комментарии отражаются в HTML без экранирования."""
     items = "".join(f"<li>{c}</li>" for c in _COMMENTS)
     return HTMLResponse(f"<html><body><ul>{items}</ul></body></html>")
+
+
+# ---------- УЯЗВИМОСТЬ: JWT weak HMAC secret ----------
+@app.get("/api/jwt-weak/{item_id}")
+def jwt_weak(item_id: int, authorization: str = Header(None)):
+    """УЯЗВИМОСТЬ: HS256-секрет «secret» из wordlist — токены подделываются."""
+    import base64
+    import hashlib
+    import hmac
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    parts = authorization[7:].split(".")
+    if len(parts) != 3:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    header, payload, sig = parts
+    expected = (
+        base64.urlsafe_b64encode(hmac.new(b"secret", f"{header}.{payload}".encode(), hashlib.sha256).digest())
+        .rstrip(b"=")
+        .decode()
+    )
+    if not hmac.compare_digest(sig, expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {"id": item_id, "data": "weak-secret protected"}

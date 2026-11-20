@@ -4,6 +4,8 @@
 - check_bfla: обычный user получает доступ к админскому эндпоинту
 """
 
+import base64
+
 import httpx
 
 from .base import (
@@ -374,6 +376,48 @@ async def check_jwt_exp(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
                     "endpoint": ep,
                     "desc": "Сервер принял JWT с истёкшим exp (HTTP 200) — срок действия токена не проверяется",
                     "details": get_vuln_info("JWT Expiration Not Verified"),
+                }
+            )
+            break
+    return findings
+
+
+async def check_jwt_weak_secret(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
+    """Подбор слабого HMAC-секрета JWT (wordlist): поддельный HS256-токен принят → CWE-326/347."""
+    import hashlib
+    import hmac
+    import json
+
+    findings: list = []
+    paths = (ctx.openapi or {}).get("paths", {}) if isinstance(ctx.openapi, dict) else {}
+    candidates = [p for p, item in paths.items() if isinstance(item, dict) and "get" in item and "{" in p]
+    candidates += [p for p in endpoints if "{" in p]
+    candidates = [p for p in dict.fromkeys(candidates) if "{" in p][:8]
+    if not candidates:
+        return findings
+    secrets = ["secret", "key", "password", "jwt_secret", "changeme", "secret123", "admin", "test", "qwerty", "123456"]
+
+    def b64(b: bytes) -> str:
+        return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+    header = b64(b'{"alg":"HS256","typ":"JWT"}')
+    payload = b64(json.dumps({"uid": 1, "role": "admin", "exp": 9999999999}).encode())
+    signing_input = f"{header}.{payload}".encode()
+    ep = candidates[0]
+    param = ep[ep.find("{") + 1 : ep.find("}")]
+    path = ep.replace(f"{{{param}}}", "1")
+    for sec in secrets:
+        sig = b64(hmac.new(sec.encode(), signing_input, hashlib.sha256).digest())
+        token = f"{header}.{payload}.{sig}"
+        r = await _safe_get(ctx.anon_client, f"{ctx.target_url}{path}", headers={"Authorization": f"Bearer {token}"})
+        if r is not None and r.status_code == 200:
+            findings.append(
+                {
+                    "level": "CRITICAL",
+                    "type": "JWT Weak Secret",
+                    "endpoint": ep,
+                    "desc": f"JWT подписан слабым HMAC-секретом «{sec}» — токены любого пользователя можно подделывать",
+                    "details": get_vuln_info("JWT Weak Secret"),
                 }
             )
             break

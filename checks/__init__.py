@@ -17,7 +17,7 @@ from .access import (
     check_idor,
     check_idor_auth,
 )
-from .auth import check_bfla, check_cross_user_idor, check_jwt_exp, check_jwt_none
+from .auth import check_bfla, check_cross_user_idor, check_jwt_exp, check_jwt_none, check_jwt_weak_secret
 from .base import (
     _EVIDENCE_LOG,
     _SCAN_CTX,
@@ -92,6 +92,7 @@ ALL_CHECKS: list[Callable[..., Awaitable[list[dict]]]] = [
     check_stored_xss,
     check_jwt_exp,
     check_security_txt,
+    check_jwt_weak_secret,
 ]
 
 
@@ -129,6 +130,7 @@ CHECK_METADATA = {
     "check_stored_xss": {"name": "Хранимый XSS", "quick": False, "level": "HIGH"},
     "check_jwt_exp": {"name": "JWT: срок действия", "quick": True, "level": "HIGH"},
     "check_security_txt": {"name": "security.txt", "quick": False, "level": "LOW"},
+    "check_jwt_weak_secret": {"name": "JWT: слабый секрет", "quick": True, "level": "CRITICAL"},
 }
 
 
