@@ -170,6 +170,8 @@ async def get_html_report(task_id: str, request: Request, user: str = Depends(re
         score=task.score,
         mode=task.mode,
         scan_date=scan_dt.strftime("%Y-%m-%d %H:%M:%S"),
+        partial=task.partial,
+        partial_reason=task.partial_reason,
     )
 
 

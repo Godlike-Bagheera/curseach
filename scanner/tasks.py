@@ -100,6 +100,10 @@ class ScanTask:
         self.account1 = account1
         self.account2 = account2
         self.status = "pending"
+        self.partial = False
+        self.partial_reason = ""
+        self.partial = False
+        self.partial_reason = ""
         self.progress = 0.0
         self.logs: list[str] = []
         self.critical_count = 0
@@ -208,6 +212,8 @@ class ScanTask:
             "mode": self.mode,
             "selected_checks": self.selected_checks,
             "status": self.status,
+            "partial": self.partial,
+            "partial_reason": self.partial_reason,
             "progress": self.progress,
             "logs": self.logs,
             "critical_count": self.critical_count,
@@ -371,11 +377,19 @@ async def scan_engine(task: ScanTask):
                 if isinstance(r, checks.ScanCancelled):
                     cancelled = True
         except asyncio.TimeoutError:
+            task.partial = True
+            task.partial_reason = f"общий таймаут {SCAN_TOTAL_TIMEOUT}s"
             task.add_log(f"[ВНИМАНИЕ] Общий таймаут скана ({SCAN_TOTAL_TIMEOUT}s) — сохраняем частичные результаты")
         except asyncio.CancelledError:
             cancelled = True
+            task.partial = True
+            task.partial_reason = "скан отменён"
+            task.partial = True
+            task.partial_reason = "скан отменён"
 
         if ctx.budget is not None and ctx.budget.exhausted:
+            task.partial = True
+            task.partial_reason = f"бюджет запросов исчерпан ({SCAN_MAX_REQUESTS})"
             task.add_log(f"[ВНИМАНИЕ] Бюджет запросов исчерпан ({SCAN_MAX_REQUESTS}) — часть запросов пропущена")
 
         before = len(task.scan_results)
