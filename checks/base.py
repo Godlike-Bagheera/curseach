@@ -50,17 +50,32 @@ class ScanCancelled(Exception):
 
 
 class RequestBudget:
-    """Общий бюджет HTTP-запросов на один скан (защита от «долбёжки» цели)."""
+    """Общий бюджет HTTP-запросов на один скан (защита от «долбёжки» цели).
 
-    def __init__(self, max_requests: int):
+    per_check_cap — опциональная квота запросов на одну проверку (имя берётся
+    из contextvar _CHECK_NAME). Не даёт «прожорливым» проверкам (SQLi/SSRF)
+    съесть весь бюджет раньше остальных. None (по умолчанию) — прежнее
+    поведение без per-check квот (обратная совместимость).
+    """
+
+    def __init__(self, max_requests: int, per_check_cap: int | None = None):
         self.max_requests = max(1, int(max_requests))
         self.used = 0
         self.exhausted = False
+        self.per_check: dict[str, int] = {}
+        self.per_check_cap = int(per_check_cap) if per_check_cap is not None else None
+        self.per_check_capped: set[str] = set()
 
     def take(self, n: int = 1) -> bool:
         if self.used + n > self.max_requests:
             self.exhausted = True
             return False
+        name = _CHECK_NAME.get(None)
+        if name is not None:
+            if self.per_check_cap is not None and self.per_check.get(name, 0) + n > self.per_check_cap:
+                self.per_check_capped.add(name)
+                return False
+            self.per_check[name] = self.per_check.get(name, 0) + n
         self.used += n
         return True
 
@@ -89,6 +104,8 @@ class RateLimiter:
 # (каждая проверка выполняется в своей task через ContextVar).
 _SCAN_CTX: contextvars.ContextVar = contextvars.ContextVar("scan_ctx", default=None)
 _EVIDENCE_LOG: contextvars.ContextVar = contextvars.ContextVar("evidence_log", default=None)
+# Имя текущей проверки (check_func.__name__) — для per-check квот бюджета.
+_CHECK_NAME: contextvars.ContextVar = contextvars.ContextVar("check_name", default=None)
 
 
 _SENSITIVE_JSON_RE = re.compile(

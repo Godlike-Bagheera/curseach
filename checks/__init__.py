@@ -19,6 +19,7 @@ from .access import (
 )
 from .auth import check_bfla, check_cross_user_idor, check_jwt_exp, check_jwt_none, check_jwt_weak_secret
 from .base import (
+    _CHECK_NAME,
     _EVIDENCE_LOG,
     _SCAN_CTX,
     RateLimiter,
