@@ -641,7 +641,7 @@ chmod +x run.sh
                     <div class="ftitle">Режимы сканирования</div>
                     <div class="fdesc">
                         <b>Быстрый</b> — только ключевые проверки.<br>
-                        <b>Полный</b> — все 27 проверок.<br>
+                        <b>Полный</b> — все проверки.<br>
                         <b>Свои</b> — галочками выбираются конкретные проверки.
                     </div>
                 </div>
@@ -670,7 +670,7 @@ chmod +x run.sh
                     <div class="ftitle">Справочник уязвимостей</div>
                     <div class="fdesc">
                         Страница <code class="inline">/vulns</code>: EN + RU-название, понятный смысл,
-                        рекомендация, CWE и OWASP API Top 10. Ниже — реестр всех 27 проверок сканера.
+                        рекомендация, CWE и OWASP API Top 10. Ниже — реестр всех проверок сканера.
                         Поиск без перезагрузки, доступна гостю.
                     </div>
                 </div>
@@ -777,78 +777,226 @@ chmod +x run.sh
         <!-- ================= 05 ================= -->
         <section id="checks">
             <div class="section-title"><span class="num">05</span> Проверки сканера</div>
-
-            <p>Всего реализовано <strong>27 проверок</strong>, сгруппированные по категориям.</p>
+            <!-- CHECKS:START -->
+            <p>Всего реализовано <strong>34 проверок</strong>. Список генерируется из <code>CHECK_METADATA</code> + <code>descriptions.py</code> (<code>scripts/gen_about.py</code>) — единый источник с /vulns и отчётами.</p>
 
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th style="width: 220px;">Категория</th>
+                        <th style="width: 240px;">Проверка</th>
+                        <th class="level-head">Уровень</th>
+                        <th style="width: 200px;">CWE / OWASP</th>
                         <th>Что проверяется</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td><b>Инъекции</b></td>
-                        <td>
-                            SQL Injection (error-based, boolean-based, time-based: SLEEP / pg_sleep / WAITFOR);
-                            OS Command Injection (<code>;id</code>, <code>|id</code>, <code>$(id)</code>, <code>`id`</code>);
-                            Reflected XSS (5 payload'ов для HTML и атрибутов)
-                        </td>
+                        <td><b>SQL-инъекция</b><br><code>check_sqli</code><br><code>SQL Injection</code></td>
+                        <td class="level-cell">CRITICAL</td>
+                        <td>CWE-89, API8:2023</td>
+                        <td>Сайт хранит данные (аккаунты, заказы, пароли) в базе данных и разговаривает с ней на языке запросов SQL. Если сайт без проверки вставляет текст посетителя прямо в такой запрос, злоумышленник может «дописать» свою команду — и база её выполнит.</td>
                     </tr>
                     <tr>
-                        <td><b>Контроль доступа</b></td>
-                        <td>
-                            IDOR (общая эвристика «разные ID → разные данные»);
-                            IDOR auth vs аноним (сравнение ответов с токеном и без);
-                            Cross-user IDOR / BOLA (user1 читает данные user2);
-                            BFLA (обычный user получает админский эндпоинт);
-                            CSRF (эвристика по токену / cookie, кроме login-роутов);
-                            CORS (<code>Access-Control-Allow-Origin: *</code>);
-                            CAPTCHA (10 попыток логина без блокировки)
-                        </td>
+                        <td><b>Отражённый XSS</b><br><code>check_xss</code><br><code>Reflected XSS</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-79, API8:2023</td>
+                        <td>Страницы сайтов содержат маленькие программы — скрипты, которые выполняет браузер. Если сайт берёт текст от посетителя и без очистки показывает его на странице, туда можно подсунуть чужой скрипт. Он выполнится в браузере жертвы от её имени.</td>
                     </tr>
                     <tr>
-                        <td><b>Заголовки и TLS</b></td>
-                        <td>
-                            Security Headers (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection);
-                            CSP (Content-Security-Policy); HSTS (Strict-Transport-Security);
-                            TLS (отсутствие HSTS на HTTPS); Unsafe HTTP methods (PUT / DELETE / TRACE)
-                        </td>
+                        <td><b>Скрытые пути</b><br><code>check_hidden_paths</code><br><code>Hidden Path</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-200, API8:2023</td>
+                        <td>На сервере нашёлся «спрятанный» адрес (например, /admin или /backup), которого нет в меню, но он открывается любому, кто угадает ссылку. Спрятать — не значит защитить.</td>
                     </tr>
                     <tr>
-                        <td><b>Данные</b></td>
-                        <td>
-                            Sensitive Data Exposure (AWS-ключи, пароли, API-ключи, приватные ключи);
-                            SCA (поиск <code>/package.json</code>, <code>/requirements.txt</code>, <code>/pom.xml</code>)
-                        </td>
+                        <td><b>Нарушение контроля доступа</b><br><code>check_idor</code><br><code>Broken Access Control</code></td>
+                        <td class="level-cell">CRITICAL</td>
+                        <td>CWE-639, CWE-862, API1:2023, API5:2023</td>
+                        <td>У каждого пользователя должны быть границы: видеть и менять можно только своё. Если сервер отдаёт чужие данные просто по номеру в ссылке, не проверяя, кому они принадлежат, — это дыра в контроле доступа (её называют IDOR или BOLA).</td>
                     </tr>
                     <tr>
-                        <td><b>Логика</b></td>
-                        <td>
-                            Business Logic Error (отрицательные ID);
-                            Pagination (сервер отдаёт всё без лимита);
-                            Mass Assignment (лишние поля <code>is_admin</code>, <code>role</code>);
-                            GraphQL Introspection (открыт <code>__schema</code>)
-                        </td>
+                        <td><b>IDOR: auth vs аноним</b><br><code>check_idor_auth</code><br><code>Broken Access Control</code></td>
+                        <td class="level-cell">CRITICAL</td>
+                        <td>CWE-639, CWE-862, API1:2023, API5:2023</td>
+                        <td>У каждого пользователя должны быть границы: видеть и менять можно только своё. Если сервер отдаёт чужие данные просто по номеру в ссылке, не проверяя, кому они принадлежат, — это дыра в контроле доступа (её называют IDOR или BOLA).</td>
                     </tr>
                     <tr>
-                        <td><b>Сеть</b></td>
-                        <td>
-                            SSRF (сервер сам ходит по URL клиента: cloud-metadata <code>169.254.169.254</code>,
-                            внутренние адреса <code>127.0.0.1</code> / <code>localhost</code>)
-                        </td>
+                        <td><b>Cross-user IDOR (BOLA)</b><br><code>check_cross_user_idor</code><br><code>Broken Access Control</code></td>
+                        <td class="level-cell">CRITICAL</td>
+                        <td>CWE-639, CWE-862, API1:2023, API5:2023</td>
+                        <td>У каждого пользователя должны быть границы: видеть и менять можно только своё. Если сервер отдаёт чужие данные просто по номеру в ссылке, не проверяя, кому они принадлежат, — это дыра в контроле доступа (её называют IDOR или BOLA).</td>
                     </tr>
                     <tr>
-                        <td><b>Прочее</b></td>
-                        <td>
-                            Hidden Paths (<code>/admin</code>, <code>/backup</code>, <code>/.env</code>, <code>/metrics</code>);
-                            HTTP без HTTPS; Content-Type Validation (принимает <code>text/plain</code>);
-                            Rate Limiting (50 запросов без блокировки); Error Leak (stack-trace в ответе)
-                        </td>
+                        <td><b>BFLA (admin без роли)</b><br><code>check_bfla</code><br><code>Broken Function Level Authorization</code></td>
+                        <td class="level-cell">CRITICAL</td>
+                        <td>CWE-862, API5:2023</td>
+                        <td>Вход в аккаунт проверен, а роли — нет. Обычный пользователь может вызывать действия, положенные только администратору: сервер спрашивает «ты кто?», но не спрашивает «а тебе можно это действие?».</td>
+                    </tr>
+                    <tr>
+                        <td><b>JWT alg=none / подделка</b><br><code>check_jwt_none</code><br><code>JWT alg=none</code></td>
+                        <td class="level-cell">CRITICAL</td>
+                        <td>CWE-347, API2:2023</td>
+                        <td>JWT — это «электронный пропуск»: сайт выдаёт его после входа, клиент отправляет его при каждом запросе. У пропуска есть цифровая подпись — защита от подделки. Если сервер принимает пропуска с пометкой «подписи нет» (alg=none), любой может нарисовать себе пропуск с любым именем.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Заголовки безопасности</b><br><code>check_security_headers</code><br><code>Missing Security Headers</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-693, API8:2023</td>
+                        <td>Заголовки безопасности — короткие инструкции, которые сервер отправляет браузеру вместе со страницей: «не встраивать меня в чужие сайты», «не угадывать тип файла», «скрипты только отсюда». Без них браузер работает менее осторожно.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Утечка данных</b><br><code>check_sensitive_data</code><br><code>Sensitive Data Exposure</code></td>
+                        <td class="level-cell">HIGH</td>
+                        <td>CWE-200, API3:2023</td>
+                        <td>Сервер отправляет в ответе больше, чем нужно: пароли, ключи, токены или личные данные. Всё, что ушло в ответ, видно в браузере — «спрятать в коде страницы» не получится.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Открытый CORS</b><br><code>check_cors</code><br><code>Open CORS</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-942, API8:2023</td>
+                        <td>По умолчанию браузер не даёт одному сайту читать ответы другого. CORS — это разрешение сервера «чужим сайтам можно меня читать». Если разрешить всем подряд «*», любой вредоносный сайт сможет обращаться к вашему API из браузеров ваших пользователей.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Ограничение запросов</b><br><code>check_rate_limiting</code><br><code>Lack of Rate Limiting</code></td>
+                        <td class="level-cell">LOW</td>
+                        <td>CWE-770, API4:2023</td>
+                        <td>Сервер не ограничивает, сколько запросов в секунду ему можно слать. Этим пользуются: робот может перебирать пароли миллионы раз или «уронить» сервер лавиной запросов.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Инъекция команд ОС</b><br><code>check_command_injection</code><br><code>OS Command Injection</code></td>
+                        <td class="level-cell">CRITICAL</td>
+                        <td>CWE-78, API8:2023</td>
+                        <td>Иногда программа просит операционную систему выполнить команду (например, проверить связь с адресом). Если в команду без проверки попадает текст от посетителя, он может «дописать» свою команду — сервер выполнит её. Это путь к полному захвату сервера.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Утечка через ошибки</b><br><code>check_error_leak</code><br><code>Information Leak via Errors</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-209, API8:2023</td>
+                        <td>Когда что-то ломается, сервер показывает «внутреннюю кухню»: куски кода, пути к файлам, версии программ, запросы к базе. Для злоумышленника это карта ваших слабых мест.</td>
+                    </tr>
+                    <tr>
+                        <td><b>HTTP без HTTPS</b><br><code>check_http_only</code><br><code>HTTP without HTTPS</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-319, API8:2023</td>
+                        <td>Данные летят по сети открытым текстом — как открытка, а не запечатанное письмо. Любой на пути (провайдер, Wi-Fi в кафе) может их прочитать и подменить.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Защита от CSRF</b><br><code>check_csrf</code><br><code>Missing CSRF Protection</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-352, API8:2023</td>
+                        <td>Браузер сам прикладывает ваши «cookies входа» к запросам на сайт, где вы залогинены. Поэтому чужая страница может заставить ваш браузер отправить запрос на этот сайт — и сайт не отличит вас от подделки. Защита — одноразовый секрет (CSRF-токен) в каждой форме.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Опасные HTTP-методы</b><br><code>check_unsafe_methods</code><br><code>Unsafe HTTP Methods</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-650, API8:2023</td>
+                        <td>Кроме обычных «показать» (GET) и «отправить» (POST), у HTTP есть служебные методы: PUT — записать файл, DELETE — удалить, TRACE — эхо. Если они включены без нужды и защиты, сервер можно менять или использовать в атаках.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Валидация Content-Type</b><br><code>check_content_type_validation</code><br><code>Missing Content-Type Validation</code></td>
+                        <td class="level-cell">LOW</td>
+                        <td>CWE-20, API8:2023</td>
+                        <td>Каждый запрос помечает, в каком формате прислал данные (JSON, форма, XML…). Если сервер не проверяет формат, его можно запутать: скормить данные в неожиданном виде и обойти проверки.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Утечка манифеста зависимостей</b><br><code>check_sca</code><br><code>Dependency Manifest Exposed</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-200, API8:2023</td>
+                        <td>Файл со списком библиотек и их версий (requirements.txt, package.json…) случайно доступен прямо с сайта. Это «состав и версии деталей» вашего дома — атакующий сразу знает, какие известные дыры искать.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Защита от брутфорса</b><br><code>check_captcha</code><br><code>Lack of CAPTCHA</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-307, API2:2023</td>
+                        <td>На форме входа нет проверки «человек ли ты». Робот может перебирать пароли автоматически и без устали.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Бизнес-логика</b><br><code>check_business_logic</code><br><code>Business Logic Error</code></td>
+                        <td class="level-cell">HIGH</td>
+                        <td>CWE-840, API4:2023</td>
+                        <td>Программа принимает бессмысленные с точки зрения бизнеса значения: отрицательное количество товара, скидку 150%, дату рождения в будущем. Формально код работает, но правилами можно пользоваться во вред.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Пагинация</b><br><code>check_pagination</code><br><code>Missing Pagination</code></td>
+                        <td class="level-cell">LOW</td>
+                        <td>CWE-770, API4:2023</td>
+                        <td>Сервер готов отдать сразу всю таблицу — миллионы записей за один запрос. Это и утечка (выгрузить всю базу разом), и способ «уронить» сервер нагрузкой.</td>
+                    </tr>
+                    <tr>
+                        <td><b>TLS и сертификат</b><br><code>check_tls_version</code><br><code>Weak TLS Version</code></td>
+                        <td class="level-cell">HIGH</td>
+                        <td>CWE-326, API8:2023</td>
+                        <td>TLS — «защитная труба» между браузером и сервером: внутри неё данные не видно подслушивающим. Старые версии трубы (TLS 1.0/1.1) дырявые — при определённых условиях трафик можно расшифровать. Сюда же относятся проблемы сертификата — «удостоверения личности» сервера.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Массовое присвоение</b><br><code>check_mass_assignment</code><br><code>Mass Assignment</code></td>
+                        <td class="level-cell">HIGH</td>
+                        <td>CWE-915, API3:2023</td>
+                        <td>Когда вы сохраняете профиль, сервер получает набор полей (имя, аватар…). Если он без разбора принимает ВСЕ присланные поля, посетитель может добавить лишнее — например «сделать меня админом» — и сервер это сохранит.</td>
+                    </tr>
+                    <tr>
+                        <td><b>GraphQL-интроспекция</b><br><code>check_graphql_introspection</code><br><code>GraphQL Introspection</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-200, API8:2023</td>
+                        <td>GraphQL — способ спрашивать у сервера данные гибкими запросами. «Интроспекция» — встроенная функция «покажи свою полную схему»: все типы, поля и операции. В продакшене это готовая карта API для злоумышленника.</td>
+                    </tr>
+                    <tr>
+                        <td><b>SCA: уязвимые зависимости (OSV)</b><br><code>check_osv_sca</code><br><code>Vulnerable Dependency (OSV)</code></td>
+                        <td class="level-cell">CRITICAL</td>
+                        <td>CWE-1104, API8:2023</td>
+                        <td>Программы собирают из готовых библиотек — как дом из готовых блоков. Если в блоке нашли дыру, она есть у всех, кто его использует. Сканер сверил ваши библиотеки и их версии с открытой базой известных уязвимостей OSV.dev — и нашёл совпадение.</td>
+                    </tr>
+                    <tr>
+                        <td><b>SSRF (запросы от имени сервера)</b><br><code>check_ssrf</code><br><code>Server-Side Request Forgery</code></td>
+                        <td class="level-cell">HIGH</td>
+                        <td>CWE-918, API7:2023</td>
+                        <td>Иногда сервер сам скачивает что-то по ссылке, которую дал посетитель (картинку, страницу). Если сервер не проверяет, куда ведёт ссылка, злоумышленник может заставить его сходить во внутреннюю сеть — туда, куда снаружи попасть нельзя.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Path Traversal / LFI</b><br><code>check_path_traversal</code><br><code>Path Traversal</code></td>
+                        <td class="level-cell">HIGH</td>
+                        <td>CWE-22, API8:2023</td>
+                        <td>Параметр запроса (file/path/page…) подставляется в путь к файлу без проверки. Payload ../../etc/passwd заставляет сервер прочитать произвольный файл за пределами разрешённой папки.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Открытый редирект</b><br><code>check_open_redirect</code><br><code>Open Redirect</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-601, API8:2023</td>
+                        <td>Параметр redirect/next/url задаёт адрес перехода без проверки. Атакующий подставляет свой домен — жертва переходит с доверенного сайта на фишинговый.</td>
+                    </tr>
+                    <tr>
+                        <td><b>Флаги cookie</b><br><code>check_cookie_flags</code><br><code>Insecure Cookie Flags</code></td>
+                        <td class="level-cell">MEDIUM</td>
+                        <td>CWE-614, CWE-1004, API8:2023</td>
+                        <td>Cookie сессии выставлена без флагов Secure/HttpOnly/SameSite: её можно перехватить по HTTP, прочитать через XSS (нет HttpOnly) или отправить в cross-site запросе (нет SameSite).</td>
+                    </tr>
+                    <tr>
+                        <td><b>Хранимый XSS</b><br><code>check_stored_xss</code><br><code>Stored XSS</code></td>
+                        <td class="level-cell">HIGH</td>
+                        <td>CWE-79, API8:2023</td>
+                        <td>Payload, отправленный в POST (комментарий/имя/сообщение), сохраняется и затем отражается в HTML без экранирования — скрипт выполняется у всех, кто откроет страницу.</td>
+                    </tr>
+                    <tr>
+                        <td><b>JWT: срок действия</b><br><code>check_jwt_exp</code><br><code>JWT Expiration Not Verified</code></td>
+                        <td class="level-cell">HIGH</td>
+                        <td>CWE-613, API2:2023</td>
+                        <td>Сервер принимает JWT с истёкшим exp — украденный токен действует бессрочно, отзыв не работает.</td>
+                    </tr>
+                    <tr>
+                        <td><b>security.txt</b><br><code>check_security_txt</code><br><code>Missing security.txt</code></td>
+                        <td class="level-cell">LOW</td>
+                        <td>CWE-1059, API8:2023</td>
+                        <td>Файл security.txt (RFC 9116) не опубликован — исследователям некуда сообщать об уязвимостях, нет контактов и политики раскрытия.</td>
+                    </tr>
+                    <tr>
+                        <td><b>JWT: слабый секрет</b><br><code>check_jwt_weak_secret</code><br><code>JWT Weak Secret</code></td>
+                        <td class="level-cell">CRITICAL</td>
+                        <td>CWE-326, CWE-347, API2:2023</td>
+                        <td>JWT подписывается HMAC-секретом из словаря (secret/key/password…). Атакующий подбирает секрет и подписывает токены с любыми правами.</td>
                     </tr>
                 </tbody>
             </table>
+            <!-- CHECKS:END -->
         </section>
 
         <!-- ================= 06 ================= -->
@@ -967,7 +1115,7 @@ chmod +x run.sh
                 <li>Открывается WebSocket на <code class="inline">/ws/scan/{task_id}</code>.</li>
                 <li>В фоновом потоке сканер логинится в стенд, дёргает <code class="inline">/openapi.json</code>
                     с <code class="inline">X-Scan-Start: 1</code> (стенд генерирует новый профиль уязвимостей).</li>
-                <li>27 проверок прогоняются параллельно, находки летят в UI по WebSocket.</li>
+                <li>Все проверки прогоняются параллельно, находки летят в UI по WebSocket.</li>
                 <li>Результат сохраняется в SQLite (<code class="inline">scans.db</code>) — <em>до</em> того,
                     как UI получит статус «ГОТОВО».</li>
                 <li>Пользователь может скачать отчёты и посмотреть график динамики.</li>
@@ -1003,7 +1151,7 @@ chmod +x run.sh
 │   ├── vuln_guide.py    <span class="cm">#   справочник /vulns + реестр проверок</span>
 │   └── routes/          <span class="cm">#   auth, scan, history, misc, common</span>
 │
-├── checks/              <span class="cm"># 27 проверок безопасности</span>
+├── checks/              <span class="cm"># проверки безопасности</span>
 │   ├── __init__.py      <span class="cm">#   реестр CHECK_METADATA</span>
 │   ├── base.py          <span class="cm">#   ScanContext, бюджет запросов, evidence</span>
 │   ├── descriptions.py  <span class="cm">#   тексты уязвимостей, CWE / OWASP</span>

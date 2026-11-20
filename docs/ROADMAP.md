@@ -15,6 +15,7 @@
 - **Статистика покрытия в отчёте** — эндпоинты/поверхности/запросы в HTML/PDF-отчётах — PR #38.
 - **Webhook-уведомления** — JSON-сводка по завершении скана (httpx, таймаут, 1 retry) — PR #39.
 - **Supply-chain** — Docker base-image по digest, ```pip --require-hashes``` (hash-locked requirements) — PR #40.
+- **Генерация about.html** — секция проверок из CHECK_METADATA + descriptions.py (gen_about.py --check в CI) — PR #41.
 
 ## Осталось
 
@@ -26,5 +27,3 @@
 - Проекты / мульти-цели, тренд-график по истории.
 - i18n (EN-toggle) — опционально, проект RU-first.
 
-### Прочее
-- Генерация ```about.html``` из единого источника проверок.

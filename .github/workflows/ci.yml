@@ -49,6 +49,9 @@ jobs:
       - name: Format check (ruff format)
         run: ruff format --check .
 
+      - name: about.html sync (gen_about --check)
+        run: python scripts/gen_about.py --check
+
       - name: Type check (mypy — блокирует для checks/ и security)
         run: mypy checks scanner/security.py
 
