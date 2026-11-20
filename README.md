@@ -4,7 +4,7 @@
 [![Security Scan](https://github.com/Godlike-Bagheera/curseach/actions/workflows/security-scan.yml/badge.svg)](https://github.com/Godlike-Bagheera/curseach/actions/workflows/security-scan.yml)
 
 Учебный DAST-сканер безопасности API + намеренно уязвимая цель («Damn Vulnerable API»)
-в одном репозитории. Сканер читает OpenAPI-спеку цели и прогоняет **26 проверок**
+в одном репозитории. Сканер читает OpenAPI-спеку цели и прогоняет **27 проверок**
 (SQLi, XSS, IDOR/BOLA/BFLA, JWT alg=none, заголовки, TLS/сертификат, CORS, rate-limit,
 SCA через OSV.dev и др.), показывая live-логи по WebSocket и собирая отчёты
 HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ), CWE и OWASP API Top 10**.
@@ -27,7 +27,7 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 - Anti-SSRF (включая пиннинг проверенного IP от DNS-rebinding), CSRF-Origin-политика, CSP,
   PBKDF2-пароли, HttpOnly-cookie, rate-limit логина.
 - **Справочник `/vulns`**: EN + RU-название и смысл популярных уязвимостей, рекомендации,
-  CWE/OWASP API Top 10 и реестр всех 26 проверок; поиск без перезагрузки, доступен гостю.
+  CWE/OWASP API Top 10 и реестр всех 27 проверок; поиск без перезагрузки, доступен гостю.
 - **Фильтр истории по датам**: период «С/По», пресеты «Сегодня/7/30 дней», счётчик,
   экспорт XLSX за выбранный период; выбор сохраняется в localStorage.
 - **JetBrains Mono self-hosted** (`static/fonts/`) — строгая CSP без внешних CDN, работа офлайн.
@@ -100,7 +100,7 @@ coverage, smoke-import. Отдельный workflow **Security Scan** скани
 - `main.py` — уязвимая цель (FastAPI), профиль уязвимостей рандомизируется на скан (или фиксируется seed-ом)
 - `scanner/` — веб-приложение сканера: `app`, `config`, `security` (anti-SSRF/сессии), `tasks` (движок),
   `reporting`, `pdf` (WeasyPrint), `vuln_guide` (справочник `/vulns`), `routes/` (auth/scan/history/misc)
-- `checks/` — 26 проверок + поверхности атаки из OpenAPI (`surface.py`), описания и CWE/OWASP (`descriptions.py`)
+- `checks/` — 27 проверок + поверхности атаки из OpenAPI (`surface.py`), описания и CWE/OWASP (`descriptions.py`)
 - `scripts/self_scan.py` — self-scan для CI (SARIF)
 - `templates/` — index, login, `vulns` (справочник), отчёты и диаграмма
 - `static/` — UI: `style.css`, `fonts.css` + `fonts/` (self-hosted JetBrains Mono), `script.js`,

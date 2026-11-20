@@ -100,12 +100,15 @@
             <div class="panel-label">&gt; АВТОРИЗАЦИЯ</div>
 
             <div class="auth-hint">
-                Сканер сам зайдёт под указанными аккаунтами через <code>/api/auth/login</code> и получит токены.
-                Если указать два аккаунта — проверит <b>cross-user IDOR</b> и <b>BFLA</b>.
+                Сканер сам войдёт в проверяемый сервис под этими аккаунтами (через <code>/api/auth/login</code>) и получит токены.
+                <b>Зачем два аккаунта:</b> чтобы проверить, не видит ли один пользователь чужие данные и функции.
+                Пример: Алиса заказала товар и отслеживает доставку — сканер проверит, может ли Боб открыть заказ Алисы,
+                хотя не покупал его (дыра <b>IDOR/BOLA</b>), и не дотянется ли Боб до админских функций (<b>BFLA</b>).
+                Второй аккаунт необязателен: без него эти проверки просто пропускаются.
             </div>
 
             <div class="auth-section">
-                <div class="auth-section-title">АККАУНТ 1 (ОСНОВНОЙ)</div>
+                <div class="auth-section-title">АККАУНТ 1 — ОСНОВНОЙ («АЛИСА»)</div>
                 <div class="auth-row-2col">
                     <div>
                         <label class="auth-label" for="acc1User">ЛОГИН</label>
@@ -119,7 +122,8 @@
             </div>
 
             <div class="auth-section auth-secondary">
-                <div class="auth-section-title">АККАУНТ 2 (ДЛЯ СРАВНЕНИЯ)</div>
+                <div class="auth-section-title">АККАУНТ 2 — ЧУЖОЙ АККАУНТ («БОБ»)</div>
+                <div class="auth-hint">Под этим аккаунтом сканер попробует открыть данные и функции первого — так находятся IDOR/BOLA и BFLA.</div>
                 <div class="auth-row-2col">
                     <div>
                         <label class="auth-label" for="acc2User">ЛОГИН</label>

@@ -641,7 +641,7 @@ chmod +x run.sh
                     <div class="ftitle">Режимы сканирования</div>
                     <div class="fdesc">
                         <b>Быстрый</b> — только ключевые проверки.<br>
-                        <b>Полный</b> — все 26 проверок.<br>
+                        <b>Полный</b> — все 27 проверок.<br>
                         <b>Свои</b> — галочками выбираются конкретные проверки.
                     </div>
                 </div>
@@ -670,7 +670,7 @@ chmod +x run.sh
                     <div class="ftitle">Справочник уязвимостей</div>
                     <div class="fdesc">
                         Страница <code class="inline">/vulns</code>: EN + RU-название, понятный смысл,
-                        рекомендация, CWE и OWASP API Top 10. Ниже — реестр всех 26 проверок сканера.
+                        рекомендация, CWE и OWASP API Top 10. Ниже — реестр всех 27 проверок сканера.
                         Поиск без перезагрузки, доступна гостю.
                     </div>
                 </div>
@@ -778,7 +778,7 @@ chmod +x run.sh
         <section id="checks">
             <div class="section-title"><span class="num">05</span> Проверки сканера</div>
 
-            <p>Всего реализовано <strong>26 проверок</strong>, сгруппированные по категориям.</p>
+            <p>Всего реализовано <strong>27 проверок</strong>, сгруппированные по категориям.</p>
 
             <table class="data-table">
                 <thead>
@@ -830,6 +830,13 @@ chmod +x run.sh
                             Pagination (сервер отдаёт всё без лимита);
                             Mass Assignment (лишние поля <code>is_admin</code>, <code>role</code>);
                             GraphQL Introspection (открыт <code>__schema</code>)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><b>Сеть</b></td>
+                        <td>
+                            SSRF (сервер сам ходит по URL клиента: cloud-metadata <code>169.254.169.254</code>,
+                            внутренние адреса <code>127.0.0.1</code> / <code>localhost</code>)
                         </td>
                     </tr>
                     <tr>
@@ -960,7 +967,7 @@ chmod +x run.sh
                 <li>Открывается WebSocket на <code class="inline">/ws/scan/{task_id}</code>.</li>
                 <li>В фоновом потоке сканер логинится в стенд, дёргает <code class="inline">/openapi.json</code>
                     с <code class="inline">X-Scan-Start: 1</code> (стенд генерирует новый профиль уязвимостей).</li>
-                <li>26 проверок прогоняются параллельно, находки летят в UI по WebSocket.</li>
+                <li>27 проверок прогоняются параллельно, находки летят в UI по WebSocket.</li>
                 <li>Результат сохраняется в SQLite (<code class="inline">scans.db</code>) — <em>до</em> того,
                     как UI получит статус «ГОТОВО».</li>
                 <li>Пользователь может скачать отчёты и посмотреть график динамики.</li>
@@ -996,7 +1003,7 @@ chmod +x run.sh
 │   ├── vuln_guide.py    <span class="cm">#   справочник /vulns + реестр проверок</span>
 │   └── routes/          <span class="cm">#   auth, scan, history, misc, common</span>
 │
-├── checks/              <span class="cm"># 26 проверок безопасности</span>
+├── checks/              <span class="cm"># 27 проверок безопасности</span>
 │   ├── __init__.py      <span class="cm">#   реестр CHECK_METADATA</span>
 │   ├── base.py          <span class="cm">#   ScanContext, бюджет запросов, evidence</span>
 │   ├── descriptions.py  <span class="cm">#   тексты уязвимостей, CWE / OWASP</span>
