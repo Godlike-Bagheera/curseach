@@ -658,20 +658,30 @@ async function loadHistory(page) {
             const table = el('table', { className: 'history-table' });
             const thead = el('thead', null, [
                 el('tr', null, [
-                    el('th', { text: 'DIFF' }), el('th', { text: 'ID' }), el('th', { text: 'ДАТА (UTC)' }), el('th', { text: 'ЦЕЛЬ' }),
-                    el('th', { text: 'КРИТ' }), el('th', { text: 'ВЫС' }), el('th', { text: 'СРЕД' }),
-                    el('th', { text: 'НИЗК' }), el('th', { text: 'ДЕЙСТВИЯ' }),
+                    el('th', { className: 'col-diff', text: 'DIFF', title: 'Отметьте два скана одной цели и нажмите «Сравнить»' }),
+                    el('th', { className: 'col-id', text: 'ID', title: 'Номер скана в истории' }),
+                    el('th', { className: 'col-date', text: 'ДАТА (UTC)', title: 'Когда выполнялось сканирование (всемирное время)' }),
+                    el('th', { className: 'col-target', text: 'ЦЕЛЬ', title: 'Адрес просканированного API' }),
+                    el('th', { className: 'col-sev th-crit', text: 'КРИТ', title: 'Критические находки: возможен полный взлом — чинить немедленно' }),
+                    el('th', { className: 'col-sev th-high', text: 'ВЫС', title: 'Высокий риск: реальная утечка данных или доступ к чужим аккаунтам' }),
+                    el('th', { className: 'col-sev th-med', text: 'СРЕД', title: 'Средний риск: опасно при определённых условиях' }),
+                    el('th', { className: 'col-sev th-low', text: 'НИЗК', title: 'Низкий риск: мелкие недочёты и «гигиена» безопасности' }),
+                    el('th', { className: 'col-actions', text: 'ДЕЙСТВИЯ' }),
                 ]),
             ]);
+            const sevBadge = (cls, n) => el('span', {
+                className: 'badge ' + cls + ((n ?? 0) > 0 ? '' : ' badge-zero'),
+                text: String(n ?? 0),
+            });
             const tbody = el('tbody');
             for (const s of scans) {
-                const viewBtn = el('button', { className: 'btn-view', text: 'ПРОСМОТР',
+                const viewBtn = el('button', { className: 'btn-view', text: 'ПРОСМОТР', title: 'Открыть полный отчёт по скану',
                     onclick: () => window.open(`/history/${s.id}/view`, '_blank') });
-                const chartBtn = el('button', { className: 'btn-chart', text: 'ДИАГРАММА',
+                const chartBtn = el('button', { className: 'btn-chart', text: 'ДИАГРАММА', title: 'Диаграмма найденных уязвимостей',
                     onclick: () => window.open(`/history/${s.id}/chart`, '_blank', 'width=1200,height=800') });
-                const bundleBtn = el('button', { className: 'btn-bundle', text: 'ZIP', title: 'Скачать все форматы одним архивом',
+                const bundleBtn = el('button', { className: 'btn-bundle', text: 'ZIP', title: 'Скачать все форматы отчёта одним архивом',
                     onclick: () => window.location.href = `/history/${s.id}/bundle` });
-                const delBtn = el('button', { className: 'btn-delete', text: 'УДАЛИТЬ',
+                const delBtn = el('button', { className: 'btn-delete', text: 'УДАЛИТЬ', title: 'Удалить этот скан из истории',
                     onclick: async () => {
                         if (!confirm('Удалить скан #' + s.id + '?')) return;
                         try {
@@ -680,16 +690,18 @@ async function loadHistory(page) {
                         } catch (e) { alert('Ошибка: ' + e.message); }
                     } });
                 const row = el('tr', null, [
-                    el('td', { className: 'diff-cell' }, [el('input', { type: 'checkbox', className: 'diff-check',
+                    el('td', { className: 'col-diff diff-cell' }, [el('input', { type: 'checkbox', className: 'diff-check',
                         dataset: { id: String(s.id), target: s.target_url }, title: 'Выбрать для сравнения' })]),
-                    el('td', { text: String(s.id) }),
-                    el('td', { text: s.scan_date.replace('T', ' ').slice(0, 19) }),
-                    el('td', { className: 'url-cell', text: s.target_url, title: s.target_url }),
-                    el('td', null, [el('span', { className: 'badge badge-crit', text: String(s.critical ?? 0) })]),
-                    el('td', null, [el('span', { className: 'badge badge-high', text: String(s.high ?? 0) })]),
-                    el('td', null, [el('span', { className: 'badge badge-med', text: String(s.medium ?? 0) })]),
-                    el('td', null, [el('span', { className: 'badge badge-low', text: String(s.low ?? 0) })]),
-                    el('td', { className: 'actions-cell' }, [viewBtn, chartBtn, bundleBtn, delBtn]),
+                    el('td', { className: 'col-id', text: String(s.id) }),
+                    el('td', { className: 'col-date', text: s.scan_date.replace('T', ' ').slice(0, 19) }),
+                    el('td', { className: 'col-target url-cell', text: s.target_url, title: s.target_url }),
+                    el('td', { className: 'col-sev' }, [sevBadge('badge-crit', s.critical)]),
+                    el('td', { className: 'col-sev' }, [sevBadge('badge-high', s.high)]),
+                    el('td', { className: 'col-sev' }, [sevBadge('badge-med', s.medium)]),
+                    el('td', { className: 'col-sev' }, [sevBadge('badge-low', s.low)]),
+                    el('td', { className: 'col-actions actions-cell' }, [
+                        el('div', { className: 'row-actions' }, [viewBtn, chartBtn, bundleBtn, delBtn]),
+                    ]),
                 ]);
                 tbody.appendChild(row);
             }
