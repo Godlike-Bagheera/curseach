@@ -113,6 +113,39 @@
                 <div class="auth-section-title">АККАУНТ 1 — ОСНОВНОЙ («АЛИСА»)</div>
                 <div class="auth-row-2col">
                     <div>
+                        <label class="auth-label" for="acc1Profile">ПРОФИЛЬ</label>
+                        <select id="acc1Profile" class="auth-field" {% if is_guest %}disabled{% endif %}><option value="">— вручную —</option></select>
+                    </div>
+                    <div>
+                        <label class="auth-label" for="acc1Type">ТИП АВТОРИЗАЦИИ</label>
+                        <select id="acc1Type" class="auth-field" {% if is_guest %}disabled{% endif %}>
+                            <option value="bearer">Bearer (логин/пароль)</option>
+                            <option value="form">Form (cookie-сессия)</option>
+                            <option value="apikey">API-key (заголовок)</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="acc1Extra" class="auth-row-2col hidden">
+                    <div>
+                        <label class="auth-label" for="acc1KeyHeader">API-KEY: ЗАГОЛОВОК</label>
+                        <input type="text" id="acc1KeyHeader" class="auth-field" placeholder="X-API-Key" autocomplete="off" {% if is_guest %}disabled{% endif %}>
+                    </div>
+                    <div>
+                        <label class="auth-label" for="acc1KeyValue">API-KEY: ЗНАЧЕНИЕ</label>
+                        <input type="text" id="acc1KeyValue" class="auth-field" placeholder="secret" autocomplete="off" {% if is_guest %}disabled{% endif %}>
+                    </div>
+                    <div>
+                        <label class="auth-label" for="acc1LoginPath">FORM: LOGIN PATH</label>
+                        <input type="text" id="acc1LoginPath" class="auth-field" placeholder="/login" autocomplete="off" {% if is_guest %}disabled{% endif %}>
+                    </div>
+                    <div>
+                        <label class="auth-label" for="acc1FormFields">FORM: ДОП. ПОЛЯ (JSON)</label>
+                        <input type="text" id="acc1FormFields" class="auth-field" placeholder='{"csrf":"token"}' autocomplete="off" {% if is_guest %}disabled{% endif %}>
+                    </div>
+                </div>
+                <button type="button" id="acc1SaveProfile" class="mini-btn" {% if is_guest %}disabled{% endif %}>СОХРАНИТЬ ПРОФИЛЬ</button>
+                <div class="auth-row-2col">
+                    <div>
                         <label class="auth-label" for="acc1User">ЛОГИН</label>
                         <input type="text" id="acc1User" class="auth-field" placeholder="alice" autocomplete="off" {% if is_guest %}disabled{% endif %}>
                     </div>
@@ -125,6 +158,39 @@
 
             <div class="auth-section auth-secondary">
                 <div class="auth-section-title">АККАУНТ 2 — ЧУЖОЙ АККАУНТ («БОБ»)</div>
+                <div class="auth-row-2col">
+                    <div>
+                        <label class="auth-label" for="acc2Profile">ПРОФИЛЬ</label>
+                        <select id="acc2Profile" class="auth-field" {% if is_guest %}disabled{% endif %}><option value="">— вручную —</option></select>
+                    </div>
+                    <div>
+                        <label class="auth-label" for="acc2Type">ТИП АВТОРИЗАЦИИ</label>
+                        <select id="acc2Type" class="auth-field" {% if is_guest %}disabled{% endif %}>
+                            <option value="bearer">Bearer (логин/пароль)</option>
+                            <option value="form">Form (cookie-сессия)</option>
+                            <option value="apikey">API-key (заголовок)</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="acc2Extra" class="auth-row-2col hidden">
+                    <div>
+                        <label class="auth-label" for="acc2KeyHeader">API-KEY: ЗАГОЛОВОК</label>
+                        <input type="text" id="acc2KeyHeader" class="auth-field" placeholder="X-API-Key" autocomplete="off" {% if is_guest %}disabled{% endif %}>
+                    </div>
+                    <div>
+                        <label class="auth-label" for="acc2KeyValue">API-KEY: ЗНАЧЕНИЕ</label>
+                        <input type="text" id="acc2KeyValue" class="auth-field" placeholder="secret" autocomplete="off" {% if is_guest %}disabled{% endif %}>
+                    </div>
+                    <div>
+                        <label class="auth-label" for="acc2LoginPath">FORM: LOGIN PATH</label>
+                        <input type="text" id="acc2LoginPath" class="auth-field" placeholder="/login" autocomplete="off" {% if is_guest %}disabled{% endif %}>
+                    </div>
+                    <div>
+                        <label class="auth-label" for="acc2FormFields">FORM: ДОП. ПОЛЯ (JSON)</label>
+                        <input type="text" id="acc2FormFields" class="auth-field" placeholder='{"csrf":"token"}' autocomplete="off" {% if is_guest %}disabled{% endif %}>
+                    </div>
+                </div>
+                <button type="button" id="acc2SaveProfile" class="mini-btn" {% if is_guest %}disabled{% endif %}>СОХРАНИТЬ ПРОФИЛЬ</button>
                 <div class="auth-hint">Под этим аккаунтом сканер попробует открыть данные и функции первого — так находятся IDOR/BOLA и BFLA.</div>
                 <div class="auth-row-2col">
                     <div>

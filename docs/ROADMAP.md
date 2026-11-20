@@ -16,11 +16,9 @@
 - **Webhook-уведомления** — JSON-сводка по завершении скана (httpx, таймаут, 1 retry) — PR #39.
 - **Supply-chain** — Docker base-image по digest, ```pip --require-hashes``` (hash-locked requirements) — PR #40.
 - **Генерация about.html** — секция проверок из CHECK_METADATA + descriptions.py (gen_about.py --check в CI) — PR #41.
+- **Auth-профили** — bearer/form/apikey, refresh при 401, сохранение профилей (auth_profiles + CRUD + UI) — PR #42.
 
 ## Осталось
-
-### Auth-профили
-- Form-login, cookie-сессии, API-key header, refresh токена; сохранение профилей сканирования.
 
 ### Операционные фичи
 - Расписание / повторные сканы.

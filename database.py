@@ -76,6 +76,19 @@ def init_db():
         if "webhook_url" not in cols:
             c.execute("ALTER TABLE scans ADD COLUMN webhook_url TEXT DEFAULT ''")
         c.execute("CREATE INDEX IF NOT EXISTS idx_scans_scan_date ON scans(scan_date DESC)")
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS auth_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                auth_type TEXT DEFAULT 'bearer',
+                username TEXT DEFAULT '',
+                password TEXT DEFAULT '',
+                api_key_header TEXT DEFAULT '',
+                api_key_value TEXT DEFAULT '',
+                form_fields TEXT DEFAULT '',
+                login_path TEXT DEFAULT ''
+            )
+        """)
 
 
 def save_scan(
@@ -312,3 +325,81 @@ def prune_old_scans(days: int) -> int:
         count = c.fetchone()[0]
         c.execute("DELETE FROM scans WHERE scan_date < ?", (cutoff,))
     return count
+
+
+# ---------- Auth-профили (сохранённые учётные данные сканирования) ----------
+def _profile_row(row) -> dict:
+    return {
+        "id": row[0],
+        "name": row[1],
+        "auth_type": row[2] or "bearer",
+        "username": row[3] or "",
+        "password": row[4] or "",
+        "api_key_header": row[5] or "",
+        "api_key_value": row[6] or "",
+        "form_fields": _safe_json_loads(row[7]) if row[7] else {},
+        "login_path": row[8] or "",
+    }
+
+
+def list_auth_profiles() -> list[dict]:
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute(
+            "SELECT id, name, auth_type, username, password, api_key_header, api_key_value, form_fields, login_path FROM auth_profiles ORDER BY name"
+        )
+        return [_profile_row(r) for r in c.fetchall()]
+
+
+def get_auth_profile(profile_id: int) -> dict | None:
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute(
+            "SELECT id, name, auth_type, username, password, api_key_header, api_key_value, form_fields, login_path FROM auth_profiles WHERE id = ?",
+            (profile_id,),
+        )
+        row = c.fetchone()
+    return _profile_row(row) if row else None
+
+
+def save_auth_profile(
+    name,
+    auth_type="bearer",
+    username="",
+    password="",
+    api_key_header="",
+    api_key_value="",
+    form_fields=None,
+    login_path="",
+) -> int:
+    ff = json.dumps(form_fields or {}, ensure_ascii=False)
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute(
+            """INSERT INTO auth_profiles (name, auth_type, username, password, api_key_header, api_key_value, form_fields, login_path)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(name) DO UPDATE SET auth_type=excluded.auth_type, username=excluded.username,
+                   password=excluded.password, api_key_header=excluded.api_key_header, api_key_value=excluded.api_key_value,
+                   form_fields=excluded.form_fields, login_path=excluded.login_path""",
+            (name, auth_type, username, password, api_key_header, api_key_value, ff, login_path),
+        )
+        c.execute("SELECT id FROM auth_profiles WHERE name = ?", (name,))
+        return c.fetchone()[0]
+
+
+def delete_auth_profile(profile_id: int):
+    with _db() as conn:
+        conn.execute("DELETE FROM auth_profiles WHERE id = ?", (profile_id,))
+
+
+def profile_to_account(p: dict) -> dict:
+    """Профиль БД → поля AccountConfig."""
+    return {
+        "username": p.get("username") or None,
+        "password": p.get("password") or None,
+        "auth_type": p.get("auth_type") or "bearer",
+        "api_key_header": p.get("api_key_header") or None,
+        "api_key_value": p.get("api_key_value") or None,
+        "form_fields": p.get("form_fields") or None,
+        "login_path": p.get("login_path") or None,
+    }
