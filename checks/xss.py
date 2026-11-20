@@ -2,7 +2,7 @@
 
 import asyncio
 
-from .base import ScanContext, ev
+from .base import ScanContext, _safe_get, _safe_post, _writable_endpoints, ev
 from .descriptions import get_vuln_info
 from .surface import Surface, build_surfaces, probe
 
@@ -56,3 +56,35 @@ async def check_xss(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
 
     results = await asyncio.gather(*(per_surface(s) for s in surfaces))
     return [f for chunk in results for f in chunk]
+
+
+async def check_stored_xss(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
+    """POST с XSS-payload в writable-эндпоинты, затем GET HTML-страниц: ищем неотэкранированное отражение."""
+    findings: list[dict] = []
+    payload = "<script>alert(1337)</script>"
+    for ep in _writable_endpoints(ctx, endpoints)[:3]:
+        await _safe_post(
+            ctx.client,
+            f"{ctx.target_url}{ep}",
+            json={"comment": payload, "text": payload, "body": payload, "name": payload, "message": payload},
+        )
+    static = [e for e in endpoints if "{" not in e and "}" not in e]
+    for ep in static[:12]:
+        r = await _safe_get(ctx.client, f"{ctx.target_url}{ep}")
+        if r is None:
+            continue
+        if "html" in r.headers.get("content-type", "") and payload in r.text:
+            findings.append(
+                {
+                    "level": "HIGH",
+                    "type": "Stored XSS",
+                    "endpoint": ep,
+                    "method": "GET",
+                    "desc": "Payload из POST отражается без экранирования в HTML — хранимый XSS",
+                    "confidence": "high",
+                    "details": get_vuln_info("Stored XSS"),
+                    "evidence": ev(r),
+                }
+            )
+            break
+    return findings

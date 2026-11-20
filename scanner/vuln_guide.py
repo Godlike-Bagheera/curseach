@@ -77,6 +77,8 @@ CHECK_VULN = {
     "check_path_traversal": "Path Traversal",
     "check_open_redirect": "Open Redirect",
     "check_cookie_flags": "Insecure Cookie Flags",
+    "check_stored_xss": "Stored XSS",
+    "check_jwt_exp": "JWT Expiration Not Verified",
 }
 
 # Русские названия типов без отдельной карточки в «популярных» — для заголовков реестра.

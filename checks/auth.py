@@ -343,3 +343,38 @@ async def check_bfla(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
                 )
 
     return findings
+
+
+async def check_jwt_exp(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
+    """Поддельный JWT (alg=none) с истёкшим exp: если принят — срок действия не проверяется (CWE-613)."""
+    findings: list = []
+    paths = (ctx.openapi or {}).get("paths", {}) if isinstance(ctx.openapi, dict) else {}
+    candidates = [p for p, item in paths.items() if isinstance(item, dict) and "get" in item and "{" in p]
+    candidates += [p for p in endpoints if "{" in p]
+    forged = "{}.{}.".format(
+        _b64url_nopad(b'{"alg":"none","typ":"JWT"}'),
+        _b64url_nopad(b'{"uid":1,"role":"admin","exp":1000000000}'),
+    )
+    headers = {"Authorization": f"Bearer {forged}"}
+    tried = 0
+    for ep in dict.fromkeys(candidates):
+        if tried >= 8:
+            break
+        if "{" not in ep:
+            continue
+        tried += 1
+        param = ep[ep.find("{") + 1 : ep.find("}")]
+        path = ep.replace(f"{{{param}}}", "1")
+        r = await _safe_get(ctx.anon_client, f"{ctx.target_url}{path}", headers=headers)
+        if r is not None and r.status_code == 200:
+            findings.append(
+                {
+                    "level": "HIGH",
+                    "type": "JWT Expiration Not Verified",
+                    "endpoint": ep,
+                    "desc": "Сервер принял JWT с истёкшим exp (HTTP 200) — срок действия токена не проверяется",
+                    "details": get_vuln_info("JWT Expiration Not Verified"),
+                }
+            )
+            break
+    return findings

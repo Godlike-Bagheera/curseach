@@ -162,6 +162,16 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "example": "Set-Cookie: session_id=abc — без Secure, HttpOnly и SameSite.",
         "recommendation": "Ставьте session-cookie с Secure; HttpOnly; SameSite=Lax (или Strict); при необходимости — префикс __Host- и Path=/.",
     },
+    "Stored XSS": {
+        "plain": "Payload, отправленный в POST (комментарий/имя/сообщение), сохраняется и затем отражается в HTML без экранирования — скрипт выполняется у всех, кто откроет страницу.",
+        "example": "POST /api/comments с comment=<script>alert(1337)</script> → GET /api/comments отдаёт <li><script>alert(1337)</script></li>.",
+        "recommendation": "Экранируйте вывод (HTML-escape) во всех шаблонах; используйте автоэскейпинг шаблонизатора, CSP и валидацию ввода.",
+    },
+    "JWT Expiration Not Verified": {
+        "plain": "Сервер принимает JWT с истёкшим exp — украденный токен действует бессрочно, отзыв не работает.",
+        "example": "Поддельный токен с exp=1000000000 (2001 год) принят сервером с HTTP 200.",
+        "recommendation": "Проверяйте exp (и nbf) при валидации JWT; отклоняйте истёкшие токены; настройте короткое время жизни и refresh-токены.",
+    },
     "Weak CSP": {
         "plain": (
             "CSP есть, но ослаблен: script-src/default-src разрешает 'unsafe-inline', 'unsafe-eval' "
@@ -495,6 +505,13 @@ VULN_DESCRIPTIONS: dict[str, dict[str, str]] = {
 # Классификация: CWE + OWASP API Security Top 10 (2023) + OWASP Top 10 (2021)
 # и confidence по умолчанию для эвристик vs сигнатурных проверок.
 VULN_META: dict[str, dict] = {
+    "Stored XSS": {"cwe": ["CWE-79"], "owasp_api": ["API8:2023"], "owasp_top10": "A03:2021", "confidence": "high"},
+    "JWT Expiration Not Verified": {
+        "cwe": ["CWE-613"],
+        "owasp_api": ["API2:2023"],
+        "owasp_top10": "A07:2021",
+        "confidence": "high",
+    },
     "Path Traversal": {"cwe": ["CWE-22"], "owasp_api": ["API8:2023"], "owasp_top10": "A01:2021", "confidence": "high"},
     "Open Redirect": {"cwe": ["CWE-601"], "owasp_api": ["API8:2023"], "owasp_top10": "A01:2021", "confidence": "high"},
     "Insecure Cookie Flags": {

@@ -664,3 +664,28 @@ def session_login():
     resp = JSONResponse({"ok": True})
     resp.set_cookie("session_id", "demo-session", path="/")
     return resp
+
+
+# ---------- УЯЗВИМОСТЬ: Stored XSS (комментарии) ----------
+_COMMENTS: list = []
+
+
+@app.post("/api/comments")
+async def add_comment(request: Request):
+    """УЯЗВИМОСТЬ: комментарий сохраняется без sanitization."""
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    text = data.get("comment") or data.get("text") or data.get("body") or data.get("message") or ""
+    _COMMENTS.append(str(text))
+    return {"ok": True, "count": len(_COMMENTS)}
+
+
+@app.get("/api/comments")
+def list_comments():
+    """УЯЗВИМОСТЬ: комментарии отражаются в HTML без экранирования."""
+    items = "".join(f"<li>{c}</li>" for c in _COMMENTS)
+    return HTMLResponse(f"<html><body><ul>{items}</ul></body></html>")
