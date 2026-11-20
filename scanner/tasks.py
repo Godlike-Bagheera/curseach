@@ -61,6 +61,7 @@ class ScanRequest(BaseModel):
     webhook_url: str | None = None  # JSON-сводка по завершении скана
     account1_profile_id: int | None = None  # сохранённый auth-профиль (БД)
     account2_profile_id: int | None = None
+    project_id: int | None = None  # проект (мульти-цели)
 
 
 @dataclass
@@ -187,10 +188,12 @@ class ScanTask:
         account2: AccountConfig | None = None,
         seed: int | None = None,
         webhook_url: str | None = None,
+        project_id: int | None = None,
     ):
         self.id = str(uuid.uuid4())
         self.seed = seed
         self.webhook_url = webhook_url
+        self.project_id = project_id
         self.cancel_event = threading.Event()
         self.target_url = target_url
         self.mode = mode
@@ -551,6 +554,7 @@ async def scan_engine(task: ScanTask):
                     requests_used=task.requests_used,
                     requests_max=task.budget.max_requests if task.budget else SCAN_MAX_REQUESTS,
                     webhook_url=task.webhook_url or "",
+                    project_id=task.project_id,
                 )
             except sqlite3.OperationalError:
                 database.init_db()  # пересоздаём схему и пробуем ещё раз
@@ -569,6 +573,7 @@ async def scan_engine(task: ScanTask):
                     requests_used=task.requests_used,
                     requests_max=task.budget.max_requests if task.budget else SCAN_MAX_REQUESTS,
                     webhook_url=task.webhook_url or "",
+                    project_id=task.project_id,
                 )
             task.add_log("[OK] Результаты сохранены в историю")
         except Exception as e:

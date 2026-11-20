@@ -61,6 +61,7 @@ async def start_scan(req: ScanRequest, user: str = Depends(require_admin)):
         account2=acc2,
         seed=req.seed,
         webhook_url=webhook_url,
+        project_id=req.project_id,
     )
     task.loop = asyncio.get_running_loop()
     tasks[task.id] = task
