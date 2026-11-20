@@ -56,7 +56,8 @@ def init_db():
                 surfaces_count INTEGER DEFAULT 0,
                 requests_used INTEGER DEFAULT 0,
                 requests_max INTEGER DEFAULT 0,
-                webhook_url TEXT DEFAULT ''
+                webhook_url TEXT DEFAULT '',
+                project_id INTEGER
             )
         """)
         c.execute("PRAGMA table_info(scans)")
@@ -75,6 +76,8 @@ def init_db():
             c.execute("ALTER TABLE scans ADD COLUMN requests_max INTEGER DEFAULT 0")
         if "webhook_url" not in cols:
             c.execute("ALTER TABLE scans ADD COLUMN webhook_url TEXT DEFAULT ''")
+        if "project_id" not in cols:
+            c.execute("ALTER TABLE scans ADD COLUMN project_id INTEGER")
         c.execute("CREATE INDEX IF NOT EXISTS idx_scans_scan_date ON scans(scan_date DESC)")
         c.execute("""
             CREATE TABLE IF NOT EXISTS auth_profiles (
@@ -87,6 +90,24 @@ def init_db():
                 api_key_value TEXT DEFAULT '',
                 form_fields TEXT DEFAULT '',
                 login_path TEXT DEFAULT ''
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target_url TEXT NOT NULL,
+                mode TEXT DEFAULT 'full',
+                interval INTEGER DEFAULT 60,
+                profile_id INTEGER,
+                webhook_url TEXT DEFAULT '',
+                enabled INTEGER DEFAULT 1,
+                last_run REAL
             )
         """)
 
@@ -106,6 +127,7 @@ def save_scan(
     requests_used: int = 0,
     requests_max: int = 0,
     webhook_url: str = "",
+    project_id: int | None = None,
 ):
     scan_date = datetime.datetime.now(datetime.timezone.utc).isoformat()
     results_json = json.dumps(results, ensure_ascii=False)
@@ -113,8 +135,8 @@ def save_scan(
         conn.execute(
             """
             INSERT INTO scans (target_url, scan_date, critical, high, medium, low, results_json, mode, partial,
-                               partial_reason, endpoints_count, surfaces_count, requests_used, requests_max, webhook_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               partial_reason, endpoints_count, surfaces_count, requests_used, requests_max, webhook_url, project_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 target_url,
@@ -132,6 +154,7 @@ def save_scan(
                 int(requests_used),
                 int(requests_max),
                 webhook_url,
+                project_id,
             ),
         )
 
@@ -403,3 +426,116 @@ def profile_to_account(p: dict) -> dict:
         "form_fields": p.get("form_fields") or None,
         "login_path": p.get("login_path") or None,
     }
+
+
+# ---------- Проекты (мульти-цели) ----------
+def list_projects() -> list[dict]:
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute("SELECT id, name FROM projects ORDER BY name")
+        return [{"id": r[0], "name": r[1]} for r in c.fetchall()]
+
+
+def create_project(name: str) -> int:
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute("INSERT INTO projects (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name=excluded.name", (name,))
+        c.execute("SELECT id FROM projects WHERE name = ?", (name,))
+        return c.fetchone()[0]
+
+
+def delete_project(project_id: int):
+    with _db() as conn:
+        conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+        conn.execute("UPDATE scans SET project_id = NULL WHERE project_id = ?", (project_id,))
+
+
+# ---------- Расписания (повторные сканы) ----------
+def _schedule_row(r) -> dict:
+    return {
+        "id": r[0],
+        "target_url": r[1],
+        "mode": r[2] or "full",
+        "interval": r[3] or 60,
+        "profile_id": r[4],
+        "webhook_url": r[5] or "",
+        "enabled": bool(r[6]),
+        "last_run": r[7],
+    }
+
+
+def list_schedules() -> list[dict]:
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute(
+            "SELECT id, target_url, mode, interval, profile_id, webhook_url, enabled, last_run FROM schedules ORDER BY id"
+        )
+        return [_schedule_row(r) for r in c.fetchall()]
+
+
+def create_schedule(target_url, mode="full", interval=60, profile_id=None, webhook_url="", enabled=True) -> int:
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO schedules (target_url, mode, interval, profile_id, webhook_url, enabled, last_run) VALUES (?, ?, ?, ?, ?, ?, NULL)",
+            (target_url, mode, int(interval), profile_id, webhook_url, int(enabled)),
+        )
+        return c.lastrowid
+
+
+def delete_schedule(schedule_id: int):
+    with _db() as conn:
+        conn.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
+
+
+def set_schedule_enabled(schedule_id: int, enabled: bool):
+    with _db() as conn:
+        conn.execute("UPDATE schedules SET enabled = ? WHERE id = ?", (int(enabled), schedule_id))
+
+
+def mark_schedule_run(schedule_id: int, now: float):
+    with _db() as conn:
+        conn.execute("UPDATE schedules SET last_run = ? WHERE id = ?", (now, schedule_id))
+
+
+def due_schedules(now: float) -> list[dict]:
+    """Включённые расписания, у которых подошёл срок (last_run + interval <= now)."""
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute(
+            "SELECT id, target_url, mode, interval, profile_id, webhook_url, enabled, last_run FROM schedules WHERE enabled = 1"
+        )
+        rows = c.fetchall()
+    out = []
+    for r in rows:
+        last = r[7]
+        if last is None or now - last >= (r[3] or 60) * 60:
+            out.append(_schedule_row(r))
+    return out
+
+
+# ---------- Тренд по истории (агрегация по дням) ----------
+def get_trend(project_id=None, limit: int = 200) -> list[dict]:
+    from scanner.config import calculate_score
+
+    where = ""
+    params: list = []
+    if project_id is not None:
+        where = "WHERE project_id = ?"
+        params.append(project_id)
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute(
+            f"SELECT substr(scan_date, 1, 10) AS d, SUM(critical), SUM(high), SUM(medium), SUM(low) "
+            f"FROM scans {where} GROUP BY d ORDER BY d DESC LIMIT ?",
+            params + [int(limit)],
+        )
+        rows = c.fetchall()
+    out = []
+    for d, cr, hi, me, lo in rows:
+        cr, hi, me, lo = int(cr or 0), int(hi or 0), int(me or 0), int(lo or 0)
+        out.append(
+            {"date": d, "score": calculate_score(cr, hi, me, lo), "critical": cr, "high": hi, "medium": me, "low": lo}
+        )
+    out.reverse()
+    return out

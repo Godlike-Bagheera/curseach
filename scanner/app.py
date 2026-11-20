@@ -10,7 +10,8 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config
 from .config import origin_allowed
-from .routes import auth, common, history, misc, profiles, scan
+from .routes import auth, common, history, misc, planning, profiles, scan
+from .scheduler import scheduler_loop
 from .security import get_current_user
 from .tasks import gc_loop
 from .vuln_guide import slugify
@@ -24,12 +25,18 @@ async def lifespan(app: FastAPI):
 
     database.init_db()
     gc_task = asyncio.create_task(gc_loop())
+    sched_task = asyncio.create_task(scheduler_loop())
     try:
         yield
     finally:
         gc_task.cancel()
+        sched_task.cancel()
         try:
             await gc_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await sched_task
         except asyncio.CancelledError:
             pass
 
@@ -92,6 +99,8 @@ async def security_middleware(request: Request, call_next):
 # ---------- Роутеры ----------
 app.include_router(auth.router)
 app.include_router(scan.router)
+# planning ДО history: /history/trend должен матчиться раньше /history/{scan_id}
+app.include_router(planning.router)
 app.include_router(history.router)
 app.include_router(misc.router)
 app.include_router(profiles.router)
