@@ -8,20 +8,26 @@ import datetime
 import io
 from typing import Any
 
-_LEVEL_RU = {
-    "CRITICAL": "Критично",
-    "HIGH": "Высоко",
-    "MEDIUM": "Средне",
-    "LOW": "Низко",
-}
+from scanner.config import LEVEL_RU_REPORT as _LEVEL_RU
+from scanner.config import MODE_TITLES_REPORT as _MODE_TITLES
 
 _LEVEL_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
 
-_MODE_TITLES = {
-    "quick": "Быстрая проверка",
-    "full": "Полная проверка",
-    "custom": "Выборочная проверка",
-}
+
+def _safe_cell(value):
+    """CSV formula injection: ячейки, начинающиеся с = + - @ (и TAB/CR),
+    могут исполниться Excel как формула. Экранируем ведущим апострофом."""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
+
+
+class _SafeWriter:
+    def __init__(self, writer):
+        self._writer = writer
+
+    def writerow(self, row):
+        self._writer.writerow([_safe_cell(c) for c in row])
 
 
 def generate_csv(
@@ -42,7 +48,7 @@ def generate_csv(
     buf = io.StringIO()
     # BOM — чтобы Excel корректно открыл UTF-8
     buf.write("\ufeff")
-    writer = csv.writer(buf, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer = _SafeWriter(csv.writer(buf, delimiter=";", quoting=csv.QUOTE_MINIMAL))
 
     scan_str = scan_dt.strftime("%Y-%m-%d %H:%M:%S")
 
