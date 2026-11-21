@@ -46,6 +46,44 @@ def _ensure_pip():
         import pip  # noqa: F401
     except Exception:
         subprocess.check_call([sys.executable, "-m", "ensurepip", "--upgrade"])
+        return
+    # pip < 21 не понимает manylinux-теги свежих wheels и молча скатывается
+    # на сборку из исходников — обновляем (best-effort).
+    try:
+        major = int(pip.__version__.split(".")[0])
+    except Exception:
+        major = 0
+    if major < 21:
+        subprocess.call([sys.executable, "-m", "pip", "install", "--upgrade", "pip>=23"])
+
+
+def _pip_install_cmd(*extra):
+    return [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", *extra, "-r", REQ_FILE]
+
+
+def _run_pip(cmd):
+    """pip с перехватом вывода: диагностика без простыни gcc-ошибок в консоли."""
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def _devel_packages_hint():
+    """Команда установки заголовков Python/компилятора под дистрибутив."""
+    distro = ""
+    try:
+        with open("/etc/os-release", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("ID="):
+                    distro = line.strip().split("=", 1)[1].strip('"')
+                    break
+    except OSError:
+        pass
+    if distro in ("fedora", "rhel", "centos", "rocky", "almalinux", "ol"):
+        return "sudo dnf install python3-devel gcc libffi-devel libjpeg-turbo-devel zlib-devel"
+    if distro in ("debian", "ubuntu", "linuxmint", "pop"):
+        return "sudo apt-get install python3-dev build-essential libffi-dev libjpeg-dev zlib1g-dev"
+    if distro == "alpine":
+        return "sudo apk add python3-dev gcc musl-dev libffi-dev jpeg-dev zlib-dev"
+    return "sudo apt-get install python3-dev build-essential libffi-dev  # или sudo dnf install python3-devel gcc"
 
 
 def ensure_dependencies():
@@ -59,7 +97,24 @@ def ensure_dependencies():
         f"[start] доустанавливаю {len(missing)} пакетов строго по requirements.txt: "
         + ", ".join(f"{n}=={v}" for n, v in missing)
     )
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", REQ_FILE])
+    # 1) Только готовые wheels — компиляция не нужна (python3-devel/gcc не требуются).
+    #    Хеши покрывают Linux x86_64/aarch64, Python 3.11–3.13.
+    res = _run_pip(_pip_install_cmd("--only-binary", ":all:"))
+    if res.returncode != 0:
+        # 2) Fallback: сборка из исходников (нужны gcc и заголовки Python).
+        print("[start] wheels не подошли — пробую сборку из исходников (может занять несколько минут)...")
+        res = _run_pip(_pip_install_cmd())
+    if res.returncode != 0:
+        out = ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
+        print("\n".join(out.splitlines()[-20:]))
+        print("\n\033[31m[start] Не удалось установить зависимости.\033[0m")
+        if "Python.h" in out:
+            print("[start] Не хватает заголовков Python (Python.h). Установите их и перезапустите start.py:")
+        else:
+            print("[start] Готовые wheels захэшированы для Linux (x86_64/aarch64), Python 3.11–3.13.")
+            print("[start] Варианты: Python 3.12/3.13, Docker (docker build -t curseach .) или компилятор:")
+        print("    " + _devel_packages_hint())
+        raise SystemExit(1)
     try:
         import weasyprint  # noqa: F401
     except Exception:
