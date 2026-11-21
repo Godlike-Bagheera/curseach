@@ -31,14 +31,15 @@
 
 <div class="app" id="app">
     <header class="app-header">
-        <h1>DEVSECOPS // СКАНЕР REST API</h1>
+        <h1 data-i18n="app.title">DEVSECOPS // СКАНЕР REST API</h1>
         <div class="header-right">
             <div class="user-badge">
                 ПОЛЬЗОВАТЕЛЬ: {{ user }}{% if is_guest %} [ТОЛЬКО ПРОСМОТР]{% endif %}
             </div>
-            <a href="/about" target="_blank" class="about-btn">О ПРОЕКТЕ</a>
-            <a href="/vulns" target="_blank" class="about-btn">СПРАВОЧНИК УЯЗВИМОСТЕЙ</a>
-            <form method="post" action="/logout" class="logout-form"><button type="submit" class="logout-btn" style="background:none;border:0;cursor:pointer;font:inherit">ВЫЙТИ</button></form>
+            <button type="button" id="langToggle" class="about-btn" title="RU / EN">EN</button>
+            <a href="/about" target="_blank" class="about-btn" data-i18n="btn.about">О ПРОЕКТЕ</a>
+            <a href="/vulns" target="_blank" class="about-btn" data-i18n="btn.vulns">СПРАВОЧНИК УЯЗВИМОСТЕЙ</a>
+            <form method="post" action="/logout" class="logout-form"><button type="submit" class="logout-btn" style="background:none;border:0;cursor:pointer;font:inherit" data-i18n="btn.logout">ВЫЙТИ</button></form>
         </div>
     </header>
 
@@ -49,46 +50,46 @@
     {% endif %}
 
     <nav class="tabs">
-        <button class="tab-btn active" data-tab="scanner">[ СКАНЕР ]</button>
+        <button class="tab-btn active" data-tab="scanner" data-i18n="tab.scanner">[ СКАНЕР ]</button>
         {% if not is_guest %}
-        <button class="tab-btn" data-tab="history">[ ИСТОРИЯ ]</button>
+        <button class="tab-btn" data-tab="history" data-i18n="tab.history">[ ИСТОРИЯ ]</button>
         {% else %}
         <button class="tab-btn" disabled title="Недоступно для гостя">[ ИСТОРИЯ ]</button>
         {% endif %}
         {% if not is_guest %}
-        <button class="tab-btn" data-tab="planning">[ ОПЕРАЦИИ ]</button>
+        <button class="tab-btn" data-tab="planning" data-i18n="tab.planning">[ ОПЕРАЦИИ ]</button>
         {% endif %}
     </nav>
 
     <section id="scanner" class="tab-content active">
         <div class="panel">
-            <label class="panel-label" for="urlInput">&gt; ЦЕЛЕВОЙ URL</label>
+            <label class="panel-label" for="urlInput" data-i18n="panel.url">&gt; ЦЕЛЕВОЙ URL</label>
             <div class="input-row">
                 <input type="text" id="urlInput" value="http://127.0.0.1:8000" spellcheck="false" autocomplete="off" {% if is_guest %}disabled{% endif %}>
-                <button id="scanBtn" class="exec-btn" {% if is_guest %}disabled{% endif %}>ЗАПУСТИТЬ</button>
-            <button id="cancelBtn" class="exec-btn hidden" style="background:#7a2e2e;" {% if is_guest %}disabled{% endif %}>ОСТАНОВИТЬ</button>
+                <button id="scanBtn" class="exec-btn" data-i18n="btn.scan" {% if is_guest %}disabled{% endif %}>ЗАПУСТИТЬ</button>
+            <button id="cancelBtn" class="exec-btn hidden" style="background:#7a2e2e;" {% if is_guest %}disabled{% endif %} data-i18n="btn.cancel">ОСТАНОВИТЬ</button>
             </div>
         </div>
 
         <div class="panel">
-            <label class="panel-label" for="scanProject">&gt; ПРОЕКТ (НЕОБЯЗАТЕЛЬНО)</label>
+            <label class="panel-label" for="scanProject" data-i18n="panel.project">&gt; ПРОЕКТ (НЕОБЯЗАТЕЛЬНО)</label>
             <select id="scanProject" class="auth-field" {% if is_guest %}disabled{% endif %}><option value="">— без проекта —</option></select>
         </div>
 
         <div class="panel">
-            <div class="panel-label">&gt; РЕЖИМ СКАНИРОВАНИЯ</div>
+            <div class="panel-label" data-i18n="panel.mode">&gt; РЕЖИМ СКАНИРОВАНИЯ</div>
             <div class="mode-row" id="modeRow">
                 <label class="mode-item {% if is_guest %}disabled{% endif %}" data-mode="quick">
                     <input type="radio" name="scanMode" value="quick" {% if is_guest %}disabled{% endif %}>
-                    <span>БЫСТРЫЙ</span>
+                    <span data-i18n="mode.quick">БЫСТРЫЙ</span>
                 </label>
                 <label class="mode-item active {% if is_guest %}disabled{% endif %}" data-mode="full">
                     <input type="radio" name="scanMode" value="full" checked {% if is_guest %}disabled{% endif %}>
-                    <span>ПОЛНЫЙ</span>
+                    <span data-i18n="mode.full">ПОЛНЫЙ</span>
                 </label>
                 <label class="mode-item {% if is_guest %}disabled{% endif %}" data-mode="custom">
                     <input type="radio" name="scanMode" value="custom" {% if is_guest %}disabled{% endif %}>
-                    <span>СВОЙ</span>
+                    <span data-i18n="mode.custom">СВОЙ</span>
                 </label>
             </div>
 
@@ -105,7 +106,7 @@
         </div>
 
         <div class="panel">
-            <div class="panel-label">&gt; АВТОРИЗАЦИЯ</div>
+            <div class="panel-label" data-i18n="panel.auth">&gt; АВТОРИЗАЦИЯ</div>
 
             <div class="auth-hint">
                 Сканер войдёт в проверяемый сервис под этими аккаунтами (через <code>/api/auth/login</code>) и получит токены.
@@ -214,7 +215,7 @@
         </div>
 
         <div class="panel">
-            <div class="panel-label">&gt; УВЕДОМЛЕНИЯ</div>
+            <div class="panel-label" data-i18n="panel.notify">&gt; УВЕДОМЛЕНИЯ</div>
             <div class="auth-hint">После завершения скана сканер отправит короткую JSON-сводку на этот адрес (webhook). Поле необязательное.</div>
             <input type="text" id="webhookInput" class="auth-field" placeholder="https://example.com/webhook" spellcheck="false" autocomplete="off" {% if is_guest %}disabled{% endif %}>
         </div>
@@ -222,27 +223,27 @@
         <div class="panel">
             <div class="stats-row">
                 <div class="stat-box stat-critical">
-                    <div class="stat-label">КРИТИЧНО</div>
+                    <div class="stat-label" data-i18n="stat.critical">КРИТИЧНО</div>
                     <div class="stat-value" id="critCount">0</div>
                 </div>
                 <div class="stat-box stat-high">
-                    <div class="stat-label">ВЫСОКО</div>
+                    <div class="stat-label" data-i18n="stat.high">ВЫСОКО</div>
                     <div class="stat-value" id="highCount">0</div>
                 </div>
                 <div class="stat-box stat-medium">
-                    <div class="stat-label">СРЕДНЕ</div>
+                    <div class="stat-label" data-i18n="stat.medium">СРЕДНЕ</div>
                     <div class="stat-value" id="medCount">0</div>
                 </div>
                 <div class="stat-box stat-low">
-                    <div class="stat-label">НИЗКО</div>
+                    <div class="stat-label" data-i18n="stat.low">НИЗКО</div>
                     <div class="stat-value" id="lowCount">0</div>
                 </div>
                 <div class="stat-box stat-score score-safe" id="scoreBox">
-                    <div class="stat-label">ОЦЕНКА</div>
+                    <div class="stat-label" data-i18n="stat.score">ОЦЕНКА</div>
                     <div class="stat-value" id="scoreValue">100</div>
                 </div>
                 <div class="stat-box stat-status">
-                    <div class="stat-label">СТАТУС</div>
+                    <div class="stat-label" data-i18n="stat.status">СТАТУС</div>
                     <div class="stat-value" id="statusValue" role="status" aria-live="polite">ОЖИДАНИЕ</div>
                 </div>
             </div>
@@ -257,10 +258,10 @@
             </div>
 
             <div class="actions">
-                <button id="htmlBtn" class="action-btn" disabled>СФОРМИРОВАТЬ ОТЧЁТ (HTML / PDF)</button>
-                <button id="jsonBtn" class="action-btn" disabled>ЭКСПОРТ JSON</button>
-                <button id="csvBtn" class="action-btn" disabled>ЭКСПОРТ CSV</button>
-                <button id="xlsxBtn" class="action-btn" disabled>ЭКСПОРТ EXCEL</button>
+                <button id="htmlBtn" class="action-btn" data-i18n="btn.html" disabled>СФОРМИРОВАТЬ ОТЧЁТ (HTML / PDF)</button>
+                <button id="jsonBtn" class="action-btn" data-i18n="btn.json" disabled>ЭКСПОРТ JSON</button>
+                <button id="csvBtn" class="action-btn" data-i18n="btn.csv" disabled>ЭКСПОРТ CSV</button>
+                <button id="xlsxBtn" class="action-btn" data-i18n="btn.xlsx" disabled>ЭКСПОРТ EXCEL</button>
             </div>
         </div>
     </section>
@@ -327,5 +328,6 @@
 <script src="/static/chart.umd.min.js"></script>
 <script src="/static/script.js"></script>
 <script src="/static/history_filter.js"></script>
+<script src="/static/i18n.js"></script>
 </body>
 </html>

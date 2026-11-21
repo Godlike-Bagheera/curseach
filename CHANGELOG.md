@@ -15,6 +15,7 @@
 - Генерация секции проверок about.html из единого источника (scripts/gen_about.py, CI-гейт --check).
 - Auth-профили: bearer/form/apikey, refresh при 401; таблица auth_profiles + CRUD /auth-profiles + выбор/сохранение в UI.
 - Расписания (повторные сканы, тик/минута), проекты (мульти-цели), тренд-график по истории (/history/trend, Chart.js).
+- i18n: переключатель EN/RU в шапке (static/i18n.js, data-i18n, localStorage), каркас + ключевой экран.
 
 ## 1.2.0
 
