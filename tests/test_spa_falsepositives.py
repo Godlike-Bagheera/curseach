@@ -30,7 +30,7 @@ def _run(fn, handler, endpoints, spec=None, has_auth=False):
 
 def test_is_spa_shell_markers():
     assert _is_spa_shell(SPA)
-    assert _is_spa_shell('<html><body><app-root></app-root></body></html>')
+    assert _is_spa_shell("<html><body><app-root></app-root></body></html>")
     assert not _is_spa_shell("<html><body>Admin panel (unlisted)</body></html>")
     assert not _is_spa_shell('{"aws_key":"x"}')
     assert not _is_spa_shell("ok")
