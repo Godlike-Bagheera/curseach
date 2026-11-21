@@ -152,7 +152,11 @@ async def check_rate_limiting(ctx: ScanContext, endpoints: list[str] | None = No
     eps = endpoints or []
     candidates = [e for e in eps if "{" not in e and "}" not in e and e not in _RATELIMIT_PROBE_PATHS]
     auth_eps = [e for e in candidates if _is_auth_endpoint(e)]
-    test_path = (auth_eps or candidates or ["/"])[0]
+    api_eps = [e for e in candidates if e.lower().startswith("/api/")]
+    pool = auth_eps or api_eps
+    if not pool:
+        return findings  # rate-limit осмысленен на API/auth-маршрутах, не на голом корне/статике
+    test_path = pool[0]
     url = f"{ctx.target_url}{test_path}"
 
     base = await _safe_get(ctx.client, f"{ctx.target_url}/__nonexistent_baseline_rl__")

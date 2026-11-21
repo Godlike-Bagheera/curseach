@@ -9,7 +9,22 @@ _TRAVERSAL_PAYLOADS = [
     "..%2f..%2f..%2f..%2f..%2fetc%2fpasswd",
     "....//....//....//....//etc/passwd",
 ]
-_TRAVERSAL_SIGS = ["root:x:0:0", "root:*:0:0", "[boot loader]", "; for 16-bit app support", "/bin/bash", "/bin/sh"]
+_TRAVERSAL_SIGS = ["root:x:0:0", "root:*:0:0", "[boot loader]", "; for 16-bit app support"]
+
+
+def _traversal_signature(body: str) -> bool:
+    """Сигнатуры реального содержимого системных файлов, а не случайных строк.
+
+    Голые «/bin/sh»/«/bin/bash» встречаются в легитимных ответах (доки/конфиги),
+    поэтому shell-путь засчитывается только в passwd-контексте (root: / :0:0).
+    """
+    if any(sig in body for sig in _TRAVERSAL_SIGS):
+        return True
+    if ":/bin/bash" in body or ":/bin/sh" in body:
+        return "root:" in body or ":0:0" in body
+    return False
+
+
 _FILE_PARAMS = {
     "file",
     "path",
@@ -53,7 +68,7 @@ async def check_path_traversal(ctx: ScanContext, endpoints: list[str]) -> list[d
                 if r is None or r.status_code >= 500:
                     continue
                 body = _body(r)
-                if any(sig in body for sig in _TRAVERSAL_SIGS):
+                if _traversal_signature(body):
                     seen.add((s.path, name))
                     findings.append(
                         {

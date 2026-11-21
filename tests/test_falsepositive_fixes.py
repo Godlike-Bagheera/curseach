@@ -72,12 +72,12 @@ def test_idor_skips_explicitly_public_param_endpoint():
     assert [x["endpoint"] for x in f] == ["/api/orders/{id}"]
 
 
-def test_idor_param_endpoint_without_spec_still_flagged():
+def test_idor_param_ownership_endpoint_without_spec_still_flagged():
     def handler(r):
-        return httpx.Response(200, json={"id": r.url.path.rsplit("/", 1)[-1], "name": "x"})
+        return httpx.Response(200, json={"id": r.url.path.rsplit("/", 1)[-1], "user_id": 2, "item": "x"})
 
-    f = _run(check_idor, handler, ["/api/products/{id}"])
-    assert any(x["endpoint"] == "/api/products/{id}" for x in f)
+    f = _run(check_idor, handler, ["/api/orders/{id}"])
+    assert any(x["endpoint"] == "/api/orders/{id}" for x in f)
 
 
 # ---------- 3. CSRF: Bearer-only API без cookies не флагуется ----------

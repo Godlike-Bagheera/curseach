@@ -21,6 +21,52 @@ from .base import (
 )
 from .descriptions import get_vuln_info
 
+_IDOR_OWNERSHIP_FIELDS = (
+    "user_id",
+    "owner_id",
+    "account_id",
+    "tenant_id",
+    "customer_id",
+    "userid",
+    "owner",
+    "email",
+    "username",
+)
+_IDOR_SENSITIVE_PATHS = (
+    "order",
+    "user",
+    "account",
+    "profile",
+    "report",
+    "invoice",
+    "customer",
+    "cart",
+    "address",
+    "payment",
+    "private",
+    "keys",
+    "admin",
+    "system",
+    "config",
+    "settings",
+    "internal",
+    "debug",
+    "wallet",
+    "transaction",
+)
+
+
+def _idor_ownership_signal(ep: str, body: str) -> bool:
+    """Эвристика IDOR без 2 токенов осмысленна только для owner-scoped/чувствительных данных.
+
+    Публичный каталог (разные товары по ID без признаков владельца) — не IDOR.
+    """
+    low = (body or "").lower()
+    if any(f in low for f in _IDOR_OWNERSHIP_FIELDS):
+        return True
+    epl = (ep or "").lower()
+    return any(k in epl for k in _IDOR_SENSITIVE_PATHS)
+
 
 # ================== IDOR / Broken Access Control ==================
 async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
@@ -48,6 +94,10 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
 
         hashes = {tid: _content_hash(r) for tid, r in responses.items()}
         if len(set(hashes.values())) >= 2:
+            # Без 2 токенов это эвристика: флагум только owner-scoped/чувствительные данные.
+            sample_body = _body(next(iter(responses.values())))
+            if not _idor_ownership_signal(ep, sample_body):
+                continue
             ids_list = ", ".join(responses.keys())
             findings.append(
                 {
@@ -129,6 +179,9 @@ async def check_idor_auth(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
                 level = "CRITICAL"
                 desc = "Эндпоинт требует авторизацию по спеке, но отдаёт идентичный ответ с токеном и без него"
             else:
+                # Без 2 токенов: только чувствительные/owner-scoped эндпоинты, не публичные коллекции.
+                if not _idor_ownership_signal(ep, _body(r_auth)):
+                    continue
                 level = "MEDIUM"
                 desc = (
                     "Эвристика: идентичный ответ с токеном и без него — возможно, эндпоинт публичный; проверьте вручную"
