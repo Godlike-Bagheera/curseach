@@ -17,6 +17,8 @@ REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 REQ_FILE = os.path.join(REPO_ROOT, "requirements.txt")
 os.chdir(REPO_ROOT)
 sys.path.insert(0, REPO_ROOT)
+if os.name == "nt":
+    os.system("")  # включить ANSI-цвета в консоли Windows 10+
 
 
 def _parse_pins(text):
@@ -67,7 +69,11 @@ def _run_pip(cmd):
 
 
 def _devel_packages_hint():
-    """Команда установки заголовков Python/компилятора под дистрибутив."""
+    """Команда установки заголовков Python/компилятора под платформу."""
+    if sys.platform == "win32":
+        return "Windows: Python 3.12/3.13 с python.org (галочка 'Add python.exe to PATH') или Docker/WSL2 — компилятор не нужен"
+    if sys.platform == "darwin":
+        return "macOS: xcode-select --install (или Docker). Для PDF: brew install pango gdk-pixbuf libffi"
     distro = ""
     try:
         with open("/etc/os-release", encoding="utf-8") as f:
@@ -98,7 +104,7 @@ def ensure_dependencies():
         + ", ".join(f"{n}=={v}" for n, v in missing)
     )
     # 1) Только готовые wheels — компиляция не нужна (python3-devel/gcc не требуются).
-    #    Хеши покрывают Linux x86_64/aarch64, Python 3.11–3.13.
+    #    Хеши покрывают Linux/Windows/macOS (x86_64/arm64), Python 3.11–3.13.
     res = _run_pip(_pip_install_cmd("--only-binary", ":all:"))
     if res.returncode != 0:
         # 2) Fallback: сборка из исходников (нужны gcc и заголовки Python).
@@ -111,7 +117,7 @@ def ensure_dependencies():
         if "Python.h" in out:
             print("[start] Не хватает заголовков Python (Python.h). Установите их и перезапустите start.py:")
         else:
-            print("[start] Готовые wheels захэшированы для Linux (x86_64/aarch64), Python 3.11–3.13.")
+            print("[start] Готовые wheels захэшированы для Linux/Windows/macOS, Python 3.11–3.13.")
             print("[start] Варианты: Python 3.12/3.13, Docker (docker build -t curseach .) или компилятор:")
         print("    " + _devel_packages_hint())
         raise SystemExit(1)
