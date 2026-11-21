@@ -59,7 +59,7 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     sensitive_keywords = ["keys", "admin", "system", "config", "settings", "internal", "debug"]
     # Baseline catch-all: SPA (nginx try_files / React router) отдаёт один и тот же
     # index.html на /admin, /config, /debug. Это НЕ доступ к чувствительным данным.
-    base = await _safe_get(ctx.client, f"{ctx.target_url}{ep if False else '__nonexistent_baseline_idor__'}")
+    base = await _safe_get(ctx.client, f"{ctx.target_url}/__nonexistent_baseline_idor__")
     base_status = base.status_code if base is not None else None
     base_body = _norm_body(base) if base is not None else None
     for ep in endpoints:
