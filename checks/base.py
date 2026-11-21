@@ -238,6 +238,28 @@ def _content_hash(resp: httpx.Response | None) -> str:
         return ""
 
 
+def _is_spa_shell(text: str) -> bool:
+    """Эвристика: ответ — оболочка SPA (catch-all index.html), а не данные."""
+    if not text:
+        return False
+    low = text.lower()
+    if "<html" not in low and "<!doctype html" not in low:
+        return False
+    markers = ('<div id="root"', '<div id="app"', "<app-root", '<div id="__next"', "<router-outlet")
+    return any(m in low for m in markers)
+
+
+def _is_html(r) -> bool:
+    ct = (r.headers.get("content-type") or "").lower()
+    if "text/html" in ct:
+        return True
+    try:
+        body = (r.text or "").lstrip().lower()
+    except Exception:
+        return False
+    return body.startswith("<!doctype html") or body.startswith("<html")
+
+
 def _norm_body(r) -> str:
     """Нормализует динамику (timestamps/UUID/nonce) перед хеш-сравнением."""
     try:
