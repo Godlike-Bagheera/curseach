@@ -96,7 +96,13 @@ async def check_jwt_none(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
         tried += 1
         param = ep[ep.find("{") + 1 : ep.find("}")]
         path = ep.replace(f"{{{param}}}", "1")
-        r = await _safe_get(ctx.anon_client, f"{ctx.target_url}{path}", headers=headers)
+        url = f"{ctx.target_url}{path}"
+        # Baseline: эндпоинт обязан реально требовать auth (аноним без токена → не 200).
+        # Публичный эндпоинт, отдающий 200 всем, не доказывает JWT-уязвимость.
+        r_base = await _safe_get(ctx.anon_client, url)
+        if r_base is not None and r_base.status_code == 200:
+            continue
+        r = await _safe_get(ctx.anon_client, url, headers=headers)
         if r is not None and r.status_code == 200:
             findings.append(
                 {
@@ -367,7 +373,13 @@ async def check_jwt_exp(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
         tried += 1
         param = ep[ep.find("{") + 1 : ep.find("}")]
         path = ep.replace(f"{{{param}}}", "1")
-        r = await _safe_get(ctx.anon_client, f"{ctx.target_url}{path}", headers=headers)
+        url = f"{ctx.target_url}{path}"
+        # Baseline: эндпоинт обязан реально требовать auth (аноним без токена → не 200).
+        # Публичный эндпоинт, отдающий 200 всем, не доказывает JWT-уязвимость.
+        r_base = await _safe_get(ctx.anon_client, url)
+        if r_base is not None and r_base.status_code == 200:
+            continue
+        r = await _safe_get(ctx.anon_client, url, headers=headers)
         if r is not None and r.status_code == 200:
             findings.append(
                 {
@@ -406,10 +418,15 @@ async def check_jwt_weak_secret(ctx: ScanContext, endpoints: list[str]) -> list[
     ep = candidates[0]
     param = ep[ep.find("{") + 1 : ep.find("}")]
     path = ep.replace(f"{{{param}}}", "1")
+    url = f"{ctx.target_url}{path}"
+    # Baseline: эндпоинт должен реально требовать auth (без токена → не 200).
+    r_base = await _safe_get(ctx.anon_client, url)
+    if r_base is not None and r_base.status_code == 200:
+        return findings
     for sec in secrets:
         sig = b64(hmac.new(sec.encode(), signing_input, hashlib.sha256).digest())
         token = f"{header}.{payload}.{sig}"
-        r = await _safe_get(ctx.anon_client, f"{ctx.target_url}{path}", headers={"Authorization": f"Bearer {token}"})
+        r = await _safe_get(ctx.anon_client, url, headers={"Authorization": f"Bearer {token}"})
         if r is not None and r.status_code == 200:
             findings.append(
                 {
