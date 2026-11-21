@@ -268,10 +268,17 @@ function renderChecks() {
     });
     for (const c of sorted) {
         const cb = el('input', { type: 'checkbox', dataset: { id: c.id } });
+        const help = document.createElement('button');
+        help.type = 'button';
+        help.className = 'help-q';
+        help.dataset.help = 'check:' + c.id;
+        help.setAttribute('aria-label', 'Что это?');
+        help.textContent = '?';
         const label = el('label', { className: 'check-item' }, [
             cb,
             el('span', { className: 'name', text: c.name }),
             el('span', { className: 'check-level ' + c.level, text: c.level }),
+            help,
         ]);
         cb.addEventListener('change', () => {
             label.classList.toggle('checked', cb.checked);

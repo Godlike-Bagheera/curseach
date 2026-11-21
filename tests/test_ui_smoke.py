@@ -74,6 +74,15 @@ def test_ui_smoke():
             page.fill("#password", "admin")
             page.click('button[type="submit"]')
             page.wait_for_url(url + "/", timeout=10000)
+            # «?»-подсказки на главной: кнопка у панели URL + тултип по наведению
+            assert page.locator(".help-q").count() >= 1
+            page.locator('.help-q[data-help="ui:panel.url"]').hover()
+            page.wait_for_selector(".help-tip.show", timeout=3000)
+            assert len(page.locator(".help-tip.show").inner_text()) > 10
+            # Свой режим: у каждой проверки есть «?»
+            page.check('input[name="scanMode"][value="custom"]')
+            page.wait_for_selector("#checksList .check-item", timeout=5000)
+            assert page.locator("#checksList .help-q").count() >= 1
             # Справочник: поиск по EN-названию сужает карточки без перезагрузки
             page.goto(url + "/vulns")
             # Якоря отчётов подсвечивают карточку реестра; бейджи RU+EN; счётчик секций

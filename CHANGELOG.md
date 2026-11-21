@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### UX: «?»-подсказки для нетехнических пользователей
+- К каждому пункту главной (URL/проект/режим/авторизация/webhook, режимы, аккаунты, шкалы важности) и к каждой проверке добавлена кнопка «?» с простым объяснением (RU/EN).
+- Тултип: наведение + фокус с клавиатуры + тап на телефоне, Esc закрывает; CRT-стиль, aria-атрибуты.
+- static/help.js (тексты + движок), правки index.html/script.js/style.css; тесты покрытия + Playwright-проверка тултипа.
+
 ### Кроссплатформенный запуск (Windows / macOS / Linux)
 - requirements.txt: добавлены sha256 win_amd64 и macosx (x86_64/arm64/universal2) wheels для compiled-пакетов — установка без компиляции на Windows и macOS.
 - uvloop: маркер `; sys_platform != "win32"` (Unix-only; на macOS/Linux остаётся).
