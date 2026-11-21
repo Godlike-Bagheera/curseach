@@ -80,7 +80,7 @@ def test_ui_smoke():
             page.wait_for_selector(".help-tip.show", timeout=3000)
             assert len(page.locator(".help-tip.show").inner_text()) > 10
             # Свой режим: у каждой проверки есть «?»
-            page.check('input[name="scanMode"][value="custom"]')
+            page.click('.mode-item[data-mode="custom"] span[data-i18n="mode.custom"]')
             page.wait_for_selector("#checksList .check-item", timeout=5000)
             assert page.locator("#checksList .help-q").count() >= 1
             # Справочник: поиск по EN-названию сужает карточки без перезагрузки
