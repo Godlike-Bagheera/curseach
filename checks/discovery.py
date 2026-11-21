@@ -2,7 +2,7 @@
 
 import re
 
-from .base import ScanContext, _safe_get
+from .base import ScanContext, _norm_body, _safe_get
 
 _COMMON_PATHS = [
     "/admin",
@@ -53,8 +53,14 @@ async def discover_endpoints(ctx: ScanContext) -> list[str]:
             p = _path_from_url(loc)
             if p:
                 found.add(p)
+    base = await _safe_get(ctx.client, f"{ctx.target_url}/__nonexistent_baseline_disc__")
+    base_status = base.status_code if base is not None else None
+    base_body = _norm_body(base) if base is not None else None
     for p in _COMMON_PATHS:
         rr = await _safe_get(ctx.client, f"{ctx.target_url}{p}")
-        if rr is not None and rr.status_code not in (404, 410):
-            found.add(p)
+        if rr is None or rr.status_code in (404, 410):
+            continue
+        if base_body is not None and rr.status_code == base_status and _norm_body(rr) == base_body:
+            continue
+        found.add(p)
     return sorted(found)
