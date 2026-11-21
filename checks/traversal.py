@@ -23,6 +23,8 @@ def _traversal_signature(body: str) -> bool:
     if ":/bin/bash" in body or ":/bin/sh" in body:
         return "root:" in body or ":0:0" in body
     return False
+
+
 _FILE_PARAMS = {
     "file",
     "path",
