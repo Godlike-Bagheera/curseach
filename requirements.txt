@@ -1,5 +1,5 @@
 # Hash-locked runtime-зависимости (pip install --require-hashes).
-# Прямые пины сохранены; транзитивные зафиксированы с sha256 (linux x86_64/aarch64, py3.10–3.13).
+# Прямые пины сохранены; транзитивные зафиксированы с sha256 (linux x86_64/aarch64, py3.11–3.13).
 # Playwright/Chromium НЕ нужны: PDF рендерится WeasyPrint (чистый Python).
 
 annotated-doc==0.0.7 \

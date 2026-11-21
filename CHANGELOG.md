@@ -4,7 +4,7 @@
 
 ### Исправления запуска
 - start.py: зависимости ставятся только из готовых wheels (--only-binary :all:) — компиляция и python3-devel/gcc не нужны; fallback на исходники и понятная диагностика (Python.h → команда установки заголовков под дистрибутив).
-- requirements.txt: добавлены sha256 manylinux-wheels для Python 3.10/3.11 (x86_64/aarch64) — запуск на системном Python 3.11 без сборки brotli/cffi/httptools/pillow/uvloop.
+- requirements.txt: добавлены sha256 manylinux-wheels для Python 3.11 (x86_64/aarch64) — запуск на системном Python 3.11 без сборки brotli/cffi/httptools/pillow/uvloop.
 
 ### Бюджет и покрытие
 - Per-check квоты бюджета запросов: «прожорливые» проверки (SQLi/SSRF) больше не съедают весь бюджет раньше остальных.

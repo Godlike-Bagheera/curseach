@@ -98,7 +98,7 @@ def ensure_dependencies():
         + ", ".join(f"{n}=={v}" for n, v in missing)
     )
     # 1) Только готовые wheels — компиляция не нужна (python3-devel/gcc не требуются).
-    #    Хеши покрывают Linux x86_64/aarch64, Python 3.10–3.13.
+    #    Хеши покрывают Linux x86_64/aarch64, Python 3.11–3.13.
     res = _run_pip(_pip_install_cmd("--only-binary", ":all:"))
     if res.returncode != 0:
         # 2) Fallback: сборка из исходников (нужны gcc и заголовки Python).
@@ -111,7 +111,7 @@ def ensure_dependencies():
         if "Python.h" in out:
             print("[start] Не хватает заголовков Python (Python.h). Установите их и перезапустите start.py:")
         else:
-            print("[start] Готовые wheels захэшированы для Linux (x86_64/aarch64), Python 3.10–3.13.")
+            print("[start] Готовые wheels захэшированы для Linux (x86_64/aarch64), Python 3.11–3.13.")
             print("[start] Варианты: Python 3.12/3.13, Docker (docker build -t curseach .) или компилятор:")
         print("    " + _devel_packages_hint())
         raise SystemExit(1)
@@ -122,6 +122,7 @@ def ensure_dependencies():
             "[start] ВНИМАНИЕ: WeasyPrint не импортируется (нужны системные pango/GTK). "
             "PDF-экспорт будет недоступен, остальные отчёты работают. В Docker всё вшито."
         )
+
 
 def _pick_ports(api_preferred, web_preferred):
     """Два РАЗНЫХ свободных порта: цель и сканер не должны занять один и тот же."""
