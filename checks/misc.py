@@ -1,5 +1,8 @@
 """Прочее: скрытые пути, HTTP без HTTPS, Content-Type, rate limiting."""
 
+import ipaddress
+from urllib.parse import urlparse
+
 from .base import (
     ScanContext,
     _is_auth_endpoint,
@@ -67,14 +70,32 @@ async def check_hidden_paths(ctx: ScanContext, endpoints: list[str] | None = Non
 
 
 # ================== HTTP без HTTPS ==================
+def _is_local_or_private_host(host: str) -> bool:
+    """Loopback/приватные адреса: HTTP на dev-localhost — не «крик», а замечание."""
+    h = (host or "").strip().lower().strip("[]")
+    if h == "localhost" or h.endswith(".localhost"):
+        return True
+    try:
+        ip = ipaddress.ip_address(h)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private or ip.is_link_local
+
+
 async def check_http_only(ctx: ScanContext, endpoints: list[str] | None = None) -> list[dict]:
     if ctx.target_url.startswith("http://"):
+        host = urlparse(ctx.target_url).hostname or ""
+        local = _is_local_or_private_host(host)
         return [
             {
-                "level": "MEDIUM",
+                "level": "LOW" if local else "MEDIUM",
                 "type": "HTTP without HTTPS",
                 "endpoint": "/",
-                "desc": "API использует HTTP, что небезопасно",
+                "desc": (
+                    "API использует HTTP без TLS (loopback/приватный хост — риск снижен)"
+                    if local
+                    else "API использует HTTP, что небезопасно"
+                ),
                 "details": get_vuln_info("HTTP without HTTPS"),
             }
         ]

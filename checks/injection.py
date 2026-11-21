@@ -47,6 +47,11 @@ async def _probe_param(ctx: ScanContext, s: Surface, kind: str, name: str, value
 
 # ---------- SQLi: error-based ----------
 async def _sqli_error_param(ctx, s, kind, name) -> dict | None:
+    # Baseline-дифференциал: безобидное значение в тот же параметр.
+    # HTTP 500 на payload — признак SQLi, только если baseline НЕ 500:
+    # иначе эндпоинт падает на любом мусоре, и это не инъекция.
+    r_base = await _probe_param(ctx, s, kind, name, "1")
+    baseline_ok = r_base is not None and r_base.status_code != 500
     for payload in _SQLI_ERROR_PAYLOADS:
         r = await _probe_param(ctx, s, kind, name, payload)
         if r is None:
@@ -62,7 +67,7 @@ async def _sqli_error_param(ctx, s, kind, name) -> dict | None:
                 ev(r),
                 "high",
             )
-        if r.status_code == 500:
+        if r.status_code == 500 and baseline_ok:
             return _mk(
                 s,
                 kind,
@@ -155,6 +160,19 @@ async def check_sqli(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     return [f for chunk in results for f in chunk]
 
 
+def _cmd_output_signature(body: str) -> bool:
+    """Сигнатуры реального вывода ОС-команд, а не случайного текста с «root:».
+
+    id — «uid=… gid=…» (оба маркера), /etc/passwd — «root:x:0:0»,
+    Windows — «windows ip» / «nt authority\\system».
+    """
+    if "uid=" in body and "gid=" in body:
+        return True
+    if "root:x:0:0" in body:
+        return True
+    return "windows ip" in body or "nt authority\\system" in body
+
+
 # ---------- OS Command Injection ----------
 async def check_command_injection(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     surfaces = build_surfaces(ctx, endpoints)
@@ -167,7 +185,7 @@ async def check_command_injection(ctx: ScanContext, endpoints: list[str]) -> lis
                 if r is None:
                     continue
                 body = _body(r)
-                if any(sig in body for sig in ("uid=", "gid=", "root:", "windows ip")):
+                if _cmd_output_signature(body):
                     return [
                         _mk(
                             s,

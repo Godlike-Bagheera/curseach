@@ -29,6 +29,10 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
 
     param_endpoints = [p for p in endpoints if "{" in p and "}" in p]
     for ep in param_endpoints:
+        # Явно публичные эндпоинты (security: [] в спеке) — не IDOR:
+        # публичный каталог /api/products/{id} отдаёт разные данные по праву.
+        if ep in _PUBLIC_PATHS or _endpoint_explicitly_public(ctx, ep):
+            continue
         param_name = ep[ep.find("{") + 1 : ep.find("}")]
         responses: dict[str, httpx.Response] = {}
         for test_id in ["1", "2", "3", "0", "-1", "100"]:
@@ -151,14 +155,21 @@ async def check_csrf(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     if not post_endpoints:
         return findings
 
+    # Bearer-only API без cookies: CSRF не применим (браузер не шлёт
+    # Authorization автоматически). Флагаем только cookie-аутентификацию.
+    auth_header = (ctx.client.headers.get("authorization") or "").lower()
+    bearer_no_cookies = auth_header.startswith("bearer ") and len(ctx.client.cookies) == 0
+
     for test_path in post_endpoints[:3]:
         r = await _safe_post(ctx.client, f"{ctx.target_url}{test_path}", json={})
         if r is None or _method_not_supported(r):
             continue
         if not (200 <= r.status_code < 300):
             continue
-        has_csrf_header = "x-csrf-token" in r.headers
         set_cookie = r.headers.get("set-cookie", "")
+        if bearer_no_cookies and not set_cookie:
+            continue  # Bearer без cookies — CSRF не применим
+        has_csrf_header = "x-csrf-token" in r.headers
         has_csrf_cookie = "csrf" in set_cookie.lower()
         if not has_csrf_header and not has_csrf_cookie:
             findings.append(
@@ -231,13 +242,15 @@ async def check_captcha(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             json={"username": "wrong", "password": "wrong"},
         )
         if _method_not_supported(r):
-            return findings
+            return findings  # 404/405/501 — это не эндпоинт логина
         if r is None:
             continue
-        got_valid_response = True
         if r.status_code == 429 or "captcha" in _body(r):
             got_protection = True
             break
+        # Только ответы валидации кредов (400/401/422) считаются попытками логина.
+        if r.status_code in (400, 401, 422):
+            got_valid_response = True
 
     if got_valid_response and not got_protection:
         findings.append(
