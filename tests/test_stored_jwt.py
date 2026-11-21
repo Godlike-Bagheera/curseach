@@ -43,5 +43,12 @@ def test_stored_xss_flagged():
 
 def test_jwt_exp_flagged():
     spec = {"paths": {"/api/reports/{id}": {"get": {"responses": {"401": {}}}}}}
-    f = _run(check_jwt_exp, lambda r: httpx.Response(200, json={"data": "x"}), ["/api/reports/{id}"], spec)
+
+    def handler(r):
+        # Защищённый эндпоинт: без токена 401, поддельный токен принимается (200).
+        if not r.headers.get("authorization"):
+            return httpx.Response(401)
+        return httpx.Response(200, json={"data": "x"})
+
+    f = _run(check_jwt_exp, handler, ["/api/reports/{id}"], spec)
     assert len(f) == 1 and f[0]["type"] == "JWT Expiration Not Verified"
