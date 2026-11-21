@@ -12,14 +12,57 @@ from .descriptions import get_vuln_info
 
 
 # ================== Sensitive data ==================
+_SECRET_PLACEHOLDERS = {
+    "string",
+    "password",
+    "secret",
+    "changeme",
+    "change_me",
+    "example",
+    "test",
+    "your_password",
+    "your_secret",
+    "your_api_key",
+    "null",
+    "none",
+    "undefined",
+    "placeholder",
+    "redacted",
+    "hidden",
+    "masked",
+    "dummy",
+    "sample",
+    "default",
+}
+
+
+def _is_real_secret(value: str) -> bool:
+    """Placeholder/маска/пустышка — не утечка секрета (Swagger-example «string», «********», «<hidden>»)."""
+    v = (value or "").strip()
+    if len(v) < 6:
+        return False
+    low = v.lower()
+    if low in _SECRET_PLACEHOLDERS:
+        return False
+    if re.fullmatch(r"[*•·x#.\-]+", low):
+        return False
+    if re.fullmatch(r"<[^>]*>|\[[^\]]*\]", low):
+        return False
+    if any(w in low for w in ("your_", "example", "changeme", "placeholder")):
+        return False
+    return True
+
+
 async def check_sensitive_data(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
     findings: list = []
-    patterns = [
+    strong_patterns = [
         (r"AKIA[0-9A-Z]{16}", "AWS-ключ"),
         (r"BEGIN (RSA|DSA|EC) PRIVATE KEY", "Приватный ключ"),
-        (r"\"password\"\s*:\s*\"[^\"]+\"", "Пароль в JSON-ответе"),
-        (r"\"secret\"\s*:\s*\"[^\"]+\"", "Секрет в JSON-ответе"),
-        (r"\"api[_-]?key\"\s*:\s*\"[^\"]+\"", "API-ключ в JSON-ответе"),
+    ]
+    value_patterns = [
+        (r"\"password\"\s*:\s*\"([^\"]+)\"", "Пароль в JSON-ответе"),
+        (r"\"secret\"\s*:\s*\"([^\"]+)\"", "Секрет в JSON-ответе"),
+        (r"\"api[_-]?key\"\s*:\s*\"([^\"]+)\"", "API-ключ в JSON-ответе"),
     ]
     for ep in endpoints:
         if "{" in ep or "}" in ep:
@@ -31,18 +74,27 @@ async def check_sensitive_data(ctx: ScanContext, endpoints: list[str]) -> list[d
             body = r.text
         except (UnicodeDecodeError, LookupError):
             continue
-        for pattern, desc in patterns:
+        hit = None
+        for pattern, desc in strong_patterns:
             if re.search(pattern, body):
-                findings.append(
-                    {
-                        "level": "HIGH",
-                        "type": "Sensitive Data Exposure",
-                        "endpoint": ep,
-                        "desc": f"Обнаружены чувствительные данные: {desc}",
-                        "details": get_vuln_info("Sensitive Data Exposure"),
-                    }
-                )
+                hit = desc
                 break
+        if hit is None:
+            for pattern, desc in value_patterns:
+                m = re.search(pattern, body)
+                if m and _is_real_secret(m.group(1)):
+                    hit = desc
+                    break
+        if hit:
+            findings.append(
+                {
+                    "level": "HIGH",
+                    "type": "Sensitive Data Exposure",
+                    "endpoint": ep,
+                    "desc": f"Обнаружены чувствительные данные: {hit}",
+                    "details": get_vuln_info("Sensitive Data Exposure"),
+                }
+            )
     return findings
 
 

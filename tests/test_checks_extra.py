@@ -199,7 +199,7 @@ def test_content_type_validation():
 
 # ---------- misc: rate limiting ----------
 def test_rate_limiting_missing():
-    f = _check(misc.check_rate_limiting, lambda r: httpx.Response(200, text="ok"), ["/"])
+    f = _check(misc.check_rate_limiting, lambda r: httpx.Response(200, text="ok"), ["/api/items"])
     assert len(f) == 1 and f[0]["type"] == "Lack of Rate Limiting"
 
 
