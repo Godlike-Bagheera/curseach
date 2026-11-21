@@ -10,7 +10,9 @@ from .base import (
     _endpoint_explicitly_public,
     _endpoint_requires_security,
     _is_auth_endpoint,
+    _is_spa_shell,
     _method_not_supported,
+    _norm_body,
     _norm_hash,
     _safe_get,
     _safe_options,
@@ -55,6 +57,11 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             seen_endpoints.add(ep)
 
     sensitive_keywords = ["keys", "admin", "system", "config", "settings", "internal", "debug"]
+    # Baseline catch-all: SPA (nginx try_files / React router) отдаёт один и тот же
+    # index.html на /admin, /config, /debug. Это НЕ доступ к чувствительным данным.
+    base = await _safe_get(ctx.client, f"{ctx.target_url}/__nonexistent_baseline_idor__")
+    base_status = base.status_code if base is not None else None
+    base_body = _norm_body(base) if base is not None else None
     for ep in endpoints:
         if ep in seen_endpoints:
             continue
@@ -66,6 +73,10 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
         if r is None:
             continue
         if r.status_code == 200:
+            if base_body is not None and r.status_code == base_status and _norm_body(r) == base_body:
+                continue  # тот же ответ, что на несуществующий путь → catch-all
+            if _is_spa_shell(r.text or ""):
+                continue  # оболочка SPA без данных → не доказательство доступа
             findings.append(
                 {
                     "level": "CRITICAL",
@@ -107,6 +118,8 @@ async def check_idor_auth(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
         if r_auth.status_code != 200 or r_anon.status_code != 200:
             continue
 
+        if _is_spa_shell(r_auth.text or ""):
+            continue  # SPA-оболочка одинакова с токеном и без — не утечка данных
         if _norm_hash(r_auth) == _norm_hash(r_anon):
             if _endpoint_requires_security(ctx, ep):
                 level = "CRITICAL"
