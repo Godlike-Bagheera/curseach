@@ -12,6 +12,10 @@ from checks.misc import check_rate_limiting
 SPA = '<!doctype html><html lang="ru"><head><title>LMS</title></head><body><div id="root"></div></body></html>'
 
 
+def _spa():
+    return httpx.Response(200, text=SPA, headers={"content-type": "text/html"})
+
+
 def _run(fn, handler, endpoints, spec=None, has_auth=False):
     async def runner():
         async with (
@@ -33,13 +37,13 @@ def test_is_spa_shell_markers():
 
 
 def test_is_html():
-    assert _is_html(httpx.Response(200, text=SPA, headers={"content-type": "text/html"}))
+    assert _is_html(_spa())
     assert not _is_html(httpx.Response(200, text="ok"))
     assert not _is_html(httpx.Response(200, json={"a": 1}))
 
 
 def test_idor_sensitive_spa_catchall_not_flagged():
-    f = _run(check_idor, lambda r: httpx.Response(200, text=SPA, headers={"content-type": "text/html"}), ["/admin", "/config", "/debug"])
+    f = _run(check_idor, lambda r: _spa(), ["/admin", "/config", "/debug"])
     assert f == []
 
 
@@ -54,16 +58,18 @@ def test_idor_sensitive_real_json_flagged():
 
 
 def test_idor_sensitive_real_html_admin_flagged():
+    admin_html = "<html><body>Admin panel (unlisted)</body></html>"
+
     def handler(r):
         if r.url.path == "/admin":
-            return httpx.Response(200, text="<html><body>Admin panel (unlisted)</body></html>", headers={"content-type": "text/html"})
+            return httpx.Response(200, text=admin_html, headers={"content-type": "text/html"})
         return httpx.Response(404)
 
     assert any(x["endpoint"] == "/admin" for x in _run(check_idor, handler, ["/admin"]))
 
 
 def test_idor_auth_spa_not_flagged():
-    f = _run(check_idor_auth, lambda r: httpx.Response(200, text=SPA, headers={"content-type": "text/html"}), ["/api/private"], has_auth=True)
+    f = _run(check_idor_auth, lambda r: _spa(), ["/api/private"], has_auth=True)
     assert f == []
 
 
@@ -71,7 +77,7 @@ def test_discovery_spa_catchall_filtered():
     def handler(r):
         if r.url.path in ("/robots.txt", "/sitemap.xml"):
             return httpx.Response(404)
-        return httpx.Response(200, text=SPA, headers={"content-type": "text/html"})
+        return _spa()
 
     async def runner():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
@@ -83,7 +89,7 @@ def test_discovery_spa_catchall_filtered():
 
 
 def test_rate_limiting_spa_skipped():
-    assert _run(check_rate_limiting, lambda r: httpx.Response(200, text=SPA, headers={"content-type": "text/html"}), ["/"]) == []
+    assert _run(check_rate_limiting, lambda r: _spa(), ["/"]) == []
 
 
 def test_rate_limiting_prefers_auth_route():
