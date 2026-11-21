@@ -2,6 +2,8 @@
 
 from .base import (
     ScanContext,
+    _is_auth_endpoint,
+    _is_html,
     _method_not_supported,
     _norm_body,
     _safe_get,
@@ -120,14 +122,24 @@ async def check_content_type_validation(ctx: ScanContext, endpoints: list[str]) 
 
 
 # ================== Rate Limiting ==================
+_RATELIMIT_PROBE_PATHS = {"/.env", "/.git/config", "/.DS_Store", "/web.config", "/backup.zip", "/db.sqlite", "/backup"}
+
+
 async def check_rate_limiting(ctx: ScanContext, endpoints: list[str] | None = None) -> list[dict]:
+    """Rate-limit оцениваем на API/auth-маршруте, а не на статике/SPA-fallback."""
     findings: list = []
-    test_path = "/"
-    if endpoints:
-        static = [e for e in endpoints if "{" not in e and "}" not in e]
-        if static:
-            test_path = static[0]
+    eps = endpoints or []
+    candidates = [e for e in eps if "{" not in e and "}" not in e and e not in _RATELIMIT_PROBE_PATHS]
+    auth_eps = [e for e in candidates if _is_auth_endpoint(e)]
+    test_path = (auth_eps or candidates or ["/"])[0]
     url = f"{ctx.target_url}{test_path}"
+
+    base = await _safe_get(ctx.client, f"{ctx.target_url}/__nonexistent_baseline_rl__")
+    r0 = await _safe_get(ctx.client, url)
+    if r0 is None:
+        return findings
+    if base is not None and r0.status_code == base.status_code and _norm_body(r0) == _norm_body(base) and _is_html(r0):
+        return findings
 
     NUM_REQUESTS = 50
     statuses = []
