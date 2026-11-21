@@ -89,7 +89,14 @@ def test_discovery_spa_catchall_filtered():
 
 
 def test_rate_limiting_spa_skipped():
-    assert _run(check_rate_limiting, lambda r: _spa(), ["/"]) == []
+    assert (
+        _run(
+            check_rate_limiting,
+            lambda r: _spa(),
+            ["/"],
+        )
+        == []
+    )
 
 
 def test_rate_limiting_prefers_auth_route():
