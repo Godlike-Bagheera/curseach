@@ -136,26 +136,28 @@
 </head>
 <body>
     <div class="login-wrap">
-        <h1>DEVSECOPS // ВХОД</h1>
-        <div class="subtitle">СКАНЕР REST API</div>
+        <button type="button" id="langToggle" style="width:auto;padding:6px 12px;font-size:11px;letter-spacing:2px;margin:0 0 14px auto;display:block">EN</button>
+        <h1 data-i18n="login.title">DEVSECOPS // ВХОД</h1>
+        <div class="subtitle" data-i18n="login.subtitle">СКАНЕР REST API</div>
 
         {% if error %}
         <div class="error">{{ error }}</div>
         {% endif %}
 
         <form method="post" action="/login">
-            <label for="username">ЛОГИН</label>
+            <label for="username" data-i18n="login.username">ЛОГИН</label>
             <input type="text" id="username" name="username" required autofocus autocomplete="username">
 
-            <label for="password">ПАРОЛЬ</label>
+            <label for="password" data-i18n="login.password">ПАРОЛЬ</label>
             <input type="password" id="password" name="password" required autocomplete="current-password">
 
-            <button type="submit">ВОЙТИ</button>
+            <button type="submit" data-i18n="login.submit">ВОЙТИ</button>
         </form>
 
         <div class="hint">
-            <strong>GUEST / GUEST</strong> — только просмотр
+            <strong>GUEST / GUEST</strong> <span data-i18n="login.guest">— только просмотр</span>
         </div>
     </div>
+<script src="/static/i18n.js"></script>
 </body>
 </html>

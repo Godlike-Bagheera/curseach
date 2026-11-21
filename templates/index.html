@@ -119,14 +119,14 @@
             </div>
 
             <div class="auth-section">
-                <div class="auth-section-title">АККАУНТ 1 — ОСНОВНОЙ («АЛИСА»)</div>
+                <div class="auth-section-title" data-i18n="auth.acc1">АККАУНТ 1 — ОСНОВНОЙ («АЛИСА»)</div>
                 <div class="auth-row-2col">
                     <div>
-                        <label class="auth-label" for="acc1Profile">ПРОФИЛЬ</label>
+                        <label class="auth-label" for="acc1Profile" data-i18n="auth.profile">ПРОФИЛЬ</label>
                         <select id="acc1Profile" class="auth-field" {% if is_guest %}disabled{% endif %}><option value="">— вручную —</option></select>
                     </div>
                     <div>
-                        <label class="auth-label" for="acc1Type">ТИП АВТОРИЗАЦИИ</label>
+                        <label class="auth-label" for="acc1Type" data-i18n="auth.type">ТИП АВТОРИЗАЦИИ</label>
                         <select id="acc1Type" class="auth-field" {% if is_guest %}disabled{% endif %}>
                             <option value="bearer">Bearer (логин/пароль)</option>
                             <option value="form">Form (cookie-сессия)</option>
@@ -152,7 +152,7 @@
                         <input type="text" id="acc1FormFields" class="auth-field" placeholder='{"csrf":"token"}' autocomplete="off" {% if is_guest %}disabled{% endif %}>
                     </div>
                 </div>
-                <button type="button" id="acc1SaveProfile" class="mini-btn" {% if is_guest %}disabled{% endif %}>СОХРАНИТЬ ПРОФИЛЬ</button>
+                <button type="button" id="acc1SaveProfile" class="mini-btn" data-i18n="auth.save" {% if is_guest %}disabled{% endif %}>СОХРАНИТЬ ПРОФИЛЬ</button>
                 <div class="auth-row-2col">
                     <div>
                         <label class="auth-label" for="acc1User">ЛОГИН</label>
@@ -166,14 +166,14 @@
             </div>
 
             <div class="auth-section auth-secondary">
-                <div class="auth-section-title">АККАУНТ 2 — ЧУЖОЙ АККАУНТ («БОБ»)</div>
+                <div class="auth-section-title" data-i18n="auth.acc2">АККАУНТ 2 — ЧУЖОЙ АККАУНТ («БОБ»)</div>
                 <div class="auth-row-2col">
                     <div>
-                        <label class="auth-label" for="acc2Profile">ПРОФИЛЬ</label>
+                        <label class="auth-label" for="acc2Profile" data-i18n="auth.profile">ПРОФИЛЬ</label>
                         <select id="acc2Profile" class="auth-field" {% if is_guest %}disabled{% endif %}><option value="">— вручную —</option></select>
                     </div>
                     <div>
-                        <label class="auth-label" for="acc2Type">ТИП АВТОРИЗАЦИИ</label>
+                        <label class="auth-label" for="acc2Type" data-i18n="auth.type">ТИП АВТОРИЗАЦИИ</label>
                         <select id="acc2Type" class="auth-field" {% if is_guest %}disabled{% endif %}>
                             <option value="bearer">Bearer (логин/пароль)</option>
                             <option value="form">Form (cookie-сессия)</option>
@@ -199,7 +199,7 @@
                         <input type="text" id="acc2FormFields" class="auth-field" placeholder='{"csrf":"token"}' autocomplete="off" {% if is_guest %}disabled{% endif %}>
                     </div>
                 </div>
-                <button type="button" id="acc2SaveProfile" class="mini-btn" {% if is_guest %}disabled{% endif %}>СОХРАНИТЬ ПРОФИЛЬ</button>
+                <button type="button" id="acc2SaveProfile" class="mini-btn" data-i18n="auth.save" {% if is_guest %}disabled{% endif %}>СОХРАНИТЬ ПРОФИЛЬ</button>
                 <div class="auth-hint">Под этим аккаунтом сканер попробует открыть данные и функции первого — так находятся IDOR/BOLA и BFLA.</div>
                 <div class="auth-row-2col">
                     <div>
@@ -216,7 +216,7 @@
 
         <div class="panel">
             <div class="panel-label" data-i18n="panel.notify">&gt; УВЕДОМЛЕНИЯ</div>
-            <div class="auth-hint">После завершения скана сканер отправит короткую JSON-сводку на этот адрес (webhook). Поле необязательное.</div>
+            <div class="auth-hint" data-i18n="auth.notify">После завершения скана сканер отправит короткую JSON-сводку на этот адрес (webhook). Поле необязательное.</div>
             <input type="text" id="webhookInput" class="auth-field" placeholder="https://example.com/webhook" spellcheck="false" autocomplete="off" {% if is_guest %}disabled{% endif %}>
         </div>
 
@@ -268,7 +268,7 @@
 
     <section id="history" class="tab-content">
         <div class="panel">
-            <div class="panel-label">&gt; ДИНАМИКА УЯЗВИМОСТЕЙ</div>
+            <div class="panel-label" data-i18n="history.dynamics">&gt; ДИНАМИКА УЯЗВИМОСТЕЙ</div>
 
             <div class="chart-wrapper" id="chartWrapper">
                 <canvas id="historyChart"></canvas>
@@ -280,9 +280,9 @@
         </div>
 
         <div class="panel">
-            <div class="panel-label">&gt; ИСТОРИЯ СКАНИРОВАНИЙ</div>
+            <div class="panel-label" data-i18n="history.list">&gt; ИСТОРИЯ СКАНИРОВАНИЙ</div>
             <div class="history-target-row">
-                <label class="panel-label" for="historyTargetFilter">&gt; ЦЕЛЬ</label>
+                <label class="panel-label" for="historyTargetFilter" data-i18n="history.target">&gt; ЦЕЛЬ</label>
                 <input type="text" id="historyTargetFilter" placeholder="фильтр по адресу цели…" spellcheck="false" autocomplete="off">
             </div>
             <div id="historyList" class="history-list"></div>
@@ -296,7 +296,7 @@
     </section>
     <section id="planning" class="tab-content">
         <div class="panel">
-            <div class="panel-label">&gt; ПРОЕКТЫ (МУЛЬТИ-ЦЕЛИ)</div>
+            <div class="panel-label" data-i18n="planning.projects">&gt; ПРОЕКТЫ (МУЛЬТИ-ЦЕЛИ)</div>
             <div class="input-row">
                 <input type="text" id="projectName" placeholder="название проекта…" spellcheck="false" autocomplete="off">
                 <button id="addProjectBtn" class="exec-btn">ДОБАВИТЬ</button>
@@ -304,7 +304,7 @@
             <div id="projectsList" class="checks-list"></div>
         </div>
         <div class="panel">
-            <div class="panel-label">&gt; РАСПИСАНИЯ (ПОВТОРНЫЕ СКАНЫ)</div>
+            <div class="panel-label" data-i18n="planning.schedules">&gt; РАСПИСАНИЯ (ПОВТОРНЫЕ СКАНЫ)</div>
             <div class="auth-row-2col">
                 <div><label class="auth-label" for="schedUrl">ЦЕЛЕВОЙ URL</label><input id="schedUrl" class="auth-field" placeholder="http://127.0.0.1:8000" autocomplete="off"></div>
                 <div><label class="auth-label" for="schedInterval">ИНТЕРВАЛ (МИН)</label><input id="schedInterval" class="auth-field" type="number" value="60" min="1"></div>
@@ -315,7 +315,7 @@
             <div id="schedulesList" class="checks-list"></div>
         </div>
         <div class="panel">
-            <div class="panel-label">&gt; ТРЕНД ПО ИСТОРИИ</div>
+            <div class="panel-label" data-i18n="planning.trend">&gt; ТРЕНД ПО ИСТОРИИ</div>
             <div class="input-row">
                 <select id="trendProject" class="auth-field"><option value="">все проекты</option></select>
                 <button id="refreshTrendBtn" class="exec-btn">ОБНОВИТЬ</button>

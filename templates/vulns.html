@@ -112,14 +112,14 @@
 </head>
 <body>
 <div class="vg-wrap">
-  <div class="vg-top"><a class="vg-back" href="/">← Назад к сканеру</a></div>
-  <h1 class="vg-title">СПРАВОЧНИК УЯЗВИМОСТЕЙ</h1>
+  <div class="vg-top"><a class="vg-back" href="/" data-i18n="vulns.back">← Назад к сканеру</a><button type="button" id="langToggle" class="vg-back" style="cursor:pointer">EN</button></div>
+  <h1 class="vg-title" data-i18n="vulns.title">СПРАВОЧНИК УЯЗВИМОСТЕЙ</h1>
   <p class="vg-sub">Каждая карточка — одна «дыра» в безопасности сайта или API: что это простыми словами,
     пример из жизни и как её закрыть. Цветной значок показывает, насколько это опасно.
     Наведите курсор на значок или плашку с кодом — появится подсказка с расшифровкой.</p>
 
   <details class="vg-help" open>
-    <summary>Как читать справочник</summary>
+    <summary data-i18n="vulns.help">Как читать справочник</summary>
     <div class="vg-help-grid">
       <section class="vg-help-col">
         <h4>Уровень опасности</h4>
@@ -164,12 +164,12 @@
   </details>
 
   <div class="vg-searchrow">
-    <input class="vg-search" id="vg-q" type="search" placeholder="Поиск: название (EN/RU), смысл, код CWE/OWASP или имя проверки…"
+    <input class="vg-search" id="vg-q" type="search" data-i18n-placeholder="vulns.search" placeholder="Поиск: название (EN/RU), смысл, код CWE/OWASP или имя проверки…"
            aria-label="Поиск по справочнику">
     <span class="vg-count" id="vg-count"></span>
   </div>
 
-  <h2 class="vg-h2">&gt; Популярные уязвимости</h2>
+  <h2 class="vg-h2" data-i18n="vulns.h2.popular">&gt; Популярные уязвимости</h2>
   <p class="vg-h2sub">15 самых частых «дыр» — простыми словами, с примерами из жизни и уровнем опасности.</p>
   <div class="vg-grid" id="vg-grid">
     {% for v in guide %}
@@ -260,5 +260,6 @@
   <div class="vg-none" id="vr-none">Ничего не найдено — попробуй другой запрос</div>
 </div>
 <script src="/static/vulns.js"></script>
+<script src="/static/i18n.js"></script>
 </body>
 </html>
