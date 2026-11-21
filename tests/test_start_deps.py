@@ -1,5 +1,6 @@
 """Юнит-тесты requirements-driven бутстрапа start.py."""
 
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -65,3 +66,23 @@ def test_install_failure_prints_devel_hint(monkeypatch, capsys):
         start.ensure_dependencies()
     out = capsys.readouterr().out
     assert "python3-dev" in out or "python3-devel" in out
+
+
+def test_devel_hint_windows(monkeypatch):
+    monkeypatch.setattr(start.sys, "platform", "win32")
+    hint = start._devel_packages_hint()
+    assert "Windows" in hint and "python.org" in hint
+
+
+def test_devel_hint_macos(monkeypatch):
+    monkeypatch.setattr(start.sys, "platform", "darwin")
+    hint = start._devel_packages_hint()
+    assert "macOS" in hint and "xcode-select" in hint
+
+
+def test_uvloop_skipped_on_windows():
+    req = os.path.join(os.path.dirname(os.path.abspath(start.__file__)), "requirements.txt")
+    txt = open(req, encoding="utf-8").read()
+    uv = [l for l in txt.splitlines() if l.strip().startswith("uvloop==")]
+    assert uv and 'sys_platform != "win32"' in uv[0]
+    assert ("uvloop", "0.23.0") in start._parse_pins(txt)

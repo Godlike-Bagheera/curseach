@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Кроссплатформенный запуск (Windows / macOS / Linux)
+- requirements.txt: добавлены sha256 win_amd64 и macosx (x86_64/arm64/universal2) wheels для compiled-пакетов — установка без компиляции на Windows и macOS.
+- uvloop: маркер `; sys_platform != "win32"` (Unix-only; на macOS/Linux остаётся).
+- start.py: платформенная диагностика (Windows/macOS/Linux), ANSI-цвета в консоли Windows.
+
 ### Точность детектирования (дожатые эвристики)
 - Path traversal: голые «/bin/sh»/«/bin/bash» больше не сигнатура — только passwd-структура (root:…:0:0) или shell-путь в passwd-контексте; win.ini/boot.ini сохранены.
 - Sensitive data: placeholder/маски («string», «********», «<hidden>», короткие) не флагуются как утечка; реальные пароли/ключи — по-прежнему HIGH.
