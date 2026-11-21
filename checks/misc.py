@@ -138,12 +138,7 @@ async def check_rate_limiting(ctx: ScanContext, endpoints: list[str] | None = No
     r0 = await _safe_get(ctx.client, url)
     if r0 is None:
         return findings
-    if (
-        base is not None
-        and r0.status_code == base.status_code
-        and _norm_body(r0) == _norm_body(base)
-        and _is_html(r0)
-    ):
+    if base is not None and r0.status_code == base.status_code and _norm_body(r0) == _norm_body(base) and _is_html(r0):
         return findings
 
     NUM_REQUESTS = 50
