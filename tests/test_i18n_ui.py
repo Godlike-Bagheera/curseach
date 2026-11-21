@@ -86,3 +86,64 @@ def test_i18n_toggle():
             proc.wait(timeout=5)
         except Exception:
             proc.kill()
+
+
+@pytest.mark.e2e
+@pytest.mark.ui
+def test_i18n_login_toggle():
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+
+    port = _free_port()
+    url = f"http://127.0.0.1:{port}"
+    db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    db.close()
+    env = dict(os.environ, SCANNER_DB_PATH=db.name, SCANNER_ADMIN_PASSWORD="admin", SCAN_RPS="0")
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "web_app:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
+    )
+    try:
+        ready = False
+        for _ in range(80):
+            try:
+                with urllib.request.urlopen(url + "/healthz", timeout=1) as r:
+                    if r.status == 200:
+                        ready = True
+                        break
+            except Exception:
+                time.sleep(0.25)
+        if not ready:
+            pytest.skip("не удалось поднять сканер")
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url + "/login")
+            h1 = page.locator("h1").first
+            assert "ВХОД" in h1.inner_text()
+            page.click("#langToggle")
+            assert "LOGIN" in h1.inner_text()
+            assert page.evaluate("localStorage.getItem('curseach.lang')") == "en"
+            page.click("#langToggle")
+            assert "ВХОД" in h1.inner_text()
+            browser.close()
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            proc.kill()
