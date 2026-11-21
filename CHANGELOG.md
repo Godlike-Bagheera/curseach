@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Точность детектирования (6 ложных срабатываний)
+- SQLi: HTTP 500 на payload флагуется только при не-500 baseline (безобидное «1» в тот же параметр); error-text детекция сохранена.
+- IDOR: параметрические эндпоинты с security: [] в спеке (публичный каталог) пропускаются.
+- CSRF: Bearer-only API без cookies не флагуется; cookie-сессии детектируются как раньше.
+- CAPTCHA: только реальные login-пути (404/405 отсекаются; считаются ответы валидации 400/401/422).
+- HTTP without HTTPS: LOW для loopback/приватных хостов, MEDIUM для публичных.
+- OS Command Injection: сигнатуры uid=+gid= / root:x:0:0 / Windows вместо голого «root:».
+- Регрессионные тесты: tests/test_falsepositive_fixes.py (здоровый сервис → нет находки, уязвимый → есть).
+
 ### Исправления запуска
 - start.py: зависимости ставятся только из готовых wheels (--only-binary :all:) — компиляция и python3-devel/gcc не нужны; fallback на исходники и понятная диагностика (Python.h → команда установки заголовков под дистрибутив).
 - requirements.txt: добавлены sha256 manylinux-wheels для Python 3.11 (x86_64/aarch64) — запуск на системном Python 3.11 без сборки brotli/cffi/httptools/pillow/uvloop.
