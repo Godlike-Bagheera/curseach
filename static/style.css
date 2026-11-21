@@ -927,3 +927,54 @@ body {
 /* --- счётчик запросов и diff-выбор в истории --- */
 .progress-requests{display:block;text-align:right;font-size:11px;letter-spacing:1px;color:var(--fg-dim);margin-top:4px}
 
+
+
+/* ---------- «?»-подсказки (help.js) ---------- */
+.help-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.help-q {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid var(--fg-dim);
+    background: transparent;
+    color: var(--fg-dim);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0;
+    cursor: help;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.help-q:hover,
+.help-q:focus {
+    color: var(--fg);
+    border-color: var(--fg);
+    box-shadow: 0 0 6px rgba(0, 255, 65, 0.5);
+    outline: none;
+}
+.help-tip {
+    position: fixed;
+    z-index: 9999;
+    max-width: 300px;
+    display: none;
+    background: #04140a;
+    color: var(--fg);
+    border: 1px solid var(--fg);
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.45;
+    letter-spacing: 0.3px;
+    box-shadow: 0 0 14px rgba(0, 255, 65, 0.35);
+    pointer-events: none;
+}
+.help-tip.show {
+    display: block;
+}
