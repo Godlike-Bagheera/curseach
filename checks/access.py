@@ -21,7 +21,6 @@ from .base import (
 )
 from .descriptions import get_vuln_info
 
-
 _IDOR_OWNERSHIP_FIELDS = (
     "user_id",
     "owner_id",

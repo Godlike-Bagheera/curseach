@@ -10,7 +10,6 @@ import httpx
 from .base import ScanCancelled, ScanContext, _safe_get
 from .descriptions import get_vuln_info
 
-
 # ================== Sensitive data ==================
 _SECRET_PLACEHOLDERS = {
     "string",
