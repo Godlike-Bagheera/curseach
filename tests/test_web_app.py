@@ -1,5 +1,7 @@
 """Тести безопасности веб-приложения сканера."""
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -14,6 +16,13 @@ def client():
 def _login(client, user="admin", password="admin"):
     r = client.post("/login", data={"username": user, "password": password}, follow_redirects=False)
     return r
+
+
+def _skip_if_no_weasyprint():
+    from scanner import pdf as _pdf
+
+    if not os.environ.get("CI") and not _pdf.is_available():
+        pytest.skip("WeasyPrint недоступен — опциональная зависимость PDF")
 
 
 def test_login_wrong_password(client):
@@ -117,6 +126,7 @@ def test_pdf_routes_require_auth(client):
 
 
 def test_chart_pdf_generated(authed_client):
+    _skip_if_no_weasyprint()
     sid = _make_scan()
     r = authed_client.get(f"/history/{sid}/pdf")
     assert r.status_code == 200
@@ -126,6 +136,7 @@ def test_chart_pdf_generated(authed_client):
 
 
 def test_full_and_view_pdf_generated(authed_client):
+    _skip_if_no_weasyprint()
     sid = _make_scan()
     for path in (f"/history/{sid}/full/pdf", f"/history/{sid}/view/pdf"):
         r = authed_client.get(path)

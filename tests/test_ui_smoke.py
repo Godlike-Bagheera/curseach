@@ -86,6 +86,11 @@ def test_ui_smoke():
             btn_cy = btn_box["y"] + btn_box["height"] / 2
             lbl_cy = lbl_box["y"] + lbl_box["height"] / 2
             assert abs(btn_cy - lbl_cy) < 3
+            assert page.eval_on_selector(".stat-box .help-row", "el => getComputedStyle(el).justifyContent") == "center"
+            ab = page.locator('.help-q[data-help="ui:auth.acc1"]').bounding_box()
+            at = page.locator('.auth-section-title[data-i18n="auth.acc1"]').bounding_box()
+            assert ab and at
+            assert abs((ab["y"] + ab["height"] / 2) - (at["y"] + at["height"] / 2)) < 3
             # Свой режим: у каждой проверки есть «?»
             page.click('.mode-item[data-mode="custom"] span[data-i18n="mode.custom"]')
             page.wait_for_selector("#checksList .check-item", timeout=5000)

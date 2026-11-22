@@ -942,9 +942,18 @@ body {
 .help-row > .panel-label {
     margin-bottom: 0;
 }
+.help-row--title {
+    margin-bottom: 14px;
+}
+.help-row > .auth-section-title {
+    margin-bottom: 0;
+}
 .mode-item .help-q {
     vertical-align: middle;
     margin-left: 8px;
+}
+.stat-box .help-row {
+    justify-content: center;
 }
 .help-q {
     flex: none;

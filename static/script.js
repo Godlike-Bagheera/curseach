@@ -437,6 +437,7 @@ async function startScan() {
         taskId = data.task_id;
         openWebSocket(taskId);
     } catch (e) {
+        scanInProgress = false;
         appendTerminal('[ОШИБКА] ' + e.message);
         scanBtn.disabled = false;
         scanBtn.textContent = 'ЗАПУСТИТЬ';
