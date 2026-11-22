@@ -442,8 +442,7 @@ async def scan_engine(task: ScanTask):
 
         # Инфраструктура: параллелизм, бюджет, RPS, отмена.
         ctx.semaphore = asyncio.Semaphore(SCAN_CONCURRENCY)
-        per_check_cap = max(60, SCAN_MAX_REQUESTS // len(check_list) * 4)
-        ctx.budget = checks.RequestBudget(SCAN_MAX_REQUESTS, per_check_cap=per_check_cap)
+        ctx.budget = checks.RequestBudget(SCAN_MAX_REQUESTS, per_check_cap=None)
         task.budget = ctx.budget
         ctx.limiter = checks.RateLimiter(SCAN_RPS) if SCAN_RPS > 0 else None
         ctx.cancel_event = task.cancel_event
@@ -508,9 +507,7 @@ async def scan_engine(task: ScanTask):
             task.partial = True
             task.partial_reason = "скан отменён"
 
-        if ctx.budget is not None and ctx.budget.per_check_capped:
-            capped = ", ".join(sorted(ctx.budget.per_check_capped))
-            task.add_log(f"[ВНИМАНИЕ] Квота запросов исчерпана для проверок: {capped} — часть их запросов пропущена")
+        
 
         if ctx.budget is not None and ctx.budget.exhausted:
             task.partial = True
