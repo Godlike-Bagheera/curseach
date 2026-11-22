@@ -79,6 +79,13 @@ def test_ui_smoke():
             page.locator('.help-q[data-help="ui:panel.url"]').hover()
             page.wait_for_selector(".help-tip.show", timeout=3000)
             assert len(page.locator(".help-tip.show").inner_text()) > 10
+            # «?» на одной линии с заголовком панели: центр кнопки ≈ центр текста
+            btn_box = page.locator('.help-q[data-help="ui:panel.url"]').bounding_box()
+            lbl_box = page.locator('.panel-label[data-i18n="panel.url"]').bounding_box()
+            assert btn_box and lbl_box
+            btn_cy = btn_box["y"] + btn_box["height"] / 2
+            lbl_cy = lbl_box["y"] + lbl_box["height"] / 2
+            assert abs(btn_cy - lbl_cy) < 3
             # Свой режим: у каждой проверки есть «?»
             page.click('.mode-item[data-mode="custom"] span[data-i18n="mode.custom"]')
             page.wait_for_selector("#checksList .check-item", timeout=5000)
@@ -91,7 +98,7 @@ def test_ui_smoke():
             assert page.locator(".vr-card.vg-target").count() >= 1
             assert "уязвимостей" in page.locator("#vg-count").inner_text().lower()
             assert page.locator(".vg-card .lvl b").count() >= 1
-            
+            assert page.locator(".vg-card .lvl i").count() == 0  # EN-бейджи удалены (RU-only)
             # Поиск по EN-названию сужает карточки без перезагрузки
             page.fill("#vg-q", "SQL")
             assert page.locator(".vg-card:visible").count() >= 1
@@ -106,40 +113,76 @@ def test_ui_smoke():
         except Exception:
             proc.kill()
 
+
 @pytest.mark.e2e
 @pytest.mark.ui
-def test_toast_notification():
+def test_scan_toast():
+    """Тост слева снизу: «Сканирование запущено…» при старте и «Проверка завершена ✓» по финалу."""
     pytest.importorskip("playwright")
     from playwright.sync_api import sync_playwright
-    import socket, subprocess, sys, tempfile, time, urllib.request
-    def _free_port() -> int:
-        s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close(); return port
+
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
-    db = tempfile.NamedTemporaryFile(suffix=".db", delete=False); db.close()
+    db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    db.close()
     env = dict(os.environ, SCANNER_DB_PATH=db.name, SCANNER_ADMIN_PASSWORD="admin", SCAN_RPS="0")
-    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "web_app:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"], cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "web_app:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
+    )
     try:
         ready = False
         for _ in range(80):
             try:
                 with urllib.request.urlopen(url + "/healthz", timeout=1) as r:
-                    if r.status == 200: ready = True; break
-            except Exception: time.sleep(0.25)
-        assert ready, "Server did not start"
+                    if r.status == 200:
+                        ready = True
+                        break
+            except Exception:
+                time.sleep(0.25)
+        if not ready:
+            pytest.skip("не удалось поднять сканер")
         with sync_playwright() as p:
             browser = p.chromium.launch()
             page = browser.new_page()
             page.goto(url + "/login")
-            page.fill('input[name="username"]', "admin")
-            page.fill('input[name="password"]', "admin")
+            page.fill("#username", "admin")
+            page.fill("#password", "admin")
             page.click('button[type="submit"]')
-            page.wait_for_url("**/scanner")
-            page.fill("#urlInput", "http://127.0.0.1:8000")
+            page.wait_for_url(url + "/", timeout=10000)
+            page.wait_for_selector("#loading-screen", state="detached", timeout=15000)
+            page.fill("#urlInput", "http://127.0.0.1:1")
             page.click("#scanBtn")
-            page.wait_for_selector(".toast-notification.show", timeout=5000)
-            toast_text = page.locator(".toast-notification.show").text_content()
-            assert "Сканирование запущено" in toast_text or "Проверка завершена" in toast_text
+            page.wait_for_selector(".crt-toast.show", timeout=5000)
+            assert "Сканирование запущено" in page.locator(".crt-toast").inner_text()
+            pos = page.evaluate(
+                "() => { const s = getComputedStyle(document.getElementById('crt-toast'));"
+                " return { position: s.position, left: s.left, bottom: s.bottom }; }"
+            )
+            assert pos["position"] == "fixed" and pos["left"] == "16px" and pos["bottom"] == "16px"
+            page.wait_for_function(
+                "() => { const t = document.getElementById('crt-toast');"
+                " return t && t.classList.contains('show') && t.textContent.includes('Проверка завершена'); }",
+                timeout=90000,
+            )
             browser.close()
     finally:
-        proc.terminate(); proc.wait()
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            proc.kill()

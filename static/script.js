@@ -39,7 +39,6 @@ function clear(node) {
 //   чтобы layout не дёргался на глазах пользователя.
 // =============================================================
 
-function showToast(m){let t=document.getElementById('crt-toast');if(!t){t=document.createElement('div');t.id='crt-toast';t.className='toast-notification';document.body.appendChild(t);}t.textContent=m;t.classList.add('show');setTimeout(()=>{t.classList.remove('show');},5000);}
 function initLoadingScreen() {
     const screen = document.getElementById('loading-screen');
     const fill = document.getElementById('loading-bar-fill');
@@ -139,7 +138,6 @@ const acc1Pass = $('acc1Pass');
 const acc2User = $('acc2User');
 const acc2Pass = $('acc2Pass');
 
-
 // ---------- Tabs ----------
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -149,7 +147,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'history' && !isGuest) { loadHistory(); loadHistoryChart(); }
-        
     });
 });
 
@@ -180,73 +177,12 @@ function getSelectedChecks() {
 }
 
 // ---------- Auth ----------
-function buildAccount(userEl, passEl, prefix) {
+function buildAccount(userEl, passEl) {
+    if (isGuest) return null;
     const u = (userEl.value || '').trim();
     const p = (passEl.value || '').trim();
     if (!u || !p) return null;
     return { auth_type: 'bearer', username: u, password: p };
-};
-    const typeEl = $(prefix + 'Type');
-    const authType = typeEl ? typeEl.value : 'bearer';
-    if (authType === 'apikey') {
-        const h = ($(prefix + 'KeyHeader').value || '').trim();
-        const v = $(prefix + 'KeyValue').value || '';
-        if (!h || !v) return null;
-        return { auth_type: 'apikey', api_key_header: h, api_key_value: v };
-    }
-    const u = (userEl.value || '').trim();
-    const p = passEl.value || '';
-    if (!u || !p) return null;
-    const acc = { username: u, password: p, auth_type: authType };
-    if (authType === 'form') {
-        const lp = ($(prefix + 'LoginPath').value || '').trim();
-        if (lp) acc.login_path = lp;
-        const ff = ($(prefix + 'FormFields').value || '').trim();
-        if (ff) { try { acc.form_fields = JSON.parse(ff); } catch (e) { /* невалидный JSON — пропускаем */ } }
-    }
-    return acc;
-}
-
-async function loadAuthProfiles() {
-    if (isGuest) return;
-    try {
-        const resp = await fetch('/auth-profiles');
-        if (!resp.ok) return;
-        const profiles = await resp.json();
-        for (const prefix of ['acc1', 'acc2']) {
-            const sel = $(prefix + 'Profile');
-            if (!sel) continue;
-            const cur = sel.value;
-            clear(sel);
-            sel.appendChild(el('option', { value: '', text: '— вручную —' }));
-            for (const p of profiles) sel.appendChild(el('option', { value: String(p.id), text: p.name + ' (' + p.auth_type + ')' }));
-            sel.value = cur;
-        }
-    } catch (e) { /* профили не критичны */ }
-}
-
-function saveAuthProfile(prefix) {
-    if (isGuest) return;
-    const name = prompt('Имя профиля:');
-    if (!name) return;
-    const acc = buildAccount($(prefix + 'User'), $(prefix + 'Pass'), prefix);
-    if (!acc || acc.profile_id) { alert('Заполните данные аккаунта вручную (не выбирая профиль)'); return; }
-    const body = { name, auth_type: acc.auth_type || 'bearer', username: acc.username || '', password: acc.password || '', api_key_header: acc.api_key_header || '', api_key_value: acc.api_key_value || '', form_fields: acc.form_fields || null, login_path: acc.login_path || '' };
-    fetch('/auth-profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-        .then(() => { appendTerminal('[SYS] Профиль сохранён: ' + name); loadAuthProfiles(); })
-        .catch(e => alert('Ошибка сохранения: ' + e.message));
-}
-
-function initAuthUI() {
-    for (const prefix of ['acc1', 'acc2']) {
-        const typeEl = $(prefix + 'Type');
-        const extra = $(prefix + 'Extra');
-        if (typeEl && extra) typeEl.addEventListener('change', () => extra.classList.toggle('hidden', typeEl.value === 'bearer'));
-        const saveBtn = $(prefix + 'SaveProfile');
-        if (saveBtn) saveBtn.addEventListener('click', () => saveAuthProfile(prefix));
-    }
-    loadAuthProfiles();
 }
 
 // ---------- Available checks ----------
@@ -401,7 +337,6 @@ function handleWsEvent(data) {
     switch (data.type) {
         case 'init':
             clearTerminal();
-    showToast('Сканирование запущено…');
             (data.logs || []).forEach(appendTerminal);
             setStatus(data);
             break;
@@ -413,6 +348,7 @@ function handleWsEvent(data) {
             break;
         case 'complete':
             setStatus({ status: data.status });
+            if (scanInProgress) { scanInProgress = false; showToast('Проверка завершена ✓'); }
             scanBtn.disabled = false;
             scanBtn.textContent = 'ЗАПУСТИТЬ';
             if (cancelBtn) cancelBtn.classList.add('hidden');
@@ -455,8 +391,9 @@ async function startScan() {
         if (checks_.length === 0) { alert('Выберите хотя бы одну проверку'); return; }
     }
 
-    clearTerminal();
+    scanInProgress = true;
     showToast('Сканирование запущено…');
+    clearTerminal();
     appendTerminal('[SYS] Инициализация сканирования...');
     progressBar.style.width = '0%'; progressBar.setAttribute('aria-valuenow', '0');
     critCount.textContent = '0';
@@ -475,22 +412,16 @@ async function startScan() {
 
     try {
         const body = { url, mode };
-        
-        
         if (checks_) body.checks = checks_;
 
-        const a1 = buildAccount(acc1User, acc1Pass, 'acc1');
-        if (a1) { if (a1.profile_id) body.account1_profile_id = a1.profile_id; else body.account1 = a1; }
+        const a1 = buildAccount(acc1User, acc1Pass);
+        if (a1) body.account1 = a1;
+        const a2 = buildAccount(acc2User, acc2Pass);
+        if (a2) body.account2 = a2;
 
-        const a2 = buildAccount(acc2User, acc2Pass, 'acc2');
-        if (a2) { if (a2.profile_id) body.account2_profile_id = a2.profile_id; else body.account2 = a2; }
-
-        
-        
-
-        if (a1) appendTerminal(`[SYS] Аккаунт 1: ${a1.username || ('профиль #' + a1.profile_id)}`);
+        if (a1) appendTerminal(`[SYS] Аккаунт 1: ${a1.username}`);
         else appendTerminal('[SYS] Аккаунт 1: не задан (анонимно)');
-        if (a2) appendTerminal(`[SYS] Аккаунт 2: ${a2.username || ('профиль #' + a2.profile_id)}`);
+        if (a2) appendTerminal(`[SYS] Аккаунт 2: ${a2.username}`);
         else appendTerminal('[SYS] Аккаунт 2: не задан (без cross-user проверок)');
 
         const resp = await fetch('/scan', {
@@ -886,10 +817,36 @@ function exportHistory() {
     window.location.href = url;
 }
 
+// ---------- Тост сканирования (CRT, слева снизу) ----------
+let scanInProgress = false;
+let toastTimer = null;
+
+function showToast(message) {
+    let toast = $('crt-toast');
+    if (!toast) {
+        toast = el('div', { id: 'crt-toast', className: 'crt-toast', role: 'status' });
+        toast.setAttribute('aria-live', 'polite');
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 5000);
+}
+
+// Надёжный fallback: кнопка HTML-отчёта разблокируется только при завершении скана.
+if (htmlBtn) {
+    const htmlBtnObserver = new MutationObserver(() => {
+        if (scanInProgress && !htmlBtn.disabled) {
+            scanInProgress = false;
+            showToast('Проверка завершена ✓');
+        }
+    });
+    htmlBtnObserver.observe(htmlBtn, { attributes: true, attributeFilter: ['disabled'] });
+}
+
 // ---------- Wire up ----------
 if (!isGuest) {
-    initAuthUI();
-    initPlanningUI();
     scanBtn.addEventListener('click', startScan);
     if (cancelBtn) cancelBtn.addEventListener('click', cancelScan);
     urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') startScan(); });
@@ -922,140 +879,6 @@ if (!isGuest) {
     if ($('exportHistoryBtn')) $('exportHistoryBtn').disabled = true;
 }
 
-
-// ---------- Планировщик: проекты / расписания / тренд ----------
-let trendChart = null;
-
-async function loadProjects() {
-    if (isGuest) return;
-    try {
-        const resp = await fetch('/projects');
-        if (!resp.ok) return;
-        const projects = await resp.json();
-        for (const selId of ['trendProject']) {
-            const sel = $(selId);
-            if (!sel) continue;
-            const cur = sel.value;
-            clear(sel);
-            sel.appendChild(el('option', { value: '', text: selId === 'trendProject' ? 'все проекты' : '— без проекта —' }));
-            for (const p of projects) sel.appendChild(el('option', { value: String(p.id), text: p.name }));
-            sel.value = cur;
-        }
-        const list = $('projectsList');
-        if (list) {
-            clear(list);
-            for (const p of projects) {
-                list.appendChild(el('div', { className: 'check-item' }, [
-                    el('span', { className: 'name', text: p.name }),
-                    el('button', { className: 'mini-btn', text: 'УДАЛИТЬ', onclick: async () => { await fetch('/projects/' + p.id, { method: 'DELETE' }); loadProjects(); } }),
-                ]));
-            }
-        }
-    } catch (e) { /* проекты не критичны */ }
-}
-
-async function addProject() {
-    const inp = $('projectName');
-    const name = (inp.value || '').trim();
-    if (!name) return;
-    await fetch('/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-    inp.value = '';
-    loadProjects();
-}
-
-async function loadSchedProfiles() {
-    const sel = $('schedProfile');
-    if (!sel) return;
-    try {
-        const resp = await fetch('/auth-profiles');
-        if (!resp.ok) return;
-        const profiles = await resp.json();
-        const cur = sel.value;
-        clear(sel);
-        sel.appendChild(el('option', { value: '', text: '— без авторизации —' }));
-        for (const p of profiles) sel.appendChild(el('option', { value: String(p.id), text: p.name }));
-        sel.value = cur;
-    } catch (e) { /* ignore */ }
-}
-
-async function loadSchedules() {
-    if (isGuest) return;
-    const list = $('schedulesList');
-    if (!list) return;
-    try {
-        const resp = await fetch('/schedules');
-        if (!resp.ok) return;
-        const schedules = await resp.json();
-        clear(list);
-        if (!schedules.length) { list.appendChild(el('div', { className: 'empty-history', text: 'Расписаний нет' })); return; }
-        for (const s of schedules) {
-            const last = s.last_run ? new Date(s.last_run * 1000).toISOString().slice(0, 16).replace('T', ' ') : '—';
-            list.appendChild(el('div', { className: 'check-item' }, [
-                el('span', { className: 'name', text: s.target_url + ' · ' + s.mode + ' · каждые ' + s.interval + ' мин · ' + (s.enabled ? 'вкл' : 'выкл') + ' · посл: ' + last }),
-                el('button', { className: 'mini-btn', text: 'УДАЛИТЬ', onclick: async () => { await fetch('/schedules/' + s.id, { method: 'DELETE' }); loadSchedules(); } }),
-            ]));
-        }
-    } catch (e) { /* ignore */ }
-}
-
-async function addSchedule() {
-    const url = ($('schedUrl').value || '').trim();
-    if (!url) { alert('Укажите URL'); return; }
-    const body = { target_url: url, mode: $('schedMode').value, interval: parseInt($('schedInterval').value, 10) || 60, profile_id: $('schedProfile').value ? parseInt($('schedProfile').value, 10) : null };
-    const resp = await fetch('/schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!resp.ok) { const e = await resp.json().catch(() => ({})); alert('Ошибка: ' + (e.detail || resp.status)); return; }
-    loadSchedules();
-}
-
-async function loadTrend() {
-    if (isGuest) return;
-    const sel = $('trendProject');
-    const pid = sel && sel.value ? sel.value : '';
-    try {
-        const resp = await fetch('/history/trend' + (pid ? '?project_id=' + pid : ''));
-        if (!resp.ok) return;
-        renderTrendChart(await resp.json());
-    } catch (e) { /* ignore */ }
-}
-
-function renderTrendChart(data) {
-    const canvas = $('trendChart');
-    const emptyEl = $('trendEmpty');
-    if (!canvas) return;
-    if (typeof Chart === 'undefined' || !data || data.length < 2) {
-        canvas.style.display = 'none';
-        if (emptyEl) emptyEl.style.display = 'block';
-        if (trendChart) { trendChart.destroy(); trendChart = null; }
-        return;
-    }
-    canvas.style.display = 'block';
-    if (emptyEl) emptyEl.style.display = 'none';
-    const labels = data.map(d => d.date);
-    const mono = 'JetBrains Mono, monospace';
-    if (trendChart) trendChart.destroy();
-    trendChart = new Chart(canvas, {
-        type: 'line',
-        data: { labels, datasets: [
-            { label: 'ОЦЕНКА', data: data.map(d => d.score), borderColor: '#00bfff', backgroundColor: 'rgba(0,191,255,0.12)', borderWidth: 3, tension: 0.3, pointRadius: 4, yAxisID: 'yScore' },
-            { label: 'КРИТИЧНО', data: data.map(d => d.critical), borderColor: '#ff0044', backgroundColor: 'rgba(255,0,68,0.15)', borderWidth: 2, tension: 0.25, pointRadius: 4, yAxisID: 'y' },
-        ] },
-        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-            plugins: { legend: { labels: { color: '#00ff41', font: { family: mono, size: 13, weight: '800' } } } },
-            scales: {
-                x: { ticks: { color: '#7fbf80', font: { family: mono, size: 11 } }, grid: { color: 'rgba(31,95,31,0.4)' } },
-                y: { beginAtZero: true, position: 'left', ticks: { color: '#7fbf80', stepSize: 1 }, grid: { color: 'rgba(31,95,31,0.4)' } },
-                yScore: { beginAtZero: true, max: 100, position: 'right', ticks: { color: '#00bfff', stepSize: 20 }, grid: { display: false } },
-            } },
-    });
-}
-
-function initPlanningUI() {
-    const ap = $('addProjectBtn'); if (ap) ap.addEventListener('click', addProject);
-    const as = $('addScheduleBtn'); if (as) as.addEventListener('click', addSchedule);
-    const rt = $('refreshTrendBtn'); if (rt) rt.addEventListener('click', loadTrend);
-    const tp = $('trendProject'); if (tp) tp.addEventListener('change', loadTrend);
-    loadProjects(); loadSchedules(); loadSchedProfiles(); loadTrend();
-}
 
 // ---------- Старт при загрузке страницы ----------
 window.addEventListener('load', initLoadingScreen);

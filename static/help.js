@@ -1,7 +1,7 @@
 'use strict';
 // «?»-подсказки: простые объяснения каждого пункта главной страницы.
 // Цель — чтобы сайтом мог пользоваться человек, который вообще не разбирается в ПК/безопасности.
-// Тексты RU/EN; язык берётся из i18n. Тултип: наведение + фокус (клавиатура) + тап (телефон), Esc закрывает.
+// Тексты только RU. Тултип: наведение + фокус (клавиатура) + тап (телефон), Esc закрывает.
 (function () {
     const CHECKS = {
         check_sqli: { ru: "Проверяет, можно ли через поля ввода (логин, поиск, id) вставить вредоносный SQL-код и залезть в базу данных. Если да — могут украсть или изменить все данные." },
@@ -41,7 +41,6 @@
     };
     const UI = {
         "panel.url": { ru: "Адрес проверяемого сервиса (API), например http://127.0.0.1:8000. Сюда сканер отправляет запросы. Обычно это адрес вашего приложения." },
-        "panel.project": { ru: "Необязательно. Имя проекта, чтобы объединять сканы одного сервиса в истории и трендах." },
         "panel.mode": { ru: "Набор проверок: БЫСТРЫЙ — основные, ПОЛНЫЙ — все, СВОЙ — выбрать вручную галочками." },
         "mode.quick": { ru: "Быстрый режим: только самые важные проверки. Быстрее, подходит для первой оценки." },
         "mode.full": { ru: "Полный режим: все проверки. Дольше, но максимально подробно." },
@@ -49,7 +48,6 @@
         "panel.auth": { ru: "Логин/пароль тестируемого сервиса. С ними сканер входит и проверяет, что доступно после входа (утечки, чужие данные, админ-функции). Без них — только то, что открыто без входа." },
         "auth.acc1": { ru: "Основной аккаунт («Алиса»). Сканер смотрит на сервис глазами вошедшего пользователя." },
         "auth.acc2": { ru: "Второй аккаунт («Боб»). Нужен, чтобы проверить, может ли Боб открыть данные Алисы (cross-user IDOR). Без него это сравнение пропускается." },
-        "panel.notify": { ru: "Необязательно. Адрес (webhook), куда сканер отправит краткий JSON-результат после завершения." },
         "stat.critical": { ru: "Критично: прямая угроза (взлом/утечка всех данных). Требует немедленного исправления." },
         "stat.high": { ru: "Высокий риск: серьёзная уязвимость, исправить в ближайшее время." },
         "stat.medium": { ru: "Средний риск: заметная проблема, стоит исправить." },
@@ -57,7 +55,6 @@
         "stat.score": { ru: "Итоговая оценка безопасности 0–100. Чем выше, тем лучше." },
         "stat.status": { ru: "Текущее состояние сканирования." }
     };
-    function lang() { return (window.I18N && window.I18N.getLang) ? window.I18N.getLang() : "ru"; }
     function textFor(key) {
         const i = key.indexOf(":");
         const kind = key.slice(0, i), id = key.slice(i + 1);
@@ -103,12 +100,11 @@
         node.dataset.helpDone = "1";
         const b = makeBtn(key);
         if (node.hasAttribute("data-i18n")) {
-        const w = document.createElement("span");
-        w.className = "help-row";
-        if (node.classList.contains("panel-label")) w.classList.add("help-row--panel");
-        node.parentNode.insertBefore(w, node);
-        w.appendChild(node); w.appendChild(b);
-    }
+            const w = document.createElement("span");
+            w.className = "help-row";
+            if (node.classList.contains("panel-label")) w.classList.add("help-row--panel");
+            node.parentNode.insertBefore(w, node);
+            w.appendChild(node); w.appendChild(b);
         } else {
             node.appendChild(b);
         }
@@ -117,7 +113,6 @@
         ['.panel-label[data-i18n="panel.url"]', "ui:panel.url"],
         ['.panel-label[data-i18n="panel.mode"]', "ui:panel.mode"],
         ['.panel-label[data-i18n="panel.auth"]', "ui:panel.auth"],
-        ['.panel-label[data-i18n="panel.notify"]', "ui:panel.notify"],
         ['.mode-item[data-mode="quick"]', "ui:mode.quick"],
         ['.mode-item[data-mode="full"]', "ui:mode.full"],
         ['.mode-item[data-mode="custom"]', "ui:mode.custom"],

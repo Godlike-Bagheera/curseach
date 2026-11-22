@@ -17,9 +17,10 @@ def test_help_covers_all_checks():
         assert cid + ":" in js, cid
 
 
-def test_help_has_ru_and_en():
+def test_help_ru_only():
     js = _read("static/help.js")
-    assert "ru:" in js and "en:" in js
+    assert "ru:" in js
+    assert ", en:" not in js
 
 
 def test_index_loads_help_js():
