@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Dependency audit (pip-audit, informational)
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --no-deps --disable-pip
+
+      - name: JS syntax (node --check)
+        run: |
+          node --check static/script.js
+          node --check static/history_filter.js
+          node --check static/vulns.js
+          node --check static/report.js
+          node --check static/diff.js
+          node --check static/i18n.js
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (ruff format)
+        run: ruff format --check .
+
+      - name: about.html sync (gen_about --check)
+        run: python scripts/gen_about.py --check
+
+      - name: Type check (mypy — блокирует для checks/ и security)
+        run: mypy checks scanner/security.py
+
+      - name: System libs for WeasyPrint (HarfBuzz-Subset)
+        run: sudo apt-get update && sudo apt-get install -y libharfbuzz-subset0
+
+      - name: Run tests + coverage
+        run: pytest -q --cov=checks --cov=scanner --cov-report=term-missing --cov-report=xml --cov-fail-under=75
+
+      - name: Smoke — import app
+        run: python -c "import web_app; print('app OK')"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build Docker image (digest-pinned base + pip --require-hashes)
+        run: docker build -t curseach:ci .
+
+  ui-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install playwright==1.65.2
+
+      - name: Install Chromium
+        run: python -m playwright install chromium --with-deps
+
+      - name: UI smoke (Playwright)
+        run: pytest tests/test_ui_smoke.py tests/test_ui_scan.py tests/test_i18n_ui.py -q

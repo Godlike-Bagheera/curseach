@@ -1,0 +1,34 @@
+# Инструментальная конфигурация (ruff/mypy/coverage).
+# Зависимости проекта по-прежнему в requirements.txt / requirements-dev.txt.
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = ["static", "templates", ".git", "about.html"]
+
+[tool.ruff.lint]
+# Критические ошибки + стиль/импорты/апгрейды + bugbear (B).
+# B008 игнорируется: Depends()/Query() в дефолтах аргументов — идиома FastAPI.
+select = ["E9", "F", "W", "I", "UP", "B"]
+ignore = ["E501", "E702", "E731", "B008"]  # B008: Depends() в дефолтах — идиома FastAPI
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+allow_untyped_defs = true
+allow_untyped_globals = true
+no_strict_optional = true
+exclude = ["static", "templates"]
+
+[tool.coverage.run]
+source = ["checks", "scanner", "database", "report_csv", "report_xlsx"]
+omit = ["tests/*", "scanner/pdf.py"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 75
+
+[tool.ruff.lint.per-file-ignores]
+# __init__.py — хабы реэкспорта публичного API (checks, scanner, routes).
+"__init__.py" = ["F401"]
+"web_app.py" = ["F401"]

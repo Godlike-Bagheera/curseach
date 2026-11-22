@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Справочник уязвимостей — DevSecOps Scanner</title>
+<link rel="stylesheet" href="/static/fonts.css">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .vg-wrap{max-width:1180px;margin:0 auto;padding:28px 20px 70px}
+  .vg-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+  .vg-back{color:var(--fg);opacity:.85;text-decoration:none;border:2px solid var(--border-dim);
+    padding:7px 16px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;transition:.15s}
+  .vg-back:hover{border-color:var(--border);background:var(--panel);opacity:1}
+  .vg-title{font-size:27px;letter-spacing:.1em;margin:12px 0 6px;color:var(--fg);
+    text-shadow:0 0 12px rgba(0,255,65,.45)}
+  .vg-sub{color:var(--fg-dim);font-size:13.5px;margin:0 0 18px;line-height:1.7;max-width:900px}
+
+  /* ---------- Памятка «как читать справочник» ---------- */
+  .vg-help{border:2px solid var(--border-dim);background:rgba(0,20,0,.35);margin:0 0 22px}
+  .vg-help summary{cursor:pointer;padding:12px 16px;font-size:13px;letter-spacing:.12em;
+    color:var(--fg);font-weight:800;list-style:none;text-transform:uppercase}
+  .vg-help summary::-webkit-details-marker{display:none}
+  .vg-help summary::before{content:'▸ ';color:var(--fg-dim)}
+  .vg-help[open] summary::before{content:'▾ '}
+  .vg-help summary:hover{background:var(--panel)}
+  .vg-help-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:6px 22px;
+    padding:6px 16px 16px;border-top:1px dashed var(--border-dim)}
+  .vg-help-col h4{font-size:11px;letter-spacing:.12em;color:var(--fg);margin:12px 0 6px;text-transform:uppercase}
+  .vg-help-col p{font-size:12px;line-height:1.65;color:var(--fg-dim);margin:0 0 8px}
+  .vg-help-col p b{color:var(--fg)}
+  .vg-help-col code{color:var(--fg-dim);border:1px solid var(--border-dim);background:#000;
+    padding:1px 5px;font-size:10px;white-space:nowrap}
+
+  /* ---------- Значки уровня опасности и режима ---------- */
+  .lvl{display:inline-block;font-size:10.5px;font-weight:900;letter-spacing:.08em;
+    padding:3px 10px;border:2px solid currentColor;background:rgba(0,0,0,.4);
+    white-space:nowrap;cursor:help;vertical-align:middle}
+  .lvl b{display:block}
+  .lvl i{font-style:normal;font-size:9px;opacity:.85}
+  .lvl-critical{color:var(--error);background:rgba(255,0,68,.08)}
+  .lvl-high{color:var(--purple);background:rgba(213,0,249,.08)}
+  .lvl-medium{color:var(--warn);background:rgba(255,179,0,.08)}
+  .lvl-low{color:var(--fg);background:rgba(0,255,65,.06)}
+  .lvl-quick{color:var(--fg);border-color:var(--border-dim)}
+  .vg-lvl-row{margin:0 0 10px}
+  .vg-lvl-head{display:flex;align-items:center;gap:8px;margin:0 0 5px}
+  .vg-lvl-row p{margin:0}
+
+  .vg-searchrow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:24px}
+  .vg-search{flex:1;min-width:240px;box-sizing:border-box;background:#000;border:2px solid var(--border-dim);
+    color:var(--fg);padding:11px 14px;font:inherit;font-size:14px;color-scheme:dark}
+  .vg-search:focus-visible{outline:none;border-color:var(--border);box-shadow:0 0 10px rgba(0,255,65,.3)}
+  .vg-count{font-size:12px;color:var(--fg-dim);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+  .vg-h2{font-size:15px;letter-spacing:.12em;color:var(--fg);margin:26px 0 4px;
+    border-bottom:2px solid var(--border-dim);padding-bottom:8px;text-transform:uppercase}
+  .vg-h2sub{font-size:12px;color:var(--fg-dim);margin:0 0 14px;line-height:1.6}
+  .vg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+  /* Невидимые якоря отчётов перед карточками реестра: вне потока сетки, высота 0. */
+  .vg-card,.vr-card{position:relative}
+  .vg-copy{position:absolute;top:8px;right:8px;background:none;border:1px solid var(--border-dim);color:var(--fg-dim);cursor:pointer;font-size:12px;padding:2px 8px;border-radius:4px;line-height:1.4}
+  .vg-copy:hover{color:var(--fg);border-color:var(--fg)}
+  .vg-anchor{position:absolute;display:block;height:0;scroll-margin-top:24px}
+  .vg-card,.vr-card{border:2px solid var(--border-dim);background:var(--panel);padding:16px;
+    display:flex;flex-direction:column;gap:10px;transition:border-color .15s;scroll-margin-top:18px;position:relative}
+  .vg-card:hover,.vr-card:hover{border-color:var(--border)}
+  .vg-card.vg-target,.vr-card.vg-target{border-color:var(--fg);background:rgba(0,255,65,.10);
+    box-shadow:0 0 22px rgba(0,255,65,.55);animation:vg-pulse 1.1s ease-in-out 3}
+  .vg-card.vg-target::after,.vr-card.vg-target::after{content:'▼ ВЫ ЗДЕСЬ';position:absolute;top:-11px;right:10px;
+    background:var(--fg);color:var(--bg);font-size:9.5px;font-weight:900;letter-spacing:.1em;padding:2px 8px}
+  @keyframes vg-pulse{0%,100%{box-shadow:0 0 10px rgba(0,255,65,.35)}50%{box-shadow:0 0 26px rgba(0,255,65,.75)}}
+  .vg-badges{display:flex;gap:6px;flex-wrap:wrap}
+  .vg-en{font-size:15px;color:var(--fg);letter-spacing:.04em;margin:0}
+  .vg-ru{font-size:13.5px;margin:0;color:var(--fg);opacity:.95}
+  .vg-meaning{font-size:12.5px;line-height:1.7;margin:0;color:var(--fg-dim)}
+  .vg-meaning b{color:var(--fg)}
+  .vg-example{font-size:12px;line-height:1.65;margin:0;padding:10px 12px;background:#000;
+    border-left:3px solid var(--cyan);color:var(--fg-dim)}
+  .vg-example b{color:var(--cyan)}
+  .vg-rec{font-size:12px;line-height:1.65;margin:0;padding:10px 12px;background:#000;
+    border-left:3px solid var(--border);color:var(--fg-dim)}
+  .vg-rec b{color:var(--fg)}
+
+  /* ---------- Коды CWE / OWASP: код + человеческое название + подсказка ---------- */
+  .vg-taxonomy{display:flex;flex-direction:column;gap:8px}
+  .vg-taggroup{display:flex;flex-wrap:wrap;gap:6px}
+  .vg-taglabel{flex-basis:100%;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--fg-dim);opacity:.85;cursor:help}
+  .vg-tag{display:inline-flex;flex-direction:column;gap:1px;border:1px solid var(--border-dim);
+    padding:4px 9px;background:#000;cursor:help;transition:border-color .15s}
+  .vg-tag:hover{border-color:var(--border)}
+  .vg-tag b{font-size:10.5px;color:var(--fg);letter-spacing:.04em;font-weight:800}
+  .vg-tag i{font-style:normal;font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  .vg-check{font-size:11.5px;color:var(--fg-dim);margin-top:auto;line-height:2}
+  .vg-check code{color:var(--cyan);border:1px solid var(--border-dim);background:#000;
+    padding:2px 6px;margin:0 2px;cursor:help;white-space:nowrap}
+  .vr-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .vr-name{font-size:14px;color:var(--fg);margin:0;flex:1;min-width:140px}
+  .vr-ru{font-size:12.5px;margin:-6px 0 0;color:var(--fg);opacity:.85}
+  .vr-id{font-size:11px;color:var(--cyan);margin:0}
+  .vr-id code{cursor:help}
+  .vr-link{font-size:11.5px;color:var(--fg);text-decoration:none;border-bottom:1px dashed var(--border-dim);align-self:flex-start}
+  .vr-link:hover{border-color:var(--fg)}
+  .vg-none{display:none;padding:24px;text-align:center;color:var(--fg-dim);
+    border:2px dashed var(--border-dim);font-size:13px}
+  @media (max-width:640px){.vg-title{font-size:21px}.vg-grid{grid-template-columns:1fr}}
+  @media print{.vg-searchrow,.vg-back{display:none}.vg-card,.vr-card{break-inside:avoid;border-color:#999}
+    .vg-title{text-shadow:none}.vg-sub,.vg-meaning,.vg-rec,.vg-check,.vg-example{color:#333}
+    .vg-help{border-color:#999}.lvl{border-color:#999;color:#333}}
+</style>
+</head>
+<body>
+<div class="vg-wrap">
+  <div class="vg-top"><a class="vg-back" href="/" data-i18n="vulns.back">← Назад к сканеру</a>
+</div>
+  <h1 class="vg-title" data-i18n="vulns.title">СПРАВОЧНИК УЯЗВИМОСТЕЙ</h1>
+  <p class="vg-sub">Каждая карточка — одна «дыра» в безопасности сайта или API: что это простыми словами,
+    пример из жизни и как её закрыть. Цветной значок показывает, насколько это опасно.
+    Наведите курсор на значок или плашку с кодом — появится подсказка с расшифровкой.</p>
+
+  <details class="vg-help" open>
+    <summary data-i18n="vulns.help">Как читать справочник</summary>
+    <div class="vg-help-grid">
+      <section class="vg-help-col">
+        <h4>Уровень опасности</h4>
+        <div class="vg-lvl-row">
+          <div class="vg-lvl-head"><span class="lvl lvl-critical"><b>КРИТИЧЕСКИЙ РИСК</b></span></div>
+          <p>Взлом возможен уже сейчас: могут украсть всю базу или захватить сервер. Чинить немедленно.</p>
+        </div>
+        <div class="vg-lvl-row">
+          <div class="vg-lvl-head"><span class="lvl lvl-high"><b>ВЫСОКИЙ РИСК</b></span></div>
+          <p>Реальная утечка данных или доступ к чужим аккаунтам. Чинить в ближайшее время.</p>
+        </div>
+        <div class="vg-lvl-row">
+          <div class="vg-lvl-head"><span class="lvl lvl-medium"><b>СРЕДНИЙ РИСК</b></span></div>
+          <p>Заметно повышает риск, но для вреда обычно нужны дополнительные условия. Плановое исправление.</p>
+        </div>
+        <div class="vg-lvl-row">
+          <div class="vg-lvl-head"><span class="lvl lvl-low"><b>НИЗКИЙ РИСК</b></span></div>
+          <p>Мелкие недочёты и «гигиена» безопасности. Исправить при случае.</p>
+        </div>
+      </section>
+      <section class="vg-help-col">
+        <h4>Значок «⚡ БЫСТРЫЙ РЕЖИМ»</h4>
+        <p>Находка ловится в режиме <b>«Быстрый»</b> (экспресс-скан) — значок есть и у карточек
+          уязвимостей, и у проверок реестра. Без значка — только в режимах «Полный» и «Свой».</p>
+        <h4>«Ловит проверка»</h4>
+        <p>Кодовое имя автоматического теста сканера (например, <code>check_sqli</code>).
+          Те же имена — в режиме «Свой» и в отчётах: по ним легко понять, чем именно найдена дыра.</p>
+        <h4>«Служебная проверка»</h4>
+        <p>Служебная проверка — тест без отдельной карточки уязвимости: что он ищет и как
+          закрыться, написано в самой карточке реестра ниже.</p>
+      </section>
+      <section class="vg-help-col">
+        <h4>Коды CWE и OWASP</h4>
+        <p><b>CWE</b> — международный каталог типов ошибок безопасности (ведёт MITRE).
+          Номер = конкретный тип ошибки: например, CWE-89 — SQL-инъекция.</p>
+        <p><b>OWASP API Top 10 (2023)</b> — рейтинг 10 главных рисков именно для API.
+          <b>OWASP Top 10 (2021)</b> — то же для веб-приложений в целом.</p>
+        <p>Под каждым кодом в карточке написано человеческое название, а по наведению — подсказка.
+          Эти же коды стоят в отчётах сканера, поэтому находку легко найти в справочнике.</p>
+      </section>
+    </div>
+  </details>
+
+  <div class="vg-searchrow">
+    <input class="vg-search" id="vg-q" type="search" data-i18n-placeholder="vulns.search" placeholder="Поиск: название (EN/RU), смысл, код CWE/OWASP или имя проверки…"
+           aria-label="Поиск по справочнику">
+    <span class="vg-count" id="vg-count"></span>
+  </div>
+
+  <h2 class="vg-h2" data-i18n="vulns.h2.popular">&gt; Популярные уязвимости</h2>
+  <p class="vg-h2sub">15 самых частых «дыр» — простыми словами, с примерами из жизни и уровнем опасности.</p>
+  <div class="vg-grid" id="vg-grid">
+    {% for v in guide %}
+    <article class="vg-card" id="{{ v.slug }}" data-search="{{ v.search }}"><div class="vg-badges">
+        <span class="lvl lvl-{{ v.level|lower }}" title="{{ v.level_hint }}"><b>{{ v.level_ru }} РИСК</b></span>
+        {% if v.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»">⚡ БЫСТРЫЙ РЕЖИМ</span>{% endif %}
+      </div>
+      <h3 class="vg-en">{{ v.en }}</h3>
+      <p class="vg-ru">{{ v.ru }}</p>
+      <p class="vg-meaning"><b>Что это:</b> {{ v.meaning }}</p>
+      {% if v.example %}<p class="vg-example"><b>Пример:</b> {{ v.example }}</p>{% endif %}
+      <p class="vg-rec"><b>Как защититься:</b> {{ v.recommendation }}</p>
+      <div class="vg-taxonomy">
+        {% if v.cwe_tags %}
+        <div class="vg-taggroup">
+          <span class="vg-taglabel" title="CWE (Common Weakness Enumeration) — международный каталог типов ошибок безопасности, который ведёт MITRE">Тип ошибки · CWE</span>
+          {% for t in v.cwe_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
+        </div>
+        {% endif %}
+        {% if v.api_tags %}
+        <div class="vg-taggroup">
+          <span class="vg-taglabel" title="OWASP API Security Top 10 (2023) — рейтинг 10 главных рисков безопасности именно для API">Риски API · OWASP API Top 10</span>
+          {% for t in v.api_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
+        </div>
+        {% endif %}
+        {% if v.top10_tag %}
+        <div class="vg-taggroup">
+          <span class="vg-taglabel" title="OWASP Top 10 (2021) — рейтинг 10 главных рисков безопасности веб-приложений в целом">Риски веба · OWASP Top 10</span>
+          <span class="vg-tag" title="{{ v.top10_tag.title }}"><b>{{ v.top10_tag.code }}</b></span>
+        </div>
+        {% endif %}
+      </div>
+      <div class="vg-check">
+        {% if v.checks %}Ловит проверка:
+          {% for c in v.checks %}<code title="Автоматический тест сканера; это же имя — в режиме «Свой» и в отчётах">{{ c }}</code>{% endfor %}
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  <div class="vg-none" id="vg-none">Ничего не найдено — попробуй другой запрос</div>
+
+  <h2 class="vg-h2">&gt; Все проверки сканера ({{ registry|length }})</h2>
+  <p class="vg-h2sub">Что ищет каждый автоматический тест, насколько опасна его находка и ловится ли она в быстром режиме. Ссылки из отчётов ведут прямо на карточки этого реестра.</p>
+  <div class="vg-grid" id="vr-grid">
+    {% for r in registry %}
+    {% for a in r.anchors %}<span id="{{ a }}" class="vg-anchor" aria-hidden="true"></span>{% endfor %}
+    <article class="vr-card" id="reg-{{ r.id }}" data-search="{{ r.search }}"><div class="vr-head">
+        <h3 class="vr-name">{{ r.title_en }}</h3>
+      </div>
+      <p class="vr-ru">{{ r.title_ru }}</p>
+      <div class="vg-badges">
+        <span class="lvl lvl-{{ r.level|lower }}" title="{{ r.level_hint }}"><b>{{ r.level_ru }} РИСК</b></span>
+        {% if r.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»">⚡ БЫСТРЫЙ РЕЖИМ</span>{% endif %}
+      </div>
+      <p class="vr-id"><code title="{{ r.name }} — кодовое имя проверки, как в режиме «Свой» и в отчётах">{{ r.id }}</code></p>
+      <p class="vg-meaning"><b>Что ищет:</b> {{ r.meaning }}</p>
+      <p class="vg-rec"><b>Как защититься:</b> {{ r.recommendation }}</p>
+      <div class="vg-taxonomy">
+        {% if r.cwe_tags %}
+        <div class="vg-taggroup">
+          <span class="vg-taglabel" title="CWE (Common Weakness Enumeration) — международный каталог типов ошибок безопасности, который ведёт MITRE">Тип ошибки · CWE</span>
+          {% for t in r.cwe_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
+        </div>
+        {% endif %}
+        {% if r.api_tags %}
+        <div class="vg-taggroup">
+          <span class="vg-taglabel" title="OWASP API Security Top 10 (2023) — рейтинг 10 главных рисков безопасности именно для API">Риски API · OWASP API Top 10</span>
+          {% for t in r.api_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
+        </div>
+        {% endif %}
+        {% if r.top10_tag %}
+        <div class="vg-taggroup">
+          <span class="vg-taglabel" title="OWASP Top 10 (2021) — рейтинг 10 главных рисков безопасности веб-приложений в целом">Риски веба · OWASP Top 10</span>
+          <span class="vg-tag" title="{{ r.top10_tag.title }}"><b>{{ r.top10_tag.code }}</b></span>
+        </div>
+        {% endif %}
+      </div>
+      {% if r.guide_slug %}<a class="vr-link" href="#{{ r.guide_slug }}">Подробнее об уязвимости →</a>
+      {% else %}<span class="vg-check">Служебная проверка — тест без отдельной карточки уязвимости</span>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  <div class="vg-none" id="vr-none">Ничего не найдено — попробуй другой запрос</div>
+</div>
+<script src="/static/vulns.js"></script>
+<script src="/static/i18n.js"></script>
+</body>
+</html>

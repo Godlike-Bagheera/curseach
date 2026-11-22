@@ -1,0 +1,7 @@
+# Единые переносы строк в репозитории (LF).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
