@@ -44,6 +44,7 @@ jobs:
           node --check static/report.js
           node --check static/diff.js
           node --check static/i18n.js
+          node --check static/help.js
 
       - name: Lint (ruff)
         run: ruff check .

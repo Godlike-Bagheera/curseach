@@ -103,6 +103,7 @@
             const w = document.createElement("span");
             w.className = "help-row";
             if (node.classList.contains("panel-label")) w.classList.add("help-row--panel");
+            else if (node.classList.contains("auth-section-title")) w.classList.add("help-row--title");
             node.parentNode.insertBefore(w, node);
             w.appendChild(node); w.appendChild(b);
         } else {
