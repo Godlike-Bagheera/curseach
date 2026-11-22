@@ -86,7 +86,7 @@ def origin_allowed(origin: str) -> bool:
 
 # ---------- Параметры сканирования (настраиваются через env) ----------
 SCAN_CONCURRENCY = int(os.environ.get("SCAN_CONCURRENCY", "8"))  # одновременных запросов внутри скана
-SCAN_MAX_REQUESTS = int(os.environ.get("SCAN_MAX_REQUESTS", "1500"))  # общий бюджет запросов на скан
+SCAN_MAX_REQUESTS = int(os.environ.get("SCAN_MAX_REQUESTS", "3000"))  # общий бюджет запросов на скан
 SCAN_RPS = float(os.environ.get("SCAN_RPS", "20"))  # запросов в секунду (0 = без лимита)
 SCAN_TOTAL_TIMEOUT = int(os.environ.get("SCAN_TOTAL_TIMEOUT", "300"))  # общий таймаут скана, сек
 MAX_CONCURRENT_SCANS = int(os.environ.get("MAX_CONCURRENT_SCANS", "3"))  # одновременных сканов на процесс

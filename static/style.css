@@ -931,9 +931,22 @@ body {
 
 /* ---------- «?»-подсказки (help.js) ---------- */
 .help-row {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 8px;
+}
+
+.help-row--panel {
+    margin-bottom: 14px;
+}
+
+.help-row > .panel-label {
+    margin-bottom: 0;
+}
+
+.mode-item .help-q {
+    vertical-align: middle;
+    margin-left: 8px;
 }
 .help-q {
     flex: none;
@@ -978,3 +991,6 @@ body {
 .help-tip.show {
     display: block;
 }
+
+.toast-notification { position: fixed; left: 16px; bottom: 16px; background: #04140a; color: var(--fg); border: 2px solid var(--fg); padding: 12px 20px; font-family: "JetBrains Mono", monospace; font-size: 14px; font-weight: 700; letter-spacing: 1px; box-shadow: 0 0 14px rgba(0, 255, 65, 0.5); opacity: 0; transform: translateY(20px); transition: opacity 0.3s, transform 0.3s; pointer-events: none; z-index: 10000; }
+.toast-notification.show { opacity: 1; transform: translateY(0); }

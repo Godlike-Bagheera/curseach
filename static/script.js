@@ -39,6 +39,7 @@ function clear(node) {
 //   чтобы layout не дёргался на глазах пользователя.
 // =============================================================
 
+function showToast(m){let t=document.getElementById('crt-toast');if(!t){t=document.createElement('div');t.id='crt-toast';t.className='toast-notification';document.body.appendChild(t);}t.textContent=m;t.classList.add('show');setTimeout(()=>{t.classList.remove('show');},5000);}
 function initLoadingScreen() {
     const screen = document.getElementById('loading-screen');
     const fill = document.getElementById('loading-bar-fill');
@@ -137,7 +138,7 @@ const acc1User = $('acc1User');
 const acc1Pass = $('acc1Pass');
 const acc2User = $('acc2User');
 const acc2Pass = $('acc2Pass');
-const webhookInput = $('webhookInput');
+
 
 // ---------- Tabs ----------
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -148,7 +149,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'history' && !isGuest) { loadHistory(); loadHistoryChart(); }
-        if (btn.dataset.tab === 'planning' && !isGuest) { loadProjects(); loadSchedules(); loadSchedProfiles(); loadTrend(); }
+        
     });
 });
 
@@ -180,9 +181,11 @@ function getSelectedChecks() {
 
 // ---------- Auth ----------
 function buildAccount(userEl, passEl, prefix) {
-    if (isGuest) return null;
-    const profEl = $(prefix + 'Profile');
-    if (profEl && profEl.value) return { profile_id: parseInt(profEl.value, 10) };
+    const u = (userEl.value || '').trim();
+    const p = (passEl.value || '').trim();
+    if (!u || !p) return null;
+    return { auth_type: 'bearer', username: u, password: p };
+};
     const typeEl = $(prefix + 'Type');
     const authType = typeEl ? typeEl.value : 'bearer';
     if (authType === 'apikey') {
@@ -398,6 +401,7 @@ function handleWsEvent(data) {
     switch (data.type) {
         case 'init':
             clearTerminal();
+    showToast('Сканирование запущено…');
             (data.logs || []).forEach(appendTerminal);
             setStatus(data);
             break;
@@ -452,6 +456,7 @@ async function startScan() {
     }
 
     clearTerminal();
+    showToast('Сканирование запущено…');
     appendTerminal('[SYS] Инициализация сканирования...');
     progressBar.style.width = '0%'; progressBar.setAttribute('aria-valuenow', '0');
     critCount.textContent = '0';
@@ -470,8 +475,8 @@ async function startScan() {
 
     try {
         const body = { url, mode };
-        const projEl = $('scanProject');
-        if (projEl && projEl.value) body.project_id = parseInt(projEl.value, 10);
+        
+        
         if (checks_) body.checks = checks_;
 
         const a1 = buildAccount(acc1User, acc1Pass, 'acc1');
@@ -480,8 +485,8 @@ async function startScan() {
         const a2 = buildAccount(acc2User, acc2Pass, 'acc2');
         if (a2) { if (a2.profile_id) body.account2_profile_id = a2.profile_id; else body.account2 = a2; }
 
-        const webhook = webhookInput ? (webhookInput.value || '').trim() : '';
-        if (webhook) body.webhook_url = webhook;
+        
+        
 
         if (a1) appendTerminal(`[SYS] Аккаунт 1: ${a1.username || ('профиль #' + a1.profile_id)}`);
         else appendTerminal('[SYS] Аккаунт 1: не задан (анонимно)');
@@ -927,7 +932,7 @@ async function loadProjects() {
         const resp = await fetch('/projects');
         if (!resp.ok) return;
         const projects = await resp.json();
-        for (const selId of ['scanProject', 'trendProject']) {
+        for (const selId of ['trendProject']) {
             const sel = $(selId);
             if (!sel) continue;
             const cur = sel.value;

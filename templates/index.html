@@ -36,8 +36,7 @@
             <div class="user-badge">
                 ПОЛЬЗОВАТЕЛЬ: {{ user }}{% if is_guest %} [ТОЛЬКО ПРОСМОТР]{% endif %}
             </div>
-            <button type="button" id="langToggle" class="about-btn" title="RU / EN">EN</button>
-            <a href="/about" target="_blank" class="about-btn" data-i18n="btn.about">О ПРОЕКТЕ</a>
+<a href="/about" target="_blank" class="about-btn" data-i18n="btn.about">О ПРОЕКТЕ</a>
             <a href="/vulns" target="_blank" class="about-btn" data-i18n="btn.vulns">СПРАВОЧНИК УЯЗВИМОСТЕЙ</a>
             <form method="post" action="/logout" class="logout-form"><button type="submit" class="logout-btn" style="background:none;border:0;cursor:pointer;font:inherit" data-i18n="btn.logout">ВЫЙТИ</button></form>
         </div>
@@ -57,8 +56,7 @@
         <button class="tab-btn" disabled title="Недоступно для гостя">[ ИСТОРИЯ ]</button>
         {% endif %}
         {% if not is_guest %}
-        <button class="tab-btn" data-tab="planning" data-i18n="tab.planning">[ ОПЕРАЦИИ ]</button>
-        {% endif %}
+{% endif %}
     </nav>
 
     <section id="scanner" class="tab-content active">
@@ -70,13 +68,7 @@
             <button id="cancelBtn" class="exec-btn hidden" style="background:#7a2e2e;" {% if is_guest %}disabled{% endif %} data-i18n="btn.cancel">ОСТАНОВИТЬ</button>
             </div>
         </div>
-
-        <div class="panel">
-            <label class="panel-label" for="scanProject" data-i18n="panel.project">&gt; ПРОЕКТ (НЕОБЯЗАТЕЛЬНО)</label>
-            <select id="scanProject" class="auth-field" {% if is_guest %}disabled{% endif %}><option value="">— без проекта —</option></select>
-        </div>
-
-        <div class="panel">
+<div class="panel">
             <div class="panel-label" data-i18n="panel.mode">&gt; РЕЖИМ СКАНИРОВАНИЯ</div>
             <div class="mode-row" id="modeRow">
                 <label class="mode-item {% if is_guest %}disabled{% endif %}" data-mode="quick">
@@ -108,32 +100,9 @@
         <div class="panel">
             <div class="panel-label" data-i18n="panel.auth">&gt; АВТОРИЗАЦИЯ</div>
 
-            <div class="auth-hint">
-                Сканер войдёт в проверяемый сервис под этими аккаунтами (через <code>/api/auth/login</code>) и получит токены.
-                <b>Аккаунт 1 («Алиса»)</b> — основной: сканер смотрит на сервис глазами вошедшего пользователя и проверяет,
-                что тому доступно после входа — утечки данных, админские функции обычному пользователю (<b>BFLA</b>),
-                доступ к чужому без прав (<b>IDOR</b>). Эти проверки работают и с одним аккаунтом.
-                <b>Аккаунт 2 («Боб»)</b> добавляет сравнение двух пользователей: может ли Боб открыть данные Алисы —
-                например, её заказ по ссылке <code>/orders/105</code>, хотя не покупал его (<b>cross-user IDOR/BOLA</b>).
-                Без второго аккаунта пропускается только это сравнение. Без аккаунтов вовсе сканер проверит лишь то, что открыто без входа.
-            </div>
+            
 
-            <div class="auth-section">
-                <div class="auth-section-title" data-i18n="auth.acc1">АККАУНТ 1 — ОСНОВНОЙ («АЛИСА»)</div>
-                <div class="auth-row-2col">
-                    <div>
-                        <label class="auth-label" for="acc1Profile" data-i18n="auth.profile">ПРОФИЛЬ</label>
-                        <select id="acc1Profile" class="auth-field" {% if is_guest %}disabled{% endif %}><option value="">— вручную —</option></select>
-                    </div>
-                    <div>
-                        <label class="auth-label" for="acc1Type" data-i18n="auth.type">ТИП АВТОРИЗАЦИИ</label>
-                        <select id="acc1Type" class="auth-field" {% if is_guest %}disabled{% endif %}>
-                            <option value="bearer">Bearer (логин/пароль)</option>
-                            <option value="form">Form (cookie-сессия)</option>
-                            <option value="apikey">API-key (заголовок)</option>
-                        </select>
-                    </div>
-                </div>
+            <div class="auth-section"><div class="auth-section-title" data-i18n="auth.acc1">АККАУНТ 1 — ОСНОВНОЙ («АЛИСА»)</div><div class="auth-row-2col"><div><label class="auth-label" for="acc1User">ЛОГИН</label><input type="text" id="acc1User" class="auth-field" placeholder="alice" autocomplete="off" {% if is_guest %}disabled{% endif %}></div><div><label class="auth-label" for="acc1Pass">ПАРОЛЬ</label><input type="password" id="acc1Pass" class="auth-field" placeholder="alice123" autocomplete="new-password" {% if is_guest %}disabled{% endif %}></div></div></div>
                 <div id="acc1Extra" class="auth-row-2col hidden">
                     <div>
                         <label class="auth-label" for="acc1KeyHeader">API-KEY: ЗАГОЛОВОК</label>
@@ -165,22 +134,7 @@
                 </div>
             </div>
 
-            <div class="auth-section auth-secondary">
-                <div class="auth-section-title" data-i18n="auth.acc2">АККАУНТ 2 — ЧУЖОЙ АККАУНТ («БОБ»)</div>
-                <div class="auth-row-2col">
-                    <div>
-                        <label class="auth-label" for="acc2Profile" data-i18n="auth.profile">ПРОФИЛЬ</label>
-                        <select id="acc2Profile" class="auth-field" {% if is_guest %}disabled{% endif %}><option value="">— вручную —</option></select>
-                    </div>
-                    <div>
-                        <label class="auth-label" for="acc2Type" data-i18n="auth.type">ТИП АВТОРИЗАЦИИ</label>
-                        <select id="acc2Type" class="auth-field" {% if is_guest %}disabled{% endif %}>
-                            <option value="bearer">Bearer (логин/пароль)</option>
-                            <option value="form">Form (cookie-сессия)</option>
-                            <option value="apikey">API-key (заголовок)</option>
-                        </select>
-                    </div>
-                </div>
+            <div class="auth-section auth-secondary"><div class="auth-section-title" data-i18n="auth.acc2">АККАУНТ 2 — ЧУЖОЙ АККАУНТ («БОБ») <span style="font-size:12px; color:var(--fg-dim); font-weight:normal;">(нужен для cross-user IDOR)</span></div><div class="auth-row-2col"><div><label class="auth-label" for="acc2User">ЛОГИН</label><input type="text" id="acc2User" class="auth-field" placeholder="bob" autocomplete="off" {% if is_guest %}disabled{% endif %}></div><div><label class="auth-label" for="acc2Pass">ПАРОЛЬ</label><input type="password" id="acc2Pass" class="auth-field" placeholder="bob123" autocomplete="new-password" {% if is_guest %}disabled{% endif %}></div></div></div>
                 <div id="acc2Extra" class="auth-row-2col hidden">
                     <div>
                         <label class="auth-label" for="acc2KeyHeader">API-KEY: ЗАГОЛОВОК</label>
@@ -213,14 +167,7 @@
                 </div>
             </div>
         </div>
-
-        <div class="panel">
-            <div class="panel-label" data-i18n="panel.notify">&gt; УВЕДОМЛЕНИЯ</div>
-            <div class="auth-hint" data-i18n="auth.notify">После завершения скана сканер отправит короткую JSON-сводку на этот адрес (webhook). Поле необязательное.</div>
-            <input type="text" id="webhookInput" class="auth-field" placeholder="https://example.com/webhook" spellcheck="false" autocomplete="off" {% if is_guest %}disabled{% endif %}>
-        </div>
-
-        <div class="panel">
+<div class="panel">
             <div class="stats-row">
                 <div class="stat-box stat-critical">
                     <div class="stat-label" data-i18n="stat.critical">КРИТИЧНО</div>
@@ -292,35 +239,6 @@
                 <button id="refreshHistoryBtn" class="action-btn">ОБНОВИТЬ</button>
                 <button id="diffHistoryBtn" class="action-btn" disabled>СРАВНИТЬ (0/2)</button>
             </div>
-        </div>
-    </section>
-    <section id="planning" class="tab-content">
-        <div class="panel">
-            <div class="panel-label" data-i18n="planning.projects">&gt; ПРОЕКТЫ (МУЛЬТИ-ЦЕЛИ)</div>
-            <div class="input-row">
-                <input type="text" id="projectName" placeholder="название проекта…" spellcheck="false" autocomplete="off">
-                <button id="addProjectBtn" class="exec-btn">ДОБАВИТЬ</button>
-            </div>
-            <div id="projectsList" class="checks-list"></div>
-        </div>
-        <div class="panel">
-            <div class="panel-label" data-i18n="planning.schedules">&gt; РАСПИСАНИЯ (ПОВТОРНЫЕ СКАНЫ)</div>
-            <div class="auth-row-2col">
-                <div><label class="auth-label" for="schedUrl">ЦЕЛЕВОЙ URL</label><input id="schedUrl" class="auth-field" placeholder="http://127.0.0.1:8000" autocomplete="off"></div>
-                <div><label class="auth-label" for="schedInterval">ИНТЕРВАЛ (МИН)</label><input id="schedInterval" class="auth-field" type="number" value="60" min="1"></div>
-                <div><label class="auth-label" for="schedMode">РЕЖИМ</label><select id="schedMode" class="auth-field"><option value="quick">БЫСТРЫЙ</option><option value="full" selected>ПОЛНЫЙ</option></select></div>
-                <div><label class="auth-label" for="schedProfile">AUTH-ПРОФИЛЬ</label><select id="schedProfile" class="auth-field"><option value="">— без авторизации —</option></select></div>
-            </div>
-            <button id="addScheduleBtn" class="exec-btn">ДОБАВИТЬ РАСПИСАНИЕ</button>
-            <div id="schedulesList" class="checks-list"></div>
-        </div>
-        <div class="panel">
-            <div class="panel-label" data-i18n="planning.trend">&gt; ТРЕНД ПО ИСТОРИИ</div>
-            <div class="input-row">
-                <select id="trendProject" class="auth-field"><option value="">все проекты</option></select>
-                <button id="refreshTrendBtn" class="exec-btn">ОБНОВИТЬ</button>
-            </div>
-            <div class="chart-wrapper"><canvas id="trendChart"></canvas><div id="trendEmpty" class="chart-empty" style="display:none;">Недостаточно данных для тренда (нужно минимум 2 дня).</div></div>
         </div>
     </section>
 </div>

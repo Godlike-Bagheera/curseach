@@ -112,7 +112,8 @@
 </head>
 <body>
 <div class="vg-wrap">
-  <div class="vg-top"><a class="vg-back" href="/" data-i18n="vulns.back">← Назад к сканеру</a><button type="button" id="langToggle" class="vg-back" style="cursor:pointer">EN</button></div>
+  <div class="vg-top"><a class="vg-back" href="/" data-i18n="vulns.back">← Назад к сканеру</a>
+</div>
   <h1 class="vg-title" data-i18n="vulns.title">СПРАВОЧНИК УЯЗВИМОСТЕЙ</h1>
   <p class="vg-sub">Каждая карточка — одна «дыра» в безопасности сайта или API: что это простыми словами,
     пример из жизни и как её закрыть. Цветной значок показывает, насколько это опасно.
@@ -124,19 +125,19 @@
       <section class="vg-help-col">
         <h4>Уровень опасности</h4>
         <div class="vg-lvl-row">
-          <div class="vg-lvl-head"><span class="lvl lvl-critical"><b>КРИТИЧЕСКИЙ РИСК</b><i>CRITICAL</i></span></div>
+          <div class="vg-lvl-head"><span class="lvl lvl-critical"><b>КРИТИЧЕСКИЙ РИСК</b></span></div>
           <p>Взлом возможен уже сейчас: могут украсть всю базу или захватить сервер. Чинить немедленно.</p>
         </div>
         <div class="vg-lvl-row">
-          <div class="vg-lvl-head"><span class="lvl lvl-high"><b>ВЫСОКИЙ РИСК</b><i>HIGH</i></span></div>
+          <div class="vg-lvl-head"><span class="lvl lvl-high"><b>ВЫСОКИЙ РИСК</b></span></div>
           <p>Реальная утечка данных или доступ к чужим аккаунтам. Чинить в ближайшее время.</p>
         </div>
         <div class="vg-lvl-row">
-          <div class="vg-lvl-head"><span class="lvl lvl-medium"><b>СРЕДНИЙ РИСК</b><i>MEDIUM</i></span></div>
+          <div class="vg-lvl-head"><span class="lvl lvl-medium"><b>СРЕДНИЙ РИСК</b></span></div>
           <p>Заметно повышает риск, но для вреда обычно нужны дополнительные условия. Плановое исправление.</p>
         </div>
         <div class="vg-lvl-row">
-          <div class="vg-lvl-head"><span class="lvl lvl-low"><b>НИЗКИЙ РИСК</b><i>LOW</i></span></div>
+          <div class="vg-lvl-head"><span class="lvl lvl-low"><b>НИЗКИЙ РИСК</b></span></div>
           <p>Мелкие недочёты и «гигиена» безопасности. Исправить при случае.</p>
         </div>
       </section>
@@ -173,10 +174,8 @@
   <p class="vg-h2sub">15 самых частых «дыр» — простыми словами, с примерами из жизни и уровнем опасности.</p>
   <div class="vg-grid" id="vg-grid">
     {% for v in guide %}
-    <article class="vg-card" id="{{ v.slug }}" data-search="{{ v.search }}">
-      <button class="vg-copy" type="button" data-slug="{{ v.slug }}" title="Скопировать ссылку на карточку" aria-label="Скопировать ссылку: {{ v.en }}">🔗</button>
-      <div class="vg-badges">
-        <span class="lvl lvl-{{ v.level|lower }}" title="{{ v.level_hint }}"><b>{{ v.level_ru }} РИСК</b><i>{{ v.level }}</i></span>
+    <article class="vg-card" id="{{ v.slug }}" data-search="{{ v.search }}"><div class="vg-badges">
+        <span class="lvl lvl-{{ v.level|lower }}" title="{{ v.level_hint }}"><b>{{ v.level_ru }} РИСК</b></span>
         {% if v.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»">⚡ БЫСТРЫЙ РЕЖИМ</span>{% endif %}
       </div>
       <h3 class="vg-en">{{ v.en }}</h3>
@@ -188,19 +187,19 @@
         {% if v.cwe_tags %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="CWE (Common Weakness Enumeration) — международный каталог типов ошибок безопасности, который ведёт MITRE">Тип ошибки · CWE</span>
-          {% for t in v.cwe_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b><i>{{ t.name }}</i></span>{% endfor %}
+          {% for t in v.cwe_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
         </div>
         {% endif %}
         {% if v.api_tags %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="OWASP API Security Top 10 (2023) — рейтинг 10 главных рисков безопасности именно для API">Риски API · OWASP API Top 10</span>
-          {% for t in v.api_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b><i>{{ t.name }}</i></span>{% endfor %}
+          {% for t in v.api_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
         </div>
         {% endif %}
         {% if v.top10_tag %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="OWASP Top 10 (2021) — рейтинг 10 главных рисков безопасности веб-приложений в целом">Риски веба · OWASP Top 10</span>
-          <span class="vg-tag" title="{{ v.top10_tag.title }}"><b>{{ v.top10_tag.code }}</b><i>{{ v.top10_tag.name }}</i></span>
+          <span class="vg-tag" title="{{ v.top10_tag.title }}"><b>{{ v.top10_tag.code }}</b></span>
         </div>
         {% endif %}
       </div>
@@ -219,14 +218,12 @@
   <div class="vg-grid" id="vr-grid">
     {% for r in registry %}
     {% for a in r.anchors %}<span id="{{ a }}" class="vg-anchor" aria-hidden="true"></span>{% endfor %}
-    <article class="vr-card" id="reg-{{ r.id }}" data-search="{{ r.search }}">
-      <button class="vg-copy" type="button" data-slug="reg-{{ r.id }}" title="Скопировать ссылку на проверку" aria-label="Скопировать ссылку: {{ r.title_en }}">🔗</button>
-      <div class="vr-head">
+    <article class="vr-card" id="reg-{{ r.id }}" data-search="{{ r.search }}"><div class="vr-head">
         <h3 class="vr-name">{{ r.title_en }}</h3>
       </div>
       <p class="vr-ru">{{ r.title_ru }}</p>
       <div class="vg-badges">
-        <span class="lvl lvl-{{ r.level|lower }}" title="{{ r.level_hint }}"><b>{{ r.level_ru }} РИСК</b><i>{{ r.level }}</i></span>
+        <span class="lvl lvl-{{ r.level|lower }}" title="{{ r.level_hint }}"><b>{{ r.level_ru }} РИСК</b></span>
         {% if r.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»">⚡ БЫСТРЫЙ РЕЖИМ</span>{% endif %}
       </div>
       <p class="vr-id"><code title="{{ r.name }} — кодовое имя проверки, как в режиме «Свой» и в отчётах">{{ r.id }}</code></p>
@@ -236,19 +233,19 @@
         {% if r.cwe_tags %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="CWE (Common Weakness Enumeration) — международный каталог типов ошибок безопасности, который ведёт MITRE">Тип ошибки · CWE</span>
-          {% for t in r.cwe_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b><i>{{ t.name }}</i></span>{% endfor %}
+          {% for t in r.cwe_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
         </div>
         {% endif %}
         {% if r.api_tags %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="OWASP API Security Top 10 (2023) — рейтинг 10 главных рисков безопасности именно для API">Риски API · OWASP API Top 10</span>
-          {% for t in r.api_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b><i>{{ t.name }}</i></span>{% endfor %}
+          {% for t in r.api_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
         </div>
         {% endif %}
         {% if r.top10_tag %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="OWASP Top 10 (2021) — рейтинг 10 главных рисков безопасности веб-приложений в целом">Риски веба · OWASP Top 10</span>
-          <span class="vg-tag" title="{{ r.top10_tag.title }}"><b>{{ r.top10_tag.code }}</b><i>{{ r.top10_tag.name }}</i></span>
+          <span class="vg-tag" title="{{ r.top10_tag.title }}"><b>{{ r.top10_tag.code }}</b></span>
         </div>
         {% endif %}
       </div>
