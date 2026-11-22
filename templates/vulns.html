@@ -33,16 +33,14 @@
     padding:1px 5px;font-size:10px;white-space:nowrap}
 
   /* ---------- Значки уровня опасности и режима ---------- */
-  .lvl{display:inline-block;font-size:10.5px;font-weight:900;letter-spacing:.08em;
-    padding:3px 10px;border:2px solid currentColor;background:rgba(0,0,0,.4);
-    white-space:nowrap;cursor:help;vertical-align:middle}
-  .lvl b{display:block}
-  .lvl i{font-style:normal;font-size:9px;opacity:.85}
-  .lvl-critical{color:var(--error);background:rgba(255,0,68,.08)}
-  .lvl-high{color:var(--purple);background:rgba(213,0,249,.08)}
-  .lvl-medium{color:var(--warn);background:rgba(255,179,0,.08)}
-  .lvl-low{color:var(--fg);background:rgba(0,255,65,.06)}
-  .lvl-quick{color:var(--fg);border-color:var(--border-dim)}
+  .lvl{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;cursor:help;vertical-align:middle}
+  .lvl b{font-style:normal;font-size:11px;line-height:1;padding:4px 8px;border-radius:4px;
+    border:1px solid currentColor;letter-spacing:1px;font-weight:800}
+  .lvl-critical{color:#ff3b3b}
+  .lvl-high{color:#ff8c1a}
+  .lvl-medium{color:#ffd21a}
+  .lvl-low{color:#2eff7b}
+  .lvl-quick{color:#2eff7b}
   .vg-lvl-row{margin:0 0 10px}
   .vg-lvl-head{display:flex;align-items:center;gap:8px;margin:0 0 5px}
   .vg-lvl-row p{margin:0}
@@ -58,8 +56,6 @@
   .vg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
   /* Невидимые якоря отчётов перед карточками реестра: вне потока сетки, высота 0. */
   .vg-card,.vr-card{position:relative}
-  .vg-copy{position:absolute;top:8px;right:8px;background:none;border:1px solid var(--border-dim);color:var(--fg-dim);cursor:pointer;font-size:12px;padding:2px 8px;border-radius:4px;line-height:1.4}
-  .vg-copy:hover{color:var(--fg);border-color:var(--fg)}
   .vg-anchor{position:absolute;display:block;height:0;scroll-margin-top:24px}
   .vg-card,.vr-card{border:2px solid var(--border-dim);background:var(--panel);padding:16px;
     display:flex;flex-direction:column;gap:10px;transition:border-color .15s;scroll-margin-top:18px;position:relative}
@@ -107,13 +103,12 @@
   @media (max-width:640px){.vg-title{font-size:21px}.vg-grid{grid-template-columns:1fr}}
   @media print{.vg-searchrow,.vg-back{display:none}.vg-card,.vr-card{break-inside:avoid;border-color:#999}
     .vg-title{text-shadow:none}.vg-sub,.vg-meaning,.vg-rec,.vg-check,.vg-example{color:#333}
-    .vg-help{border-color:#999}.lvl{border-color:#999;color:#333}}
+    .vg-help{border-color:#999}.lvl b{border-color:#999;color:#333}}
 </style>
 </head>
 <body>
 <div class="vg-wrap">
-  <div class="vg-top"><a class="vg-back" href="/" data-i18n="vulns.back">← Назад к сканеру</a>
-</div>
+  <div class="vg-top"><a class="vg-back" href="/" data-i18n="vulns.back">← Назад к сканеру</a></div>
   <h1 class="vg-title" data-i18n="vulns.title">СПРАВОЧНИК УЯЗВИМОСТЕЙ</h1>
   <p class="vg-sub">Каждая карточка — одна «дыра» в безопасности сайта или API: что это простыми словами,
     пример из жизни и как её закрыть. Цветной значок показывает, насколько это опасно.
@@ -174,9 +169,10 @@
   <p class="vg-h2sub">15 самых частых «дыр» — простыми словами, с примерами из жизни и уровнем опасности.</p>
   <div class="vg-grid" id="vg-grid">
     {% for v in guide %}
-    <article class="vg-card" id="{{ v.slug }}" data-search="{{ v.search }}"><div class="vg-badges">
+    <article class="vg-card" id="{{ v.slug }}" data-search="{{ v.search }}">
+      <div class="vg-badges">
         <span class="lvl lvl-{{ v.level|lower }}" title="{{ v.level_hint }}"><b>{{ v.level_ru }} РИСК</b></span>
-        {% if v.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»">⚡ БЫСТРЫЙ РЕЖИМ</span>{% endif %}
+        {% if v.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»"><b>⚡ БЫСТРЫЙ РЕЖИМ</b></span>{% endif %}
       </div>
       <h3 class="vg-en">{{ v.en }}</h3>
       <p class="vg-ru">{{ v.ru }}</p>
@@ -187,19 +183,19 @@
         {% if v.cwe_tags %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="CWE (Common Weakness Enumeration) — международный каталог типов ошибок безопасности, который ведёт MITRE">Тип ошибки · CWE</span>
-          {% for t in v.cwe_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
+          {% for t in v.cwe_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b><i>{{ t.name }}</i></span>{% endfor %}
         </div>
         {% endif %}
         {% if v.api_tags %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="OWASP API Security Top 10 (2023) — рейтинг 10 главных рисков безопасности именно для API">Риски API · OWASP API Top 10</span>
-          {% for t in v.api_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
+          {% for t in v.api_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b><i>{{ t.name }}</i></span>{% endfor %}
         </div>
         {% endif %}
         {% if v.top10_tag %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="OWASP Top 10 (2021) — рейтинг 10 главных рисков безопасности веб-приложений в целом">Риски веба · OWASP Top 10</span>
-          <span class="vg-tag" title="{{ v.top10_tag.title }}"><b>{{ v.top10_tag.code }}</b></span>
+          <span class="vg-tag" title="{{ v.top10_tag.title }}"><b>{{ v.top10_tag.code }}</b><i>{{ v.top10_tag.name }}</i></span>
         </div>
         {% endif %}
       </div>
@@ -218,13 +214,14 @@
   <div class="vg-grid" id="vr-grid">
     {% for r in registry %}
     {% for a in r.anchors %}<span id="{{ a }}" class="vg-anchor" aria-hidden="true"></span>{% endfor %}
-    <article class="vr-card" id="reg-{{ r.id }}" data-search="{{ r.search }}"><div class="vr-head">
+    <article class="vr-card" id="reg-{{ r.id }}" data-search="{{ r.search }}">
+      <div class="vr-head">
         <h3 class="vr-name">{{ r.title_en }}</h3>
       </div>
       <p class="vr-ru">{{ r.title_ru }}</p>
       <div class="vg-badges">
         <span class="lvl lvl-{{ r.level|lower }}" title="{{ r.level_hint }}"><b>{{ r.level_ru }} РИСК</b></span>
-        {% if r.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»">⚡ БЫСТРЫЙ РЕЖИМ</span>{% endif %}
+        {% if r.quick %}<span class="lvl lvl-quick" title="Ловится в режиме «Быстрый»"><b>⚡ БЫСТРЫЙ РЕЖИМ</b></span>{% endif %}
       </div>
       <p class="vr-id"><code title="{{ r.name }} — кодовое имя проверки, как в режиме «Свой» и в отчётах">{{ r.id }}</code></p>
       <p class="vg-meaning"><b>Что ищет:</b> {{ r.meaning }}</p>
@@ -233,19 +230,19 @@
         {% if r.cwe_tags %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="CWE (Common Weakness Enumeration) — международный каталог типов ошибок безопасности, который ведёт MITRE">Тип ошибки · CWE</span>
-          {% for t in r.cwe_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
+          {% for t in r.cwe_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b><i>{{ t.name }}</i></span>{% endfor %}
         </div>
         {% endif %}
         {% if r.api_tags %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="OWASP API Security Top 10 (2023) — рейтинг 10 главных рисков безопасности именно для API">Риски API · OWASP API Top 10</span>
-          {% for t in r.api_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b></span>{% endfor %}
+          {% for t in r.api_tags %}<span class="vg-tag" title="{{ t.title }}"><b>{{ t.code }}</b><i>{{ t.name }}</i></span>{% endfor %}
         </div>
         {% endif %}
         {% if r.top10_tag %}
         <div class="vg-taggroup">
           <span class="vg-taglabel" title="OWASP Top 10 (2021) — рейтинг 10 главных рисков безопасности веб-приложений в целом">Риски веба · OWASP Top 10</span>
-          <span class="vg-tag" title="{{ r.top10_tag.title }}"><b>{{ r.top10_tag.code }}</b></span>
+          <span class="vg-tag" title="{{ r.top10_tag.title }}"><b>{{ r.top10_tag.code }}</b><i>{{ r.top10_tag.name }}</i></span>
         </div>
         {% endif %}
       </div>

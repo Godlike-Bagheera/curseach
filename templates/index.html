@@ -36,7 +36,7 @@
             <div class="user-badge">
                 ПОЛЬЗОВАТЕЛЬ: {{ user }}{% if is_guest %} [ТОЛЬКО ПРОСМОТР]{% endif %}
             </div>
-<a href="/about" target="_blank" class="about-btn" data-i18n="btn.about">О ПРОЕКТЕ</a>
+            <a href="/about" target="_blank" class="about-btn" data-i18n="btn.about">О ПРОЕКТЕ</a>
             <a href="/vulns" target="_blank" class="about-btn" data-i18n="btn.vulns">СПРАВОЧНИК УЯЗВИМОСТЕЙ</a>
             <form method="post" action="/logout" class="logout-form"><button type="submit" class="logout-btn" style="background:none;border:0;cursor:pointer;font:inherit" data-i18n="btn.logout">ВЫЙТИ</button></form>
         </div>
@@ -55,8 +55,6 @@
         {% else %}
         <button class="tab-btn" disabled title="Недоступно для гостя">[ ИСТОРИЯ ]</button>
         {% endif %}
-        {% if not is_guest %}
-{% endif %}
     </nav>
 
     <section id="scanner" class="tab-content active">
@@ -68,7 +66,8 @@
             <button id="cancelBtn" class="exec-btn hidden" style="background:#7a2e2e;" {% if is_guest %}disabled{% endif %} data-i18n="btn.cancel">ОСТАНОВИТЬ</button>
             </div>
         </div>
-<div class="panel">
+
+        <div class="panel">
             <div class="panel-label" data-i18n="panel.mode">&gt; РЕЖИМ СКАНИРОВАНИЯ</div>
             <div class="mode-row" id="modeRow">
                 <label class="mode-item {% if is_guest %}disabled{% endif %}" data-mode="quick">
@@ -100,28 +99,9 @@
         <div class="panel">
             <div class="panel-label" data-i18n="panel.auth">&gt; АВТОРИЗАЦИЯ</div>
 
-            
 
-            <div class="auth-section"><div class="auth-section-title" data-i18n="auth.acc1">АККАУНТ 1 — ОСНОВНОЙ («АЛИСА»)</div><div class="auth-row-2col"><div><label class="auth-label" for="acc1User">ЛОГИН</label><input type="text" id="acc1User" class="auth-field" placeholder="alice" autocomplete="off" {% if is_guest %}disabled{% endif %}></div><div><label class="auth-label" for="acc1Pass">ПАРОЛЬ</label><input type="password" id="acc1Pass" class="auth-field" placeholder="alice123" autocomplete="new-password" {% if is_guest %}disabled{% endif %}></div></div></div>
-                <div id="acc1Extra" class="auth-row-2col hidden">
-                    <div>
-                        <label class="auth-label" for="acc1KeyHeader">API-KEY: ЗАГОЛОВОК</label>
-                        <input type="text" id="acc1KeyHeader" class="auth-field" placeholder="X-API-Key" autocomplete="off" {% if is_guest %}disabled{% endif %}>
-                    </div>
-                    <div>
-                        <label class="auth-label" for="acc1KeyValue">API-KEY: ЗНАЧЕНИЕ</label>
-                        <input type="text" id="acc1KeyValue" class="auth-field" placeholder="secret" autocomplete="off" {% if is_guest %}disabled{% endif %}>
-                    </div>
-                    <div>
-                        <label class="auth-label" for="acc1LoginPath">FORM: LOGIN PATH</label>
-                        <input type="text" id="acc1LoginPath" class="auth-field" placeholder="/login" autocomplete="off" {% if is_guest %}disabled{% endif %}>
-                    </div>
-                    <div>
-                        <label class="auth-label" for="acc1FormFields">FORM: ДОП. ПОЛЯ (JSON)</label>
-                        <input type="text" id="acc1FormFields" class="auth-field" placeholder='{"csrf":"token"}' autocomplete="off" {% if is_guest %}disabled{% endif %}>
-                    </div>
-                </div>
-                <button type="button" id="acc1SaveProfile" class="mini-btn" data-i18n="auth.save" {% if is_guest %}disabled{% endif %}>СОХРАНИТЬ ПРОФИЛЬ</button>
+            <div class="auth-section">
+                <div class="auth-section-title" data-i18n="auth.acc1">АККАУНТ 1 — ОСНОВНОЙ («АЛИСА»)</div>
                 <div class="auth-row-2col">
                     <div>
                         <label class="auth-label" for="acc1User">ЛОГИН</label>
@@ -134,27 +114,9 @@
                 </div>
             </div>
 
-            <div class="auth-section auth-secondary"><div class="auth-section-title" data-i18n="auth.acc2">АККАУНТ 2 — ЧУЖОЙ АККАУНТ («БОБ») <span style="font-size:12px; color:var(--fg-dim); font-weight:normal;">(нужен для cross-user IDOR)</span></div><div class="auth-row-2col"><div><label class="auth-label" for="acc2User">ЛОГИН</label><input type="text" id="acc2User" class="auth-field" placeholder="bob" autocomplete="off" {% if is_guest %}disabled{% endif %}></div><div><label class="auth-label" for="acc2Pass">ПАРОЛЬ</label><input type="password" id="acc2Pass" class="auth-field" placeholder="bob123" autocomplete="new-password" {% if is_guest %}disabled{% endif %}></div></div></div>
-                <div id="acc2Extra" class="auth-row-2col hidden">
-                    <div>
-                        <label class="auth-label" for="acc2KeyHeader">API-KEY: ЗАГОЛОВОК</label>
-                        <input type="text" id="acc2KeyHeader" class="auth-field" placeholder="X-API-Key" autocomplete="off" {% if is_guest %}disabled{% endif %}>
-                    </div>
-                    <div>
-                        <label class="auth-label" for="acc2KeyValue">API-KEY: ЗНАЧЕНИЕ</label>
-                        <input type="text" id="acc2KeyValue" class="auth-field" placeholder="secret" autocomplete="off" {% if is_guest %}disabled{% endif %}>
-                    </div>
-                    <div>
-                        <label class="auth-label" for="acc2LoginPath">FORM: LOGIN PATH</label>
-                        <input type="text" id="acc2LoginPath" class="auth-field" placeholder="/login" autocomplete="off" {% if is_guest %}disabled{% endif %}>
-                    </div>
-                    <div>
-                        <label class="auth-label" for="acc2FormFields">FORM: ДОП. ПОЛЯ (JSON)</label>
-                        <input type="text" id="acc2FormFields" class="auth-field" placeholder='{"csrf":"token"}' autocomplete="off" {% if is_guest %}disabled{% endif %}>
-                    </div>
-                </div>
-                <button type="button" id="acc2SaveProfile" class="mini-btn" data-i18n="auth.save" {% if is_guest %}disabled{% endif %}>СОХРАНИТЬ ПРОФИЛЬ</button>
-                <div class="auth-hint">Под этим аккаунтом сканер попробует открыть данные и функции первого — так находятся IDOR/BOLA и BFLA.</div>
+            <div class="auth-section auth-secondary">
+                <div class="auth-section-title" data-i18n="auth.acc2">АККАУНТ 2 — ЧУЖОЙ АККАУНТ («БОБ»)</div>
+                <div class="auth-hint">Нужен для cross-user IDOR: может ли Боб открыть данные Алисы. Необязателен.</div>
                 <div class="auth-row-2col">
                     <div>
                         <label class="auth-label" for="acc2User">ЛОГИН</label>
@@ -167,7 +129,8 @@
                 </div>
             </div>
         </div>
-<div class="panel">
+
+        <div class="panel">
             <div class="stats-row">
                 <div class="stat-box stat-critical">
                     <div class="stat-label" data-i18n="stat.critical">КРИТИЧНО</div>

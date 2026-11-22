@@ -442,14 +442,14 @@ async def scan_engine(task: ScanTask):
 
         # Инфраструктура: параллелизм, бюджет, RPS, отмена.
         ctx.semaphore = asyncio.Semaphore(SCAN_CONCURRENCY)
-        ctx.budget = checks.RequestBudget(SCAN_MAX_REQUESTS, per_check_cap=None)
+        ctx.budget = checks.RequestBudget(SCAN_MAX_REQUESTS)
         task.budget = ctx.budget
         ctx.limiter = checks.RateLimiter(SCAN_RPS) if SCAN_RPS > 0 else None
         ctx.cancel_event = task.cancel_event
         ctx.scan_seed = task.seed
         task.add_log(
-            f"[ИНФО] Параллелизм: {SCAN_CONCURRENCY} запросов, бюджет {SCAN_MAX_REQUESTS} "
-            f"(квота на проверку: {per_check_cap}), RPS {SCAN_RPS:g}, таймаут {SCAN_TOTAL_TIMEOUT}s"
+            f"[ИНФО] Параллелизм: {SCAN_CONCURRENCY} запросов, бюджет {SCAN_MAX_REQUESTS}, "
+            f"RPS {SCAN_RPS:g}, таймаут {SCAN_TOTAL_TIMEOUT}s"
         )
 
         done = 0
@@ -506,8 +506,6 @@ async def scan_engine(task: ScanTask):
             task.partial_reason = "скан отменён"
             task.partial = True
             task.partial_reason = "скан отменён"
-
-        
 
         if ctx.budget is not None and ctx.budget.exhausted:
             task.partial = True

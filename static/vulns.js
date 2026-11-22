@@ -59,21 +59,6 @@
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     timer = setTimeout(function () { el.classList.remove('vg-target'); current = null; }, 6000);
   }
-  /* Копирование ссылки на карточку/проверку. */
-  document.addEventListener('click', function (e) {
-    var btn = e.target instanceof Element ? e.target.closest('.vg-copy') : null;
-    if (!btn) return;
-    var url = location.origin + location.pathname + '#' + btn.getAttribute('data-slug');
-    var old = btn.textContent;
-    function done(ok) { btn.textContent = ok ? '✓' : '⚠'; setTimeout(function () { btn.textContent = old; }, 1200); }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); });
-    } else {
-      var ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); done(true); } catch (err) { done(false); }
-      document.body.removeChild(ta);
-    }
-  });
   window.addEventListener('hashchange', highlight);
   document.addEventListener('click', function (e) {
     var a = e.target instanceof Element ? e.target.closest('a.vr-link') : null;
