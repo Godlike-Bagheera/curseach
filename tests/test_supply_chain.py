@@ -17,6 +17,18 @@ def _blocks(path):
     return out
 
 
+def _active_package_lines(path):
+    """Только активные (не комментарии) строки пакетов из requirements-файла."""
+    txt = open(os.path.join(ROOT, path), encoding="utf-8").read()
+    out = []
+    for line in txt.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("-"):
+            continue
+        out.append(stripped)
+    return out
+
+
 def test_requirements_all_hashed():
     blocks = _blocks("requirements.txt")
     assert blocks
@@ -33,19 +45,32 @@ def test_requirements_direct_pins_kept():
         "uvicorn[standard]==0.54.0",
     ):
         assert pin in txt
+    # weasyprint полностью удалён (PDF теперь через Playwright)
+    assert "weasyprint==" not in txt, "weasyprint removed: PDF now uses Playwright"
     # playwright ставится отдельным шагом (start.py + Dockerfile), не через
-    # requirements.txt (--require-hashes требует хеш для каждого пакета, а у
-    # playwright sha256 разные на каждой платформе).
-    assert "weasyprint" not in txt, "weasyprint removed: PDF now uses Playwright"
-    assert "playwright" not in txt, "playwright installed separately (see start.py/Dockerfile)"
+    # requirements.txt (--require-hashes требует хеш для каждого пакета,
+    # а у playwright sha256 разные на каждой платформе).
+    # Проверяем, что в файле нет АКТИВНОЙ строки-зависимости playwright
+    # (упоминание в комментариях — нормально).
+    for line in _active_package_lines("requirements.txt"):
+        assert not line.startswith("playwright"), (
+            f"playwright must NOT be a direct dependency in requirements.txt "
+            f"(installed separately in start.py/Dockerfile). Found: {line!r}"
+        )
 
 
 def test_playwright_version_pinned_in_start_py():
     """playwright==X.Y.Z должен быть зафиксирован в start.py."""
     txt = open(os.path.join(ROOT, "start.py"), encoding="utf-8").read()
-    assert re.search(r"PLAYWRIGHT_VERSION\s*=\s*['\"]\d+\.\d+\.\d+['\"]", txt)
-    assert "playwright" in txt
-    assert "playwright install chromium" in txt
+    # Пин версии в виде PLAYWRIGHT_VERSION = "X.Y.Z"
+    assert re.search(r"PLAYWRIGHT_VERSION\s*=\s*['\"]\d+\.\d+\.\d+['\"]", txt), (
+        "start.py must define PLAYWRIGHT_VERSION = 'X.Y.Z'"
+    )
+    # Команда установки Chromium: список аргументов ["playwright", "install", "chromium"]
+    assert re.search(
+        r'["\']playwright["\']\s*,\s*["\']install["\']\s*,\s*["\']chromium["\']',
+        txt,
+    ), "start.py must run: [sys.executable, '-m', 'playwright', 'install', 'chromium']"
 
 
 def test_dev_requirements_all_hashed():
