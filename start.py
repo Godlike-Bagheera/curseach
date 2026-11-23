@@ -2,6 +2,11 @@
 
 Ставит зависимости СТРОГО по requirements.txt (с пинами), поднимает оба
 сервиса, сам находит свободные порты и открывает браузер. Ctrl+C гасит оба.
+
+PDF рендерится через Playwright/Chromium. Пакет playwright ставится
+отдельным шагом (не в requirements.txt — у него разные sha256 на разных
+платформах, а pip --require-hashes требует хеш для каждого пакета в файле).
+Chromium скачивается автоматически при первом запуске.
 """
 
 import os
@@ -19,6 +24,8 @@ os.chdir(REPO_ROOT)
 sys.path.insert(0, REPO_ROOT)
 if os.name == "nt":
     os.system("")  # включить ANSI-цвета в консоли Windows 10+
+
+PLAYWRIGHT_VERSION = "1.65.2"
 
 
 def _parse_pins(text):
@@ -49,8 +56,6 @@ def _ensure_pip():
     except Exception:
         subprocess.check_call([sys.executable, "-m", "ensurepip", "--upgrade"])
         return
-    # pip < 21 не понимает manylinux-теги свежих wheels и молча скатывается
-    # на сборку из исходников — обновляем (best-effort).
     try:
         major = int(pip.__version__.split(".")[0])
     except Exception:
@@ -71,9 +76,12 @@ def _run_pip(cmd):
 def _devel_packages_hint():
     """Команда установки заголовков Python/компилятора под платформу."""
     if sys.platform == "win32":
-        return "Windows: Python 3.12/3.13 с python.org (галочка 'Add python.exe to PATH') или Docker/WSL2 — компилятор не нужен"
+        return (
+            "Windows: Python 3.12/3.13 с python.org (галочка 'Add python.exe to PATH') "
+            "или Docker/WSL2 — компилятор не нужен"
+        )
     if sys.platform == "darwin":
-        return "macOS: xcode-select --install (или Docker). Для PDF: brew install pango gdk-pixbuf libffi"
+        return "macOS: xcode-select --install (или Docker)."
     distro = ""
     try:
         with open("/etc/os-release", encoding="utf-8") as f:
@@ -103,11 +111,8 @@ def ensure_dependencies():
         f"[start] доустанавливаю {len(missing)} пакетов строго по requirements.txt: "
         + ", ".join(f"{n}=={v}" for n, v in missing)
     )
-    # 1) Только готовые wheels — компиляция не нужна (python3-devel/gcc не требуются).
-    #    Хеши покрывают Linux/Windows/macOS (x86_64/arm64), Python 3.11–3.13.
     res = _run_pip(_pip_install_cmd("--only-binary", ":all:"))
     if res.returncode != 0:
-        # 2) Fallback: сборка из исходников (нужны gcc и заголовки Python).
         print("[start] wheels не подошли — пробую сборку из исходников (может занять несколько минут)...")
         res = _run_pip(_pip_install_cmd())
     if res.returncode != 0:
@@ -121,13 +126,48 @@ def ensure_dependencies():
             print("[start] Варианты: Python 3.12/3.13, Docker (docker build -t curseach .) или компилятор:")
         print("    " + _devel_packages_hint())
         raise SystemExit(1)
+
+
+def ensure_playwright():
+    """Гарантирует: пакет playwright установлен + Chromium скачан.
+
+    playwright НЕ в requirements.txt (у него разные sha256 по платформам, а
+    pip --require-hashes требует хеш для каждого пакета в файле). Ставим
+    его отдельным шагом — и локально, и в Dockerfile.
+    """
+    if _installed_version("playwright") is None:
+        print(f"[start] доустанавливаю playwright=={PLAYWRIGHT_VERSION}...")
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "--disable-pip-version-check",
+                    f"playwright=={PLAYWRIGHT_VERSION}",
+                ],
+                check=True,
+            )
+        except Exception as e:
+            print(f"\033[31m[start] Не удалось установить playwright ({e}). PDF будет недоступен.\033[0m")
+            return
     try:
-        import weasyprint  # noqa: F401
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            p.chromium.launch().close()
+        return
     except Exception:
-        print(
-            "[start] ВНИМАНИЕ: WeasyPrint не импортируется (нужны системные pango/GTK). "
-            "PDF-экспорт будет недоступен, остальные отчёты работают. В Docker всё вшито."
+        pass
+    print("[start] Первый запуск: скачиваю Chromium для PDF-экспорта (~150 МБ)...")
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=True,
         )
+    except Exception as e:
+        print(f"[start] ВНИМАНИЕ: не удалось установить Chromium ({e}). PDF будет недоступен.")
 
 
 def _pick_ports(api_preferred, web_preferred):
@@ -155,6 +195,7 @@ def main():
     args = sys.argv[1:]
     if "--skip-install" not in args:
         ensure_dependencies()
+        ensure_playwright()
 
     import uvicorn
 
