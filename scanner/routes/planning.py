@@ -53,12 +53,17 @@ async def create_schedule(s: ScheduleIn, user: str = Depends(require_admin)):
     err = validate_target_url(s.target_url)
     if err:
         raise HTTPException(status_code=400, detail=err)
-    if s.mode not in ("quick", "full", "custom"):
-        raise HTTPException(status_code=400, detail="Invalid mode")
+    if s.mode not in ("quick", "full"):
+        raise HTTPException(status_code=400, detail="mode: quick | full (custom для расписаний недоступен)")
     if s.interval < 1:
         raise HTTPException(status_code=400, detail="interval >= 1 минута")
+    webhook_url = (s.webhook_url or "").strip()
+    if webhook_url:
+        wh_err = validate_target_url(webhook_url)
+        if wh_err:
+            raise HTTPException(status_code=400, detail=f"webhook: {wh_err}")
     sid = await run_in_threadpool(
-        database.create_schedule, s.target_url, s.mode, s.interval, s.profile_id, s.webhook_url, s.enabled
+        database.create_schedule, s.target_url, s.mode, s.interval, s.profile_id, webhook_url, s.enabled
     )
     return {"id": sid}
 

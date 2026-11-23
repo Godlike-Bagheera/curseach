@@ -18,13 +18,15 @@ async def check_cookie_flags(ctx: ScanContext, endpoints: list[str]) -> list[dic
             continue
         for sc in r.headers.get_list("set-cookie"):
             name = sc.split("=", 1)[0].strip()
-            low = sc.lower()
+            # Атрибуты ищем только после первого ';': имя cookie вроде
+            # "secure_id" не должно маскировать отсутствие флага Secure.
+            attrs = {p.strip().lower().split("=", 1)[0] for p in sc.split(";")[1:]}
             issues = []
-            if "secure" not in low:
+            if "secure" not in attrs:
                 issues.append("нет Secure")
-            if "httponly" not in low:
+            if "httponly" not in attrs:
                 issues.append("нет HttpOnly")
-            if "samesite" not in low:
+            if "samesite" not in attrs:
                 issues.append("нет SameSite")
             if issues and name not in seen:
                 seen.add(name)

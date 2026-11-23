@@ -34,6 +34,8 @@ async def run_due_schedules(now: float | None = None) -> list[int]:
             account1=_account_from_profile(s["profile_id"]),
             webhook_url=s["webhook_url"] or None,
         )
+        # Потокобезопасная доставка событий в очередь (как в routes/scan.py).
+        task.loop = asyncio.get_running_loop()
         database.mark_schedule_run(s["id"], now)
         run_scan_in_thread(task)
         started.append(s["id"])
