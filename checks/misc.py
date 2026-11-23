@@ -45,7 +45,6 @@ async def check_hidden_paths(ctx: ScanContext, endpoints: list[str] | None = Non
     documented = set(endpoints or [])
     spec = ctx.openapi if isinstance(ctx.openapi, dict) else {}
     documented |= set((spec.get("paths") or {}).keys())
-    # Baseline несуществующего пути: SPA/catch-all отдаёт тот же 200 на любой URL.
     base = await _safe_get(ctx.client, f"{ctx.target_url}/__nonexistent_baseline_7f3a__")
     base_status = base.status_code if base is not None else None
     base_body = _norm_body(base) if base is not None else ""
@@ -71,7 +70,6 @@ async def check_hidden_paths(ctx: ScanContext, endpoints: list[str] | None = Non
 
 # ================== HTTP без HTTPS ==================
 def _is_local_or_private_host(host: str) -> bool:
-    """Loopback/приватные адреса: HTTP на dev-localhost — не «крик», а замечание."""
     h = (host or "").strip().lower().strip("[]")
     if h == "localhost" or h.endswith(".localhost"):
         return True
@@ -104,22 +102,17 @@ async def check_http_only(ctx: ScanContext, endpoints: list[str] | None = None) 
 
 # ================== Content-Type validation (эвристика) ==================
 async def check_content_type_validation(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    """
-    Проверяем, принимает ли сервер данные с неправильным Content-Type.
+    """Проверяем ВСЕ writable-эндпоинты, не только первый.
 
-    FastAPI для json-роутов при text/plain обычно возвращает 422,
-    а не 415, поэтому нельзя опираться на '!= 415'. Признак уязвимости —
-    сервер реально обработал запрос (2xx).
-
-    Логин пропускаем: он принимает form-data или json по контракту,
-    и его проверка на content-type — не про безопасность.
+    Признак уязвимости — сервер реально обработал запрос (2xx), несмотря
+    на неправильный Content-Type.
     """
     findings: list = []
     post_endpoints = _writable_endpoints(ctx, endpoints)
     if not post_endpoints:
         return findings
 
-    for test_path in post_endpoints[:3]:
+    for test_path in post_endpoints:
         r = await _safe_post(
             ctx.client,
             f"{ctx.target_url}{test_path}",
@@ -138,7 +131,6 @@ async def check_content_type_validation(ctx: ScanContext, endpoints: list[str]) 
                     "details": get_vuln_info("Missing Content-Type Validation"),
                 }
             )
-        return findings
     return findings
 
 
@@ -147,7 +139,6 @@ _RATELIMIT_PROBE_PATHS = {"/.env", "/.git/config", "/.DS_Store", "/web.config", 
 
 
 async def check_rate_limiting(ctx: ScanContext, endpoints: list[str] | None = None) -> list[dict]:
-    """Rate-limit оцениваем на API/auth-маршруте, а не на статике/SPA-fallback."""
     findings: list = []
     eps = endpoints or []
     candidates = [e for e in eps if "{" not in e and "}" not in e and e not in _RATELIMIT_PROBE_PATHS]
@@ -155,7 +146,7 @@ async def check_rate_limiting(ctx: ScanContext, endpoints: list[str] | None = No
     api_eps = [e for e in candidates if e.lower().startswith("/api/")]
     pool = auth_eps or api_eps
     if not pool:
-        return findings  # rate-limit осмысленен на API/auth-маршрутах, не на голом корне/статике
+        return findings
     test_path = pool[0]
     url = f"{ctx.target_url}{test_path}"
 
@@ -181,7 +172,6 @@ async def check_rate_limiting(ctx: ScanContext, endpoints: list[str] | None = No
     if got_429:
         return findings
 
-    # Равномерные non-200 (все 404) — не признак отсутствия rate-limit.
     if statuses and len(set(statuses)) == 1 and statuses[0] == 200:
         findings.append(
             {
