@@ -312,6 +312,30 @@ function setStatus(data) {
 }
 
 // ---------- WebSocket ----------
+// ---------- Переподключение WebSocket ----------
+const WS_RECONNECT_MAX_ATTEMPTS = 10;
+const WS_RECONNECT_BASE_DELAY = 1000;
+const WS_RECONNECT_MAX_DELAY = 30000;
+let wsReconnectAttempts = 0;
+let wsReconnectTimer = null;
+let wsReconnecting = false;
+let scanComplete = false;
+
+function scheduleWsReconnect() {
+    if (!scanInProgress || scanComplete || !taskId) return;
+    if (wsReconnectAttempts >= WS_RECONNECT_MAX_ATTEMPTS) {
+        appendTerminal('[ОШИБКА] Соединение потеряно — переподключение не удалось. Перезагрузите страницу.');
+        showToast('Ошибка соединения — перезагрузите страницу');
+        return;
+    }
+    const delay = Math.min(WS_RECONNECT_BASE_DELAY * Math.pow(2, wsReconnectAttempts), WS_RECONNECT_MAX_DELAY);
+    wsReconnectAttempts += 1;
+    wsReconnecting = true;
+    appendTerminal(`[СИСТЕМА] Соединение потеряно — переподключение… (попытка ${wsReconnectAttempts}/${WS_RECONNECT_MAX_ATTEMPTS})`);
+    showToast('Соединение потеряно — переподключение…');
+    wsReconnectTimer = setTimeout(() => openWebSocket(taskId), delay);
+}
+
 function openWebSocket(id) {
     closeWebSocket();
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -322,11 +346,27 @@ function openWebSocket(id) {
         try { data = JSON.parse(event.data); } catch (e) { return; }
         handleWsEvent(data);
     };
+    ws.onopen = () => {
+        if (wsReconnecting) {
+            wsReconnecting = false;
+            wsReconnectAttempts = 0;
+            appendTerminal('[СИСТЕМА] Соединение восстановлено');
+            const toast = $('crt-toast');
+            if (toast) toast.classList.remove('show');
+        }
+    };
     ws.onerror = () => appendTerminal('[ОШИБКА] Ошибка WebSocket');
-    ws.onclose = () => { ws = null; };
+    ws.onclose = () => {
+        ws = null;
+        scheduleWsReconnect();
+    };
 }
 
 function closeWebSocket() {
+    if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+    }
     if (ws) {
         try { ws.close(); } catch (e) { /* ignore */ }
         ws = null;
@@ -347,6 +387,7 @@ function handleWsEvent(data) {
             setStatus(data);
             break;
         case 'complete':
+            scanComplete = true;
             setStatus({ status: data.status });
             if (scanInProgress) { scanInProgress = false; showToast('Проверка завершена ✓'); }
             scanBtn.disabled = false;
@@ -392,6 +433,9 @@ async function startScan() {
     }
 
     scanInProgress = true;
+    scanComplete = false;
+    wsReconnectAttempts = 0;
+    wsReconnecting = false;
     showToast('Сканирование запущено…');
     clearTerminal();
     appendTerminal('[SYS] Инициализация сканирования...');
@@ -463,6 +507,24 @@ async function cancelScan() {
     }
 }
 
+// Имя файла JSON-отчёта: report_<host>_<YYYY-MM-DD>.json (как у CSV/XLSX).
+// Без метаданных — прежний ci_cd_report.json.
+function jsonReportFilename(data) {
+    try {
+        if (!data || !data.target) return 'ci_cd_report.json';
+        let host;
+        try { host = new URL(data.target).host; } catch (e) { host = null; }
+        if (!host) return 'ci_cd_report.json';
+        const date = (data.scan_date ? new Date(data.scan_date) : new Date());
+        if (isNaN(date.getTime())) return 'ci_cd_report.json';
+        const datePart = date.toISOString().slice(0, 10);
+        const hostPart = host.replace(/[^a-zA-Z0-9]+/g, '_');
+        return `report_${hostPart}_${datePart}.json`;
+    } catch (e) {
+        return 'ci_cd_report.json';
+    }
+}
+
 async function exportReport(type) {
     if (isGuest) return;
     if (!taskId) return;
@@ -476,7 +538,7 @@ async function exportReport(type) {
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'ci_cd_report.json';
+            a.download = jsonReportFilename(data);
             a.click();
             URL.revokeObjectURL(a.href);
         } else if (type === 'csv') {

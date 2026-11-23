@@ -93,7 +93,6 @@ async def check_jwt_none(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             break
         if "{" not in ep:
             continue
-        tried += 1
         param = ep[ep.find("{") + 1 : ep.find("}")]
         path = ep.replace(f"{{{param}}}", "1")
         url = f"{ctx.target_url}{path}"
@@ -102,6 +101,8 @@ async def check_jwt_none(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
         r_base = await _safe_get(ctx.anon_client, url)
         if r_base is not None and r_base.status_code == 200:
             continue
+        # Бюджет тратим только на реально протестированные (непубличные) кандидаты.
+        tried += 1
         r = await _safe_get(ctx.anon_client, url, headers=headers)
         if r is not None and r.status_code == 200:
             findings.append(
@@ -370,7 +371,6 @@ async def check_jwt_exp(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             break
         if "{" not in ep:
             continue
-        tried += 1
         param = ep[ep.find("{") + 1 : ep.find("}")]
         path = ep.replace(f"{{{param}}}", "1")
         url = f"{ctx.target_url}{path}"
@@ -379,6 +379,8 @@ async def check_jwt_exp(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
         r_base = await _safe_get(ctx.anon_client, url)
         if r_base is not None and r_base.status_code == 200:
             continue
+        # Бюджет тратим только на реально протестированные (непубличные) кандидаты.
+        tried += 1
         r = await _safe_get(ctx.anon_client, url, headers=headers)
         if r is not None and r.status_code == 200:
             findings.append(
@@ -415,27 +417,28 @@ async def check_jwt_weak_secret(ctx: ScanContext, endpoints: list[str]) -> list[
     header = b64(b'{"alg":"HS256","typ":"JWT"}')
     payload = b64(json.dumps({"uid": 1, "role": "admin", "exp": 9999999999}).encode())
     signing_input = f"{header}.{payload}".encode()
-    ep = candidates[0]
-    param = ep[ep.find("{") + 1 : ep.find("}")]
-    path = ep.replace(f"{{{param}}}", "1")
-    url = f"{ctx.target_url}{path}"
-    # Baseline: эндпоинт должен реально требовать auth (без токена → не 200).
-    r_base = await _safe_get(ctx.anon_client, url)
-    if r_base is not None and r_base.status_code == 200:
-        return findings
-    for sec in secrets:
-        sig = b64(hmac.new(sec.encode(), signing_input, hashlib.sha256).digest())
-        token = f"{header}.{payload}.{sig}"
-        r = await _safe_get(ctx.anon_client, url, headers={"Authorization": f"Bearer {token}"})
-        if r is not None and r.status_code == 200:
-            findings.append(
-                {
-                    "level": "CRITICAL",
-                    "type": "JWT Weak Secret",
-                    "endpoint": ep,
-                    "desc": f"JWT подписан слабым HMAC-секретом «{sec}» — токены любого пользователя можно подделывать",
-                    "details": get_vuln_info("JWT Weak Secret"),
-                }
-            )
-            break
+    for ep in candidates:
+        param = ep[ep.find("{") + 1 : ep.find("}")]
+        path = ep.replace(f"{{{param}}}", "1")
+        url = f"{ctx.target_url}{path}"
+        # Baseline: эндпоинт должен реально требовать auth (без токена → не 200).
+        # Публичный кандидат пропускаем и переходим к следующему, а не завершаем проверку.
+        r_base = await _safe_get(ctx.anon_client, url)
+        if r_base is not None and r_base.status_code == 200:
+            continue
+        for sec in secrets:
+            sig = b64(hmac.new(sec.encode(), signing_input, hashlib.sha256).digest())
+            token = f"{header}.{payload}.{sig}"
+            r = await _safe_get(ctx.anon_client, url, headers={"Authorization": f"Bearer {token}"})
+            if r is not None and r.status_code == 200:
+                findings.append(
+                    {
+                        "level": "CRITICAL",
+                        "type": "JWT Weak Secret",
+                        "endpoint": ep,
+                        "desc": f"JWT подписан слабым HMAC-секретом «{sec}» — токены любого пользователя можно подделывать",
+                        "details": get_vuln_info("JWT Weak Secret"),
+                    }
+                )
+                return findings
     return findings

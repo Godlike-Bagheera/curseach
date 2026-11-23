@@ -83,7 +83,7 @@ async def _sqli_error_param(ctx, s, kind, name) -> dict | None:
 # ---------- SQLi: boolean-based ----------
 async def _sqli_boolean_param(ctx, s, kind, name) -> dict | None:
     r_base = await _probe_param(ctx, s, kind, name, "1")
-    if r_base is None or r_base.status_code != 200:
+    if r_base is None or not (200 <= r_base.status_code < 300):
         return None
     r_true = await _probe_param(ctx, s, kind, name, "1 AND 1=1")
     r_false = await _probe_param(ctx, s, kind, name, "1 AND 1=2")

@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from . import config
 from .config import origin_allowed
@@ -46,7 +47,14 @@ app = FastAPI(title="DevSecOps Scanner", version=config.VERSION, lifespan=lifesp
 
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
-templates = common.NonceTemplates(directory=os.path.join(BASE_DIR, "templates"))
+# Явный Jinja2-окружение с автоэкранированием для HTML/XML-шаблонов
+# (не полагаемся на фреймворк-дефолты; то же окружение использует
+# reporting.build_scan_bundle через общий объект templates).
+_env = Environment(
+    loader=FileSystemLoader(os.path.join(BASE_DIR, "templates")),
+    autoescape=select_autoescape(["html", "htm", "xml"]),
+)
+templates = common.NonceTemplates(env=_env)
 common.init_templates(templates)
 templates.env.filters["vuln_slug"] = slugify
 

@@ -9,7 +9,7 @@ import time
 
 import database
 
-from .tasks import AccountConfig, ScanTask, run_scan_in_thread
+from .tasks import AccountConfig, ScanTask, run_scan_in_thread, tasks
 
 SCHEDULER_TICK_SECONDS = 60
 
@@ -36,6 +36,9 @@ async def run_due_schedules(now: float | None = None) -> list[int]:
         )
         # Потокобезопасная доставка событий в очередь (как в routes/scan.py).
         task.loop = asyncio.get_running_loop()
+        # Регистрируем задачу, чтобы _gc_sweep чистил её и отмена работала
+        # (как в routes/scan.py: tasks[task.id] = task).
+        tasks[task.id] = task
         database.mark_schedule_run(s["id"], now)
         run_scan_in_thread(task)
         started.append(s["id"])
