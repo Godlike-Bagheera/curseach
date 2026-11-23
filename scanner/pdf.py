@@ -1,42 +1,191 @@
-"""Серверная генерация PDF через WeasyPrint (без Chromium/Playwright).
+"""Серверная генерация PDF через Playwright (Chromium headless).
 
-История проблемы: печать браузером (window.print()) всегда добавляет
-колонтитулы (дата / заголовок вкладки / URL), если не просить пользователя
-отключить их вручную; а @page margin:0, который их убирает, прижимает
-контент после переноса страницы к верху листа. Замкнутого круга CSS-ом не
-решается — поэтому PDF рендерится на сервере: там колонтитулов нет по
-определению, а поля страницы задаются через @page и работают корректно.
+История: печать браузером (window.print()) добавляет колонтитулы (дата,
+заголовок вкладки, URL). Рендерим PDF на сервере — там колонтитулов нет по
+определению, поля задаются через @page.
 
-WeasyPrint — чистый Python (pip install weasyprint), весит десятки МБ
-вместо ~400 МБ Chromium. Диаграмма Chart.js перед конвертацией заменяется
-на SVG-аналог, который WeasyPrint умеет печатать нативно.
+Playwright скачивает собственный Chromium одной командой
+`python -m playwright install chromium` (≈150 МБ). Системные библиотеки
+(GTK/Pango) не нужны — работает одинаково на Windows и Linux и в Docker.
+
+Диаграмма Chart.js перед конвертацией заменяется на SVG-аналог, который
+Chromium печатает нативно.
 """
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import concurrent.futures
 import html as _html
+import mimetypes
 import os
 import re
+import shutil
+import tempfile
 from urllib.parse import urlparse
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATIC_DIR = os.path.realpath(os.path.join(BASE_DIR, "static"))
+
+# Флаги запуска Chromium:
+#  --no-sandbox — нужен в Docker под non-root (без capability SYS_ADMIN);
+#  --disable-dev-shm-usage — /dev/shm в Docker маленький (64 МБ), иначе падает.
+_CHROMIUM_ARGS = ["--no-sandbox", "--disable-dev-shm-usage"]
 
 
-def _safe_url_fetcher(url, timeout=5, ssl_context=None):
-    """Defense-in-depth: PDF не ходит в сеть/произвольные файлы.
-    Разрешены data: и статика сканера; прочее — пустой ресурс (без SSRF/LFI)."""
-    from weasyprint import default_url_fetcher
+# ---------- Проверка доступности ----------
 
-    if url.startswith("data:"):
-        return default_url_fetcher(url, timeout, ssl_context)
-    parsed = urlparse(url)
-    if parsed.scheme == "file":
-        path = os.path.realpath(parsed.path)
-        static_root = os.path.realpath(os.path.join(BASE_DIR, "static"))
-        if path == static_root or path.startswith(static_root + os.sep):
-            return default_url_fetcher(url, timeout, ssl_context)
-    return {"string": b"", "mime_type": "text/plain"}
+_AVAILABLE_CACHE: bool | None = None
 
+
+def is_available() -> bool:
+    """True, если Playwright импортируется и Chromium установлен/запускается."""
+    global _AVAILABLE_CACHE
+    if _AVAILABLE_CACHE is not None:
+        return _AVAILABLE_CACHE
+    try:
+        import playwright  # noqa: F401
+    except Exception:
+        _AVAILABLE_CACHE = False
+        return False
+    try:
+        if _in_running_loop():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                result = ex.submit(_probe_chromium).result(timeout=60)
+        else:
+            result = _probe_chromium()
+    except Exception:
+        result = False
+    _AVAILABLE_CACHE = result
+    return result
+
+
+def _probe_chromium() -> bool:
+    from playwright.sync_api import sync_playwright
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=_CHROMIUM_ARGS)
+            browser.close()
+        return True
+    except Exception:
+        return False
+
+
+def _in_running_loop() -> bool:
+    try:
+        asyncio.get_running_loop()
+        return True
+    except RuntimeError:
+        return False
+
+
+# ---------- Санитизация ресурсов (anti-SSRF/LFI) ----------
+
+def _static_path(url: str) -> str | None:
+    """Локальный путь, если url ведёт в /static/ сканера; иначе None."""
+    u = (url or "").strip()
+    if not u or u.startswith("data:"):
+        return None
+    if u.startswith("file://"):
+        local = os.path.realpath(urlparse(u).path)
+        if local == STATIC_DIR or local.startswith(STATIC_DIR + os.sep):
+            return local if os.path.isfile(local) else None
+        return None
+    if u.startswith("/static/"):
+        rel = u[len("/static/"):]
+    elif u.startswith("static/"):
+        rel = u[len("static/"):]
+    else:
+        return None
+    rel = rel.split("?")[0].split("#")[0].lstrip("/")
+    candidate = os.path.realpath(os.path.join(STATIC_DIR, rel))
+    if not (candidate == STATIC_DIR or candidate.startswith(STATIC_DIR + os.sep)):
+        return None
+    return candidate if os.path.isfile(candidate) else None
+
+
+def _static_data_uri(url: str) -> str | None:
+    path = _static_path(url)
+    if path is None:
+        return None
+    mime, _ = mimetypes.guess_type(path)
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except Exception:
+        return None
+    b64 = base64.b64encode(data).decode("ascii")
+    return f"data:{mime or 'application/octet-stream'};base64,{b64}"
+
+
+def _sanitize_css_urls(css: str) -> str:
+    def _repl(m: re.Match) -> str:
+        raw = m.group(1).strip().strip('"\'')
+        if raw.startswith("data:"):
+            return m.group(0)
+        data = _static_data_uri(raw)
+        if data is None:
+            return "url(data:,)"
+        return f"url({data})"
+    return re.sub(r"url\(([^)]+)\)", _repl, css)
+
+
+def _sanitize_resources(html_str: str) -> str:
+    """Инлайнит static-ресурсы как data: URI, внешние ссылки обнуляет.
+
+    Defense-in-depth против SSRF/LFI: PDF-рендерер не должен ходить в сеть
+    или читать произвольные файлы. Дополнительно page.route блокирует все
+    http(s)-запросы на уровне браузера.
+    """
+    doc = html_str
+
+    def _inline_link(m: re.Match) -> str:
+        tag = m.group(0)
+        href_m = re.search(r'href="([^"]+)"', tag)
+        if not href_m:
+            return tag
+        path = _static_path(href_m.group(1))
+        if path is None:
+            return ""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception:
+            return ""
+        return f"<style>{content}</style>"
+
+    doc = re.sub(r'<link\b[^>]*rel="stylesheet"[^>]*>', _inline_link, doc, flags=re.I)
+
+    def _inline_img(m: re.Match) -> str:
+        tag = m.group(0)
+        src_m = re.search(r'src="([^"]+)"', tag)
+        if not src_m:
+            return tag
+        data = _static_data_uri(src_m.group(1))
+        if data is None:
+            return tag
+        return re.sub(r'src="[^"]+"', f'src="{data}"', tag)
+
+    doc = re.sub(r"<img\b[^>]*>", _inline_img, doc, flags=re.I)
+
+    doc = re.sub(
+        r"(<style[^>]*>)(.*?)(</style>)",
+        lambda m: m.group(1) + _sanitize_css_urls(m.group(2)) + m.group(3),
+        doc,
+        flags=re.S | re.I,
+    )
+    doc = re.sub(
+        r'(style=")([^"]*)(")',
+        lambda m: m.group(1) + _sanitize_css_urls(m.group(2)) + m.group(3),
+        doc,
+        flags=re.I,
+    )
+    return doc
+
+
+# ---------- SVG-диаграмма вместо Canvas ----------
 
 _LEVEL_COLORS = {
     "CRITICAL": "#e5484d",
@@ -45,17 +194,6 @@ _LEVEL_COLORS = {
     "LOW": "#46a758",
 }
 
-
-def is_available() -> bool:
-    try:
-        import weasyprint  # noqa: F401
-
-        return True
-    except Exception:
-        return False
-
-
-# ---------- SVG-диаграмма вместо Canvas (печатается нативно) ----------
 _LEVEL_RU = {
     "CRITICAL": "Критические",
     "HIGH": "Высокие",
@@ -69,7 +207,7 @@ def _donut_segment_path(cx: float, cy: float, r_out: float, r_in: float, a0_deg:
     import math
 
     def pt(r: float, ang_deg: float):
-        a = math.radians(ang_deg - 90.0)  # смещение: старт сверху
+        a = math.radians(ang_deg - 90.0)
         return cx + r * math.cos(a), cy + r * math.sin(a)
 
     sweep = a1_deg - a0_deg
@@ -87,12 +225,7 @@ def _donut_segment_path(cx: float, cy: float, r_out: float, r_in: float, a0_deg:
 
 
 def make_donut_svg(critical: int, high: int, medium: int, low: int, size: int = 300) -> str:
-    """Кольцевая диаграмма «по уровням риска» + легенда с подписями.
-
-    Большой круг слева, крупная легенда справа; зоны жёстко разнесены,
-    пересечение текста с диаграммой невозможно. WeasyPrint рендерит SVG
-    нативно, поэтому в PDF всё чётко и без Canvas.
-    """
+    """Кольцевая диаграмма «по уровням риска» + легенда с подписями."""
     import math
 
     parts = [
@@ -102,15 +235,13 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int, size: int = 
         ("Низкие", low, "#3fb950"),
     ]
     total = sum(v for _, v, _ in parts)
-    # Кольцо крупное, целиком в левой части холста; легенда — сильно правее.
-    # Правый край кольца (cx + r_out) жёстко меньше левого края легенды.
-    cx = size * 0.52  # центр круга (ещё крупнее)
+    cx = size * 0.52
     cy = size / 2.0
-    r_out = size * 0.46  # радиус кольца (было 0.30*size)
+    r_out = size * 0.46
     r_in = size * 0.27
-    ring_right = cx + r_out  # ≈ 294 при size=300
-    legend_x = int(ring_right + size * 0.55)  # огромный зазор от кольца (~165px)
-    width = legend_x + int(size * 1.05)  # легенда занимает всю правую половину
+    ring_right = cx + r_out
+    legend_x = int(ring_right + size * 0.55)
+    width = legend_x + int(size * 1.05)
     height = size
     segs: list[str] = []
 
@@ -130,7 +261,7 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int, size: int = 
             a1 = angle + sweep - gap / 2
             if a1 <= a0:
                 a1 = a0 + 0.5
-            if sweep >= 359.9:  # единственная категория — полное кольцо
+            if sweep >= 359.9:
                 segs.append(
                     f'<circle cx="{cx}" cy="{cy}" r="{(r_out + r_in) / 2:.1f}" '
                     f'fill="none" stroke="{color}" '
@@ -138,23 +269,18 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int, size: int = 
                 )
             else:
                 segs.append(f'<path d="{_donut_segment_path(cx, cy, r_out, r_in, a0, a1)}" fill="{color}"/>')
-                # число внутри сегмента — только если сектор реально широкий,
-                # иначе надписи наслаиваются друг на друга
                 mid = (a0 + a1) / 2.0
                 arc_len = math.radians(sweep) * (r_out + r_in) / 2.0
                 rr = (r_out + r_in) / 2.0
                 tx = cx + rr * math.cos(math.radians(mid - 90.0))
                 ty = cy + rr * math.sin(math.radians(mid - 90.0))
                 if sweep >= 24 and arc_len >= 18:
-                    # число внутри широкого сектора
                     segs.append(
                         f'<text x="{tx:.1f}" y="{ty + 8:.1f}" fill="#ffffff" '
                         f'font-size="22" font-weight="bold" text-anchor="middle" '
                         f'font-family="DejaVu Sans, Arial, sans-serif">{val}</text>'
                     )
                 elif val > 0:
-                    # узкий сектор — выносим число наружу за кольцо,
-                    # чтобы значение не терялось (например «Низкие: 1»)
                     ox = cx + (r_out + 16) * math.cos(math.radians(mid - 90.0))
                     oy = cy + (r_out + 16) * math.sin(math.radians(mid - 90.0))
                     segs.append(
@@ -164,7 +290,6 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int, size: int = 
                     )
             angle += sweep
 
-    # центр круга: итог
     center_text = (
         f'<text x="{cx}" y="{cy - 6}" fill="#1a1a1a" font-size="54" '
         f'font-weight="bold" text-anchor="middle" '
@@ -174,11 +299,10 @@ def make_donut_svg(critical: int, high: int, medium: int, low: int, size: int = 
         f"всего</text>"
     )
 
-    # легенда: вся правая половина холста, КРУПНЫЙ текст и большой шаг строк
     lx0 = float(legend_x)
-    row_h = 62  # крупный межстрочный шаг легенды
-    marker = 20  # размер цветного маркера
-    font = 22  # крупный шрифт подписей
+    row_h = 62
+    marker = 20
+    font = 22
     rows = len(parts)
     ly0 = cy - (rows - 1) * row_h / 2.0 + font / 2.0
     legend_items = []
@@ -233,6 +357,7 @@ def make_types_bars_svg(types_data: list[dict], width: int = 640) -> str:
 
 
 # ---------- Конвертация HTML-страницы отчёта в PDF ----------
+
 _SCRIPT_RE = re.compile(r"<script\b.*?</script>", re.S | re.I)
 _TOOLBAR_RE = re.compile(r'<div class="toolbar">.*?</div>', re.S)
 _PAYLOAD_RE = re.compile(r'<script id="chart-data" type="application/json">(.*?)</script>', re.S)
@@ -241,12 +366,17 @@ _PAYLOAD_RE = re.compile(r'<script id="chart-data" type="application/json">(.*?)
 def html_to_pdf(html_str: str, ctx: dict, base_url: str | None = None) -> bytes:
     """HTML строка страницы отчёта + контекст рендера -> PDF bytes.
 
-    Canvas-диаграммы Chart.js заменяются на SVG-аналоги (WeasyPrint не
-    исполняет JS), тулбар и скрипты вырезаются, @page margin:0 — поэтому
-    в PDF нет ни колонтитулов браузера (их там просто нет как класс),
-    ни «прилипаний»: поля листов задаёт print-CSS самого шаблона.
+    Canvas-диаграммы Chart.js заменяются на SVG-аналоги, тулбар и скрипты
+    вырезаются, @page задаёт поля листов. Chromium рендерит всё нативно.
     """
-    from weasyprint import HTML
+    if _in_running_loop():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            return ex.submit(_render_pdf_sync, html_str, ctx, base_url).result()
+    return _render_pdf_sync(html_str, ctx, base_url)
+
+
+def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
+    from playwright.sync_api import sync_playwright
 
     doc = html_str
 
@@ -256,13 +386,11 @@ def html_to_pdf(html_str: str, ctx: dict, base_url: str | None = None) -> bytes:
     low = int(ctx.get("low", 0))
     types = list(ctx.get("types_data") or [])
     if not any([critical, high, medium, low]) and not types:
-        # fallback: парсим JSON-payload страницы (для report.html его нет)
         m = _PAYLOAD_RE.search(doc)
         if m:
             try:
-                import json
-
-                payload = json.loads(m.group(1))
+                import json as _json
+                payload = _json.loads(m.group(1))
                 critical = int(payload.get("critical", 0))
                 high = int(payload.get("high", 0))
                 medium = int(payload.get("medium", 0))
@@ -278,11 +406,6 @@ def html_to_pdf(html_str: str, ctx: dict, base_url: str | None = None) -> bytes:
 
     doc = re.sub(r"<canvas[^>]*>", lambda m: _svg_for(m.group(0)), doc, flags=re.I)
 
-    # Для серверного PDF отключаем print-CSS шаблона (@media print с
-    # .print-page { height: 297mm; overflow: hidden } и пр., рассчитанный
-    # на браузерную печать) и включаем свой листовой режим WeasyPrint:
-    # @page margin 15/14/16mm — контент никогда не пересекает границу листа,
-    # колонтитулов браузера тут нет по определению, ничего не прилипает.
     override_css = (
         "<style>"
         "@page { size: A4; margin: 15mm 14mm 16mm; }"
@@ -307,5 +430,34 @@ def html_to_pdf(html_str: str, ctx: dict, base_url: str | None = None) -> bytes:
 
     doc = _TOOLBAR_RE.sub("", doc)
     doc = _SCRIPT_RE.sub("", doc)
+    doc = _sanitize_resources(doc)
 
-    return HTML(string=doc, base_url=base_url, url_fetcher=_safe_url_fetcher).write_pdf()
+    tmpdir = tempfile.mkdtemp(prefix="curseach_pdf_")
+    try:
+        pdf_path = os.path.join(tmpdir, "out.pdf")
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=_CHROMIUM_ARGS)
+            try:
+                page = browser.new_page()
+
+                def _block(route):
+                    url = route.request.url
+                    if url.startswith(("data:", "about:", "blob:")):
+                        route.continue_()
+                    else:
+                        route.abort()
+
+                page.route("**/*", _block)
+                page.set_content(doc, wait_until="domcontentloaded")
+                page.pdf(
+                    path=pdf_path,
+                    format="A4",
+                    print_background=True,
+                    prefer_css_page_size=True,
+                )
+            finally:
+                browser.close()
+        with open(pdf_path, "rb") as f:
+            return f.read()
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
