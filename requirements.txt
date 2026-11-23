@@ -1,6 +1,9 @@
 # Hash-locked runtime-зависимости (pip install --require-hashes).
 # Прямые пины сохранены; транзитивные зафиксированы с sha256 (Linux/Windows/macOS, x86_64/arm64, py3.11–3.13).
-# Playwright/Chromium НЕ нужны: PDF рендерится WeasyPrint (чистый Python).
+# PDF рендерится через Playwright/Chromium. Сам playwright ставится ОТДЕЛЬНЫМ шагом
+# в start.py и Dockerfile (без хешей — его sha256 различаются по платформам, а pip
+# --require-hashes требует хеш для каждого пакета в файле). Chromium скачивается
+# автоматически при первом запуске `python start.py` или в Dockerfile.
 
 annotated-doc==0.0.7 \
     --hash=sha256:0a30ef8f5322a4173720ae6712dc9a5e58f5a19868f3f167b4b5778db066c2b5 \
@@ -242,9 +245,6 @@ watchfiles==1.3.0 \
     --hash=sha256:1acabde19b67e673274e89a04d613b7fb1f122e2c4b8ec9a581e59c149264b61 \
     --hash=sha256:000b9688fc8133037a8b075c8ebf98f32844ff8964dda61e85c1db547dafc441 \
     --hash=sha256:bbc1198edfdc90fda0600f825aa94150f428dfcbf8138746f55998e0e660d64c
-weasyprint==70.0 \
-    --hash=sha256:5043e55e38d2a2af2b2b871e869697b1f65dad5f8b4a3677961d04ceacf9c5fe \
-    --hash=sha256:c263abf0e86c747b12af678b67f85f4abbfb97d18a20503031e7ba94e4b8cf8c
 webencodings==0.6.1 \
     --hash=sha256:565f9ad031c702dae404e27a099e3e09186a3ab1b9520f06d215502b651fd910 \
     --hash=sha256:7fab6269c8bf237c657876b52058ccb182e861518d1c695c1a9aaa8c1c105d5b
