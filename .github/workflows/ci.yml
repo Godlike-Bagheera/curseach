@@ -58,8 +58,10 @@ jobs:
       - name: Type check (mypy — блокирует для checks/ и security)
         run: mypy checks scanner/security.py
 
-      - name: System libs for WeasyPrint (HarfBuzz-Subset)
-        run: sudo apt-get update && sudo apt-get install -y libharfbuzz-subset0
+      - name: Install Playwright + Chromium (для test_pdf_playwright)
+        run: |
+          pip install playwright==1.65.2
+          python -m playwright install --with-deps chromium
 
       - name: Run tests + coverage
         run: pytest -q --cov=checks --cov=scanner --cov-report=term-missing --cov-report=xml --cov-fail-under=75
