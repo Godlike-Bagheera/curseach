@@ -205,23 +205,45 @@ async def check_command_injection(ctx: ScanContext, endpoints: list[str]) -> lis
 
 
 # ---------- Утечка через ошибки ----------
+_ERR_LEAK_MARKERS = (
+    "traceback",
+    "stack trace",
+    "at line",
+    'file "',
+    "sqlstate",
+    "sqlite3.",
+    "psycopg2.",
+    "mysql.connector",
+    "org.hibernate",
+    "java.lang.",
+    "system.data.sqlclient",
+)
+
+
 async def check_error_leak(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    surfaces = build_surfaces(ctx, endpoints)[:8]
+    """Ищем stack trace / детали СУБД во всех параметрах первых 20 поверхностей.
+
+    Раньше лимит был [:8] и только первый параметр каждой поверхности —
+    уязвимые эндпоинты за пределами первых 8 и параметры глубже первого
+    не проверялись. Теперь [:20] и все injectable-параметры.
+    """
+    surfaces = build_surfaces(ctx, endpoints)[:20]
 
     async def per_surface(s: Surface) -> list[dict]:
-        for kind, name in s.injectable[:1]:
+        for kind, name in s.injectable:
             r = await _probe_param(ctx, s, kind, name, "invalid'")
             if r is None:
                 continue
-            body = _body(r)
-            if any(k in body for k in ("traceback", "stack trace", "at line", 'file "')):
+            body = _body(r).lower()
+            hit = next((k for k in _ERR_LEAK_MARKERS if k in body), None)
+            if hit:
                 return [
                     _mk(
                         s,
                         kind,
                         name,
                         "MEDIUM",
-                        f"В ответе содержатся детали ошибки (stack trace) на {kind}-параметре {name}",
+                        f"В ответе содержатся детали ошибки (stack trace) на {kind}-параметре {name} — маркер «{hit}»",
                         ev(r),
                         "high",
                         "Information Leak via Errors",
