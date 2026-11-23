@@ -1,7 +1,7 @@
 """Рендер отчётов, SARIF-экспорт и сборка ZIP-бандла.
 
-PDF рендерится на сервере через WeasyPrint (без Chromium/Playwright).
-В ZIP кладётся настоящий report.pdf; если WeasyPrint недоступен —
+PDF рендерится на сервере через Playwright/Chromium.
+В ZIP кладётся настоящий report.pdf; если Playwright недоступен —
 резервная инструкция по браузерной печати.
 """
 
@@ -322,25 +322,21 @@ def results_to_sarif(target_url: str, scan_date: str, findings: list[dict]) -> d
 def build_scan_bundle(scan: dict, host_part: str) -> tuple:
     """
     Собирает ZIP: HTML (инлайн Chart.js), JSON, CSV, XLSX, SARIF и
-    серверный PDF (WeasyPrint). Если WeasyPrint недоступен — вместо PDF
+    серверный PDF (Playwright). Если Playwright недоступен — вместо PDF
     кладётся инструкция по браузерной печати. Возвращает (zip_bytes, zip_filename).
     """
-    # 1. HTML (полный — диаграмма + таблица)
     html_ctx = build_chart_context(scan, include_findings=True)
     html_str = templates.get_template("report_full.html").render(html_ctx)
     html_str = inline_chartjs(html_str)
     html_bytes = html_str.encode("utf-8")
 
-    # 2-4. JSON / CSV / XLSX
     json_bytes = scan_json_payload(scan)
     csv_bytes = scan_csv_bytes(scan)
     xlsx_bytes = scan_xlsx_bytes(scan)
 
-    # 5. SARIF
     sarif = results_to_sarif(scan["target_url"], scan["scan_date"], scan.get("results") or [])
     sarif_bytes = _json.dumps(sarif, ensure_ascii=False, indent=2).encode("utf-8")
 
-    # 6. PDF: серверный (WeasyPrint), если доступен; иначе — инструкция печати
     scan_id = scan["id"]
     pdf_bytes = None
     try:
@@ -356,7 +352,7 @@ def build_scan_bundle(scan: dict, host_part: str) -> tuple:
     print_html = (
         "<!doctype html><meta charset='utf-8'>"
         "<h1>Как сохранить PDF</h1>"
-        f"<p>Серверный PDF недоступен (WeasyPrint не установлен). "
+        f"<p>Серверный PDF недоступен (Playwright не установлен). "
         f"Откройте <a href='/history/{scan_id}/full'>полный отчёт #{scan_id}</a> "
         "и нажмите «Печать (браузером)» (Ctrl+P → «Сохранить как PDF»).</p>"
     ).encode()
