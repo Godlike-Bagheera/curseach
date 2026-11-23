@@ -30,10 +30,22 @@ def test_requirements_direct_pins_kept():
         "fastapi==0.163.1",
         "httpx==0.28.1",
         "pydantic==2.14.3",
-        "weasyprint==70.0",
         "uvicorn[standard]==0.54.0",
     ):
         assert pin in txt
+    # playwright ставится отдельным шагом (start.py + Dockerfile), не через
+    # requirements.txt (--require-hashes требует хеш для каждого пакета, а у
+    # playwright sha256 разные на каждой платформе).
+    assert "weasyprint" not in txt, "weasyprint removed: PDF now uses Playwright"
+    assert "playwright" not in txt, "playwright installed separately (see start.py/Dockerfile)"
+
+
+def test_playwright_version_pinned_in_start_py():
+    """playwright==X.Y.Z должен быть зафиксирован в start.py."""
+    txt = open(os.path.join(ROOT, "start.py"), encoding="utf-8").read()
+    assert re.search(r"PLAYWRIGHT_VERSION\s*=\s*['\"]\d+\.\d+\.\d+['\"]", txt)
+    assert "playwright" in txt
+    assert "playwright install chromium" in txt
 
 
 def test_dev_requirements_all_hashed():
