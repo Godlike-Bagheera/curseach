@@ -1,5 +1,7 @@
 """Контроль доступа: IDOR, cross-auth IDOR, CSRF, CORS, CAPTCHA."""
 
+from urllib.parse import urlparse
+
 import httpx
 
 from .base import (
@@ -57,10 +59,6 @@ _IDOR_SENSITIVE_PATHS = (
 
 
 def _idor_ownership_signal(ep: str, body: str) -> bool:
-    """Эвристика IDOR без 2 токенов осмысленна только для owner-scoped/чувствительных данных.
-
-    Публичный каталог (разные товары по ID без признаков владельца) — не IDOR.
-    """
     low = (body or "").lower()
     if any(f in low for f in _IDOR_OWNERSHIP_FIELDS):
         return True
@@ -75,8 +73,6 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
 
     param_endpoints = [p for p in endpoints if "{" in p and "}" in p]
     for ep in param_endpoints:
-        # Явно публичные эндпоинты (security: [] в спеке) — не IDOR:
-        # публичный каталог /api/products/{id} отдаёт разные данные по праву.
         if ep in _PUBLIC_PATHS or _endpoint_explicitly_public(ctx, ep):
             continue
         param_name = ep[ep.find("{") + 1 : ep.find("}")]
@@ -94,7 +90,6 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
 
         hashes = {tid: _content_hash(r) for tid, r in responses.items()}
         if len(set(hashes.values())) >= 2:
-            # Без 2 токенов это эвристика: флагум только owner-scoped/чувствительные данные.
             sample_body = _body(next(iter(responses.values())))
             if not _idor_ownership_signal(ep, sample_body):
                 continue
@@ -111,8 +106,6 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             seen_endpoints.add(ep)
 
     sensitive_keywords = ["keys", "admin", "system", "config", "settings", "internal", "debug"]
-    # Baseline catch-all: SPA (nginx try_files / React router) отдаёт один и тот же
-    # index.html на /admin, /config, /debug. Это НЕ доступ к чувствительным данным.
     base = await _safe_get(ctx.client, f"{ctx.target_url}/__nonexistent_baseline_idor__")
     base_status = base.status_code if base is not None else None
     base_body = _norm_body(base) if base is not None else None
@@ -128,9 +121,9 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             continue
         if r.status_code == 200:
             if base_body is not None and r.status_code == base_status and _norm_body(r) == base_body:
-                continue  # тот же ответ, что на несуществующий путь → catch-all
+                continue
             if _is_spa_shell(r.text or ""):
-                continue  # оболочка SPA без данных → не доказательство доступа
+                continue
             findings.append(
                 {
                     "level": "CRITICAL",
@@ -146,12 +139,6 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
 
 # ================== Cross-auth IDOR ==================
 async def check_idor_auth(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    """
-    Сравнивает ответы с авторизацией и без.
-    Если для статического эндпоинта они идентичны (200/200 и одинаковый контент) —
-    значит сервер НЕ проверяет токен, и эндпоинт реально публичный.
-    Работает только когда скан запущен с auth.
-    """
     if not ctx.has_auth:
         return []
 
@@ -173,13 +160,12 @@ async def check_idor_auth(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             continue
 
         if _is_spa_shell(r_auth.text or ""):
-            continue  # SPA-оболочка одинакова с токеном и без — не утечка данных
+            continue
         if _norm_hash(r_auth) == _norm_hash(r_anon):
             if _endpoint_requires_security(ctx, ep):
                 level = "CRITICAL"
                 desc = "Эндпоинт требует авторизацию по спеке, но отдаёт идентичный ответ с токеном и без него"
             else:
-                # Без 2 токенов: только чувствительные/owner-scoped эндпоинты, не публичные коллекции.
                 if not _idor_ownership_signal(ep, _body(r_auth)):
                     continue
                 level = "MEDIUM"
@@ -200,20 +186,21 @@ async def check_idor_auth(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
 
 # ================== CSRF (эвристика) ==================
 async def check_csrf(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
+    """Перебираем ВСЕ writable-эндпоинты, не только первый 2xx.
+
+    Раньше проверялся только первый writable-эндпоинт, и если он легитимно
+    без CSRF (публичный API), то до остальных проверка не доходила.
+    Теперь проходим по всем и собираем находки на каждый уязвимый.
+    """
     findings: list = []
-    # Логин / регистрация — не state-changing эндпоинты.
-    # На них CSRF-токен не нужен, поэтому не проверяем их и не
-    # считаем отсутствие токена уязвимостью.
     post_endpoints = _writable_endpoints(ctx, endpoints)
     if not post_endpoints:
         return findings
 
-    # Bearer-only API без cookies: CSRF не применим (браузер не шлёт
-    # Authorization автоматически). Флагаем только cookie-аутентификацию.
     auth_header = (ctx.client.headers.get("authorization") or "").lower()
     bearer_no_cookies = auth_header.startswith("bearer ") and len(ctx.client.cookies) == 0
 
-    for test_path in post_endpoints[:3]:
+    for test_path in post_endpoints:
         r = await _safe_post(ctx.client, f"{ctx.target_url}{test_path}", json={})
         if r is None or _method_not_supported(r):
             continue
@@ -221,7 +208,7 @@ async def check_csrf(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             continue
         set_cookie = r.headers.get("set-cookie", "")
         if bearer_no_cookies and not set_cookie:
-            continue  # Bearer без cookies — CSRF не применим
+            continue
         has_csrf_header = "x-csrf-token" in r.headers
         has_csrf_cookie = "csrf" in set_cookie.lower()
         if not has_csrf_header and not has_csrf_cookie:
@@ -234,45 +221,64 @@ async def check_csrf(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
                     "details": get_vuln_info("Missing CSRF Protection"),
                 }
             )
-        return findings
     return findings
 
 
 # ================== CORS ==================
 async def check_cors(ctx: ScanContext, endpoints: list[str] | None = None) -> list[dict]:
+    """Проверяем CORS на корне и на первых 5 документированных эндпоинтах.
+
+    Preflight (OPTIONS с Origin + Access-Control-Request-Method) — самое
+    надёжное; при 405/501 падаем на GET с Origin.
+    """
     findings: list = []
-    r = await _safe_options(ctx.client, ctx.target_url)
-    if r is None:
-        r = await _safe_get(ctx.client, ctx.target_url)
-    if r is None:
-        return findings
-    acao = r.headers.get("access-control-allow-origin", "")
-    if acao.strip() == "*":
-        findings.append(
-            {
-                "level": "MEDIUM",
-                "type": "Open CORS",
-                "endpoint": "/",
-                "desc": "CORS разрешает любые источники",
-                "details": get_vuln_info("Open CORS"),
-            }
+    urls_to_test: list[str] = [ctx.target_url]
+    for ep in (endpoints or []):
+        if len(urls_to_test) >= 5:
+            break
+        if "{" in ep or "}" in ep:
+            continue
+        urls_to_test.append(f"{ctx.target_url}{ep}")
+
+    for test_url in urls_to_test:
+        r = await _safe_options(
+            ctx.client,
+            test_url,
+            headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"},
         )
-    # Reflection произвольного Origin + credentials опаснее wildcard: позволяет
-    # любому сайту читать ответы с cookies/авторизацией пользователя.
-    probe = await _safe_get(ctx.client, ctx.target_url, headers={"Origin": "https://evil.example"})
-    if probe is not None:
-        reflected = probe.headers.get("access-control-allow-origin", "").strip()
-        creds = probe.headers.get("access-control-allow-credentials", "").strip().lower() == "true"
-        if reflected == "https://evil.example" and creds:
+        if r is None or _method_not_supported(r):
+            r = await _safe_get(ctx.client, test_url, headers={"Origin": "https://evil.example"})
+        if r is None:
+            continue
+
+        acao = r.headers.get("access-control-allow-origin", "").strip()
+        creds = r.headers.get("access-control-allow-credentials", "").strip().lower() == "true"
+        ep_path = urlparse(test_url).path or "/"
+
+        if acao == "https://evil.example" and creds:
             findings.append(
                 {
                     "level": "HIGH",
                     "type": "Open CORS",
-                    "endpoint": "/",
+                    "endpoint": ep_path,
                     "desc": "CORS отражает произвольный Origin с Allow-Credentials: true — чтение ответов с cookies из любого сайта",
                     "details": get_vuln_info("Open CORS"),
                 }
             )
+            return findings
+
+        if acao == "*":
+            findings.append(
+                {
+                    "level": "MEDIUM",
+                    "type": "Open CORS",
+                    "endpoint": ep_path,
+                    "desc": "CORS разрешает любые источники (Access-Control-Allow-Origin: *)",
+                    "details": get_vuln_info("Open CORS"),
+                }
+            )
+            return findings
+
     return findings
 
 
@@ -295,13 +301,12 @@ async def check_captcha(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             json={"username": "wrong", "password": "wrong"},
         )
         if _method_not_supported(r):
-            return findings  # 404/405/501 — это не эндпоинт логина
+            return findings
         if r is None:
             continue
         if r.status_code == 429 or "captcha" in _body(r):
             got_protection = True
             break
-        # Только ответы валидации кредов (400/401/422) считаются попытками логина.
         if r.status_code in (400, 401, 422):
             got_valid_response = True
 
