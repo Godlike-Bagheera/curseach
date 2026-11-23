@@ -34,9 +34,6 @@ function clear(node) {
 
 // =============================================================
 //   ЭКРАН ЗАГРУЗКИ — CRT-эффект
-//   Класс is-loading стоит на <html> сразу из шаблона.
-//   Снимаем его ТОЛЬКО после того, как экран полностью погас,
-//   чтобы layout не дёргался на глазах пользователя.
 // =============================================================
 
 function initLoadingScreen() {
@@ -44,7 +41,6 @@ function initLoadingScreen() {
     const fill = document.getElementById('loading-bar-fill');
     const status = document.getElementById('loading-status');
 
-    // Если экрана нет — просто снимаем блокировку прокрутки
     if (!screen || !fill || !status) {
         document.documentElement.classList.remove('is-loading');
         return;
@@ -64,14 +60,8 @@ function initLoadingScreen() {
     const FADE_MS = 550;
 
     const finish = () => {
-        // Небольшая пауза, чтобы пользователь увидел 100% и "ДОБРО ПОЖАЛОВАТЬ"
         setTimeout(() => {
-            // Запускаем fade-out
             screen.classList.add('is-hidden');
-
-            // И только когда экран уже полностью прозрачный —
-            // снимаем блокировку прокрутки и удаляем DOM.
-            // Никаких сдвигов на глазах пользователя.
             setTimeout(() => {
                 document.documentElement.classList.remove('is-loading');
                 if (screen.parentNode) screen.parentNode.removeChild(screen);
@@ -101,8 +91,6 @@ function initLoadingScreen() {
         }
     };
 
-    // Ждём, пока CRT-эффект отыграет "включение",
-    // и только потом начинаем рост прогресс-бара
     setTimeout(updateProgress, 1200);
 }
 
@@ -132,7 +120,6 @@ const customBlock = $('customBlock');
 const checksList = $('checksList');
 const checksCountEl = $('checksCount');
 
-// ---------- Auth fields ----------
 const acc1User = $('acc1User');
 const acc1Pass = $('acc1Pass');
 const acc2User = $('acc2User');
@@ -312,7 +299,6 @@ function setStatus(data) {
 }
 
 // ---------- WebSocket ----------
-// ---------- Переподключение WebSocket ----------
 const WS_RECONNECT_MAX_ATTEMPTS = 10;
 const WS_RECONNECT_BASE_DELAY = 1000;
 const WS_RECONNECT_MAX_DELAY = 30000;
@@ -320,6 +306,8 @@ let wsReconnectAttempts = 0;
 let wsReconnectTimer = null;
 let wsReconnecting = false;
 let scanComplete = false;
+let scanInProgress = false;
+let scanCompleteToastShown = false;   // защита от двойного тоста «Проверка завершена»
 
 function scheduleWsReconnect() {
     if (!scanInProgress || scanComplete || !taskId) return;
@@ -373,6 +361,14 @@ function closeWebSocket() {
     }
 }
 
+// Показывает тост «Проверка завершена» один раз за скан — что бы ни сработало раньше
+// (WS-событие 'complete' или MutationObserver на кнопке HTML), второй раз не покажет.
+function showScanCompleteToastOnce() {
+    if (scanCompleteToastShown) return;
+    scanCompleteToastShown = true;
+    showToast('Проверка завершена ✓');
+}
+
 function handleWsEvent(data) {
     switch (data.type) {
         case 'init':
@@ -389,7 +385,7 @@ function handleWsEvent(data) {
         case 'complete':
             scanComplete = true;
             setStatus({ status: data.status });
-            if (scanInProgress) { scanInProgress = false; showToast('Проверка завершена ✓'); }
+            if (scanInProgress) { scanInProgress = false; showScanCompleteToastOnce(); }
             scanBtn.disabled = false;
             scanBtn.textContent = 'ЗАПУСТИТЬ';
             if (cancelBtn) cancelBtn.classList.add('hidden');
@@ -434,6 +430,7 @@ async function startScan() {
 
     scanInProgress = true;
     scanComplete = false;
+    scanCompleteToastShown = false;   // сброс флага тоста на новый скан
     wsReconnectAttempts = 0;
     wsReconnecting = false;
     showToast('Сканирование запущено…');
@@ -508,7 +505,6 @@ async function cancelScan() {
 }
 
 // Имя файла JSON-отчёта: report_<host>_<YYYY-MM-DD>.json (как у CSV/XLSX).
-// Без метаданных — прежний ci_cd_report.json.
 function jsonReportFilename(data) {
     try {
         if (!data || !data.target) return 'ci_cd_report.json';
@@ -881,7 +877,6 @@ function exportHistory() {
 }
 
 // ---------- Тост сканирования (CRT, слева снизу) ----------
-let scanInProgress = false;
 let toastTimer = null;
 
 function showToast(message) {
@@ -897,12 +892,14 @@ function showToast(message) {
     toastTimer = setTimeout(() => toast.classList.remove('show'), 5000);
 }
 
-// Надёжный fallback: кнопка HTML-отчёта разблокируется только при завершении скана.
+// Fallback: кнопка HTML-отчёта разблокируется при завершении скана.
+// Показываем тост через showScanCompleteToastOnce() — двойного тоста не будет,
+// даже если WS-событие 'complete' придёт позже (или раньше) этого observer'а.
 if (htmlBtn) {
     const htmlBtnObserver = new MutationObserver(() => {
         if (scanInProgress && !htmlBtn.disabled) {
             scanInProgress = false;
-            showToast('Проверка завершена ✓');
+            showScanCompleteToastOnce();
         }
     });
     htmlBtnObserver.observe(htmlBtn, { attributes: true, attributeFilter: ['disabled'] });
