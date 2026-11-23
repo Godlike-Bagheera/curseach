@@ -5,11 +5,18 @@ from .descriptions import get_vuln_info
 
 
 async def check_cookie_flags(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    """Собираем Set-Cookie с корня, статических эндпоинтов и login/session-точек."""
+    """Собираем Set-Cookie с корня, статических эндпоинтов и login/session-точек.
+
+    POST-пробы идут по ВСЕМ login/session-эндпоинтам без лимита: на встроенной
+    цели /api/session/login в OpenAPI объявлен ПОСЛЕ /api/session/action, и
+    старый лимит [:3] обрезал его до того, как проверка доходила до самого
+    логина (первым матчем по «session» шёл state-changing action).
+    """
     findings: list[dict] = []
     static = [e for e in (endpoints or []) if "{" not in e and "}" not in e]
     probes: list[tuple[str, str]] = [("/", "GET")] + [(e, "GET") for e in static[:4]]
-    probes += [(e, "POST") for e in (endpoints or []) if "login" in e.lower() or "session" in e.lower()][:3]
+    probes += [(e, "POST") for e in (endpoints or []) if "login" in e.lower() or "session" in e.lower()]
+
     seen: set = set()
     for path, method in probes:
         url = f"{ctx.target_url}{path}"
