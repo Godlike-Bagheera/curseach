@@ -68,6 +68,12 @@ def _idor_ownership_signal(ep: str, body: str) -> bool:
 
 # ================== IDOR / Broken Access Control ==================
 async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
+    """IDOR-эвристика: разные ID дают разные ответы + признаки owner-scoped.
+
+    Уровень — MEDIUM (эвристика без двух токенов), уверенность — low.
+    Если нужен строгий cross-user IDOR — см. check_cross_user_idor
+    (требует два аккаунта и подтверждает утечку конкретных чужих объектов).
+    """
     findings: list = []
     seen_endpoints = set()
 
@@ -96,10 +102,14 @@ async def check_idor(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
             ids_list = ", ".join(responses.keys())
             findings.append(
                 {
-                    "level": "HIGH",
+                    "level": "MEDIUM",
                     "type": "Broken Access Control",
                     "endpoint": ep,
-                    "desc": f"Эвристика: эндпоинт возвращает данные для разных ID ({ids_list}) без проверки прав",
+                    "desc": (
+                        f"Эвристика: эндпоинт возвращает разные данные для ID ({ids_list}) — "
+                        f"возможно отсутствие проверки прав; подтвердите вручную или двумя токенами"
+                    ),
+                    "confidence": "low",
                     "details": get_vuln_info("Broken Access Control"),
                 }
             )
