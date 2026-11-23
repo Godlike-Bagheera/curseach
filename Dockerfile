@@ -1,20 +1,20 @@
 FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
 
-# Где Playwright хранит браузеры. Объявляем ДО установки, чтобы Chromium
-# скачался именно сюда (а не в /root/.cache — куда appuser не имеет доступа).
+# Где Playwright хранит браузеры.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Системные шрифты для рендера PDF (сам Chromium ставится ниже через --with-deps).
+# Системные шрифты для PDF + libatomic1 (нужен Node.js-драйверу Playwright 1.65+).
+# Без libatomic1 `playwright install` падает с "libatomic.so.1: cannot open shared object file".
 RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-dejavu-core \
+        libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY requirements.txt .
-# 1) Хэшированные зависимости (тест test_dockerfile_digest_and_require_hashes требует --require-hashes).
-# 2) Playwright ставится отдельно: у него sha256 различаются по платформам,
-#    а pip --require-hashes требует хеш для КАЖДОГО пакета в файле.
-# 3) Chromium + его системные библиотеки (--with-deps дергает apt-get от root).
+# 1) Хэшированные зависимости.
+# 2) Playwright отдельно (разные sha256 по платформам).
+# 3) Chromium + системные библиотеки.
 RUN pip install --no-cache-dir --require-hashes -r requirements.txt \
     && pip install --no-cache-dir playwright==1.65.2 \
     && python -m playwright install --with-deps chromium \
