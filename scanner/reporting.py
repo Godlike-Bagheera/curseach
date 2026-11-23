@@ -45,6 +45,7 @@ def render_report(
     surfaces_count=0,
     requests_used=0,
     requests_max=0,
+    scan_id=None,
 ):
     return templates.TemplateResponse(
         request,
@@ -60,7 +61,7 @@ def render_report(
             "mode_ru": MODE_TITLES_REPORT.get(mode, "ПОЛНАЯ ПРОВЕРКА"),
             "scan_date": scan_date,
             "source": "task",
-            "scan_id": None,
+            "scan_id": scan_id,
             "partial": partial,
             "partial_reason": partial_reason,
             "endpoints_count": endpoints_count,

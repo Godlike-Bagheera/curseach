@@ -196,6 +196,7 @@ async def get_html_report(task_id: str, request: Request, user: str = Depends(re
         surfaces_count=task.surfaces_count,
         requests_used=task.requests_used,
         requests_max=task.budget.max_requests if task.budget else SCAN_MAX_REQUESTS,
+        scan_id=task.scan_id,
     )
 
 

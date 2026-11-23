@@ -216,6 +216,7 @@ class ScanTask:
         self.finished_at: float | None = None
         self.started_at: float | None = None
         self.budget: checks.RequestBudget | None = None
+        self.scan_id: int | None = None  # id записи в БД после save_scan (для live-отчёта)
         self.endpoints_count = 0
         self.surfaces_count = 0
 
@@ -333,6 +334,7 @@ class ScanTask:
             "endpoints_count": self.endpoints_count,
             "surfaces_count": self.surfaces_count,
             "scan_results": self.scan_results,
+            "scan_id": self.scan_id,
             "error": self.error,
         }
 
@@ -539,7 +541,7 @@ async def scan_engine(task: ScanTask):
             # и повторяем сохранение. Исключение из этого места больше не должно
             # приводить к "no such table: scans".
             try:
-                database.save_scan(
+                task.scan_id = database.save_scan(
                     target_url=task.target_url,
                     critical=task.critical_count,
                     high=task.high_count,
@@ -558,7 +560,7 @@ async def scan_engine(task: ScanTask):
                 )
             except sqlite3.OperationalError:
                 database.init_db()  # пересоздаём схему и пробуем ещё раз
-                database.save_scan(
+                task.scan_id = database.save_scan(
                     target_url=task.target_url,
                     critical=task.critical_count,
                     high=task.high_count,
