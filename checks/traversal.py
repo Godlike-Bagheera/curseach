@@ -41,12 +41,7 @@ _FILE_PARAMS = {
 
 
 async def check_path_traversal(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    """Traversal по path/query/body-параметрам всех поверхностей (до 50).
-
-    Раньше лимит [:12] — уязвимый эндпоинт за пределами 12-й поверхности
-    не находился. Теперь [:50], что покрывает подавляющее большинство API
-    и включает query-параметры (s.injectable возвращает все виды).
-    """
+    """Traversal по path/query/body-параметрам всех поверхностей (до 50)."""
     findings: list[dict] = []
     seen: set = set()
     for s in build_surfaces(ctx, endpoints)[:50]:
@@ -107,10 +102,14 @@ _EVIL = "https://evil.example/"
 
 
 async def check_open_redirect(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    """Параметры redirect/next/url… с внешним адресом: смотрим Location у 3xx и meta-refresh в 200."""
+    """Параметры redirect/next/url… с внешним адресом: смотрим Location у 3xx и meta-refresh в 200.
+
+    Лимит [:50] (было [:15]) — теперь доходим до /api/redirect на встроенной цели
+    (это 23-я поверхность по порядку OpenAPI).
+    """
     findings: list[dict] = []
     seen: set = set()
-    for s in build_surfaces(ctx, endpoints)[:15]:
+    for s in build_surfaces(ctx, endpoints)[:50]:
         for kind, name in s.injectable:
             if name.lower() not in _REDIRECT_PARAMS or (s.path, name) in seen:
                 continue
