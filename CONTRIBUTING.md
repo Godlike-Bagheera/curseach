@@ -4,8 +4,13 @@
 
 ```bash
 pip install -r requirements-dev.txt
-python start.py            # поднимет цель + сканер
+pip install playwright==1.65.2          # для PDF (не в requirements.txt — см. Dockerfile)
+python -m playwright install chromium   # один раз, ~150 МБ
+python start.py                          # поднимет цель + сканер
 ```
+
+Без Chromium сканер запустится, но PDF-экспорт будет недоступен.
+Остальные отчёты (HTML/CSV/XLSX/JSON/SARIF/ZIP) работают.
 
 ## Гейты (как в CI)
 
