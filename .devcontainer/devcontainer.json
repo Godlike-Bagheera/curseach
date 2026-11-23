@@ -2,7 +2,7 @@
   "name": "DevSecOps Scanner",
   "image": "mcr.microsoft.com/devcontainers/python:3.12",
   "features": {},
-  "postCreateCommand": "pip install -r requirements.txt",
+  "postCreateCommand": "pip install -r requirements-dev.txt && pip install playwright==1.65.2 && python -m playwright install --with-deps chromium",
   "postAttachCommand": "SCANNER_HOST=0.0.0.0 API_HOST=0.0.0.0 nohup python start.py > scanner.log 2>&1 &",
   "forwardPorts": [8000, 8001],
   "portsAttributes": {
