@@ -13,11 +13,6 @@ _TRAVERSAL_SIGS = ["root:x:0:0", "root:*:0:0", "[boot loader]", "; for 16-bit ap
 
 
 def _traversal_signature(body: str) -> bool:
-    """Сигнатуры реального содержимого системных файлов, а не случайных строк.
-
-    Голые «/bin/sh»/«/bin/bash» встречаются в легитимных ответах (доки/конфиги),
-    поэтому shell-путь засчитывается только в passwd-контексте (root: / :0:0).
-    """
     if any(sig in body for sig in _TRAVERSAL_SIGS):
         return True
     if ":/bin/bash" in body or ":/bin/sh" in body:
@@ -46,16 +41,20 @@ _FILE_PARAMS = {
 
 
 async def check_path_traversal(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    """Пробуем path-параметры/query/тело traversal-payload'ами и ищем сигнатуры системных файлов."""
+    """Traversal по path/query/body-параметрам всех поверхностей (до 50).
+
+    Раньше лимит [:12] — уязвимый эндпоинт за пределами 12-й поверхности
+    не находился. Теперь [:50], что покрывает подавляющее большинство API
+    и включает query-параметры (s.injectable возвращает все виды).
+    """
     findings: list[dict] = []
     seen: set = set()
-    for s in build_surfaces(ctx, endpoints)[:12]:
+    for s in build_surfaces(ctx, endpoints)[:50]:
         if _is_auth_endpoint(s.path):
             continue
         for kind, name in s.injectable:
             if (s.path, name) in seen:
                 continue
-            # приоритет «файловым» параметрам, но пробуем и остальные
             for payload in _TRAVERSAL_PAYLOADS:
                 over = {name: payload}
                 r = await probe(
