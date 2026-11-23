@@ -189,6 +189,17 @@ def get_all_scans(limit: int = HISTORY_LIMIT_DEFAULT) -> list[dict]:
     ]
 
 
+def _safe_json_dict(raw) -> dict:
+    """Парсит JSON-объект из БД (form_fields), возвращает {} при ошибке/не-объекте."""
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
 def _safe_json_loads(raw) -> list:
     """Парсит JSON-строку из БД, возвращает [] при любой ошибке."""
     if not raw:
@@ -360,7 +371,7 @@ def _profile_row(row) -> dict:
         "password": row[4] or "",
         "api_key_header": row[5] or "",
         "api_key_value": row[6] or "",
-        "form_fields": _safe_json_loads(row[7]) if row[7] else {},
+        "form_fields": _safe_json_dict(row[7]),
         "login_path": row[8] or "",
     }
 

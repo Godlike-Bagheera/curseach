@@ -154,7 +154,7 @@ def scan_json_payload(scan: dict) -> bytes:
     payload = {
         "scan_date": scan["scan_date"],
         "target": scan["target_url"],
-        "mode": "full",
+        "mode": scan.get("mode") or "full",
         "metrics": {
             "score": score,
             "critical": scan["critical"],
@@ -172,7 +172,7 @@ def scan_csv_bytes(scan: dict) -> bytes:
     scan_dt = datetime.fromisoformat(scan["scan_date"])
     return report_csv.generate_csv(
         target_url=scan["target_url"],
-        mode="full",
+        mode=scan.get("mode") or "full",
         scan_dt=scan_dt,
         score=score,
         critical=scan["critical"],
@@ -190,7 +190,7 @@ def scan_xlsx_bytes(scan: dict) -> bytes | None:
     scan_dt = datetime.fromisoformat(scan["scan_date"])
     return report_xlsx.generate_xlsx(
         target_url=scan["target_url"],
-        mode="full",
+        mode=scan.get("mode") or "full",
         scan_dt=scan_dt,
         score=score,
         critical=scan["critical"],

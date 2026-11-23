@@ -19,6 +19,7 @@ from .config import (
     LOG_TRIM_CHUNK,
     LOGIN_PATH,
     LOGIN_TOKEN_FIELD,
+    LOGIN_WINDOW_SECONDS,
     MAX_CONCURRENT_SCANS,
     MAX_LOG_LINES,
     MODE_TITLES_RU,
@@ -31,7 +32,7 @@ from .config import (
     TASK_TTL_SECONDS,
     calculate_score,
 )
-from .security import pinned_client_kwargs, sessions
+from .security import _login_attempts, pinned_client_kwargs, sessions
 
 # Реестр активных/завершённых задач (очистка — в _gc_loop)
 tasks: dict[str, "ScanTask"] = {}
@@ -92,7 +93,7 @@ async def login_and_get_token(target_url: str, account: AccountConfig | None, *,
         return (await _form_login(target_url, account, transport=transport)).token
     if not account.username or not account.password:
         return None
-    url = f"{target_url.rstrip('/')}{LOGIN_PATH}"
+    url = f"{target_url.rstrip('/')}{account.login_path or LOGIN_PATH}"
     try:
         async with httpx.AsyncClient(**_client_kw(target_url, transport)) as c:
             r = await c.post(url, json={"username": account.username, "password": account.password})
@@ -195,7 +196,7 @@ class ScanTask:
         self.webhook_url = webhook_url
         self.project_id = project_id
         self.cancel_event = threading.Event()
-        self.target_url = target_url
+        self.target_url = target_url.rstrip("/")  # без хвостового слэша: иначе //openapi.json и //path в пробах
         self.mode = mode
         self.selected_checks = selected_checks or []
         self.account1 = account1
@@ -504,8 +505,6 @@ async def scan_engine(task: ScanTask):
             cancelled = True
             task.partial = True
             task.partial_reason = "скан отменён"
-            task.partial = True
-            task.partial_reason = "скан отменён"
 
         if ctx.budget is not None and ctx.budget.exhausted:
             task.partial = True
@@ -578,7 +577,7 @@ async def scan_engine(task: ScanTask):
             try:
                 from .webhook import build_summary, send_webhook
 
-                delivered = await send_webhook(task.webhook_url, build_summary(task))
+                delivered = await send_webhook(task.webhook_url, build_summary(task, status="completed"))
                 if delivered:
                     task.add_log("[OK] Webhook-уведомление отправлено")
                 else:
@@ -617,32 +616,42 @@ def run_scan_in_thread(task: ScanTask):
 
 
 # ---------- Фоновая очистка ----------
+def _gc_sweep(now: float) -> None:
+    """Одна проходка очистки: сессии, задачи, rate-limit бакеты, retention."""
+    for sid in list(sessions.keys()):
+        entry = sessions.get(sid)
+        if not entry:
+            continue
+        _, created_at = entry
+        if now - created_at > SESSION_TTL_SECONDS:
+            sessions.pop(sid, None)
+
+    for tid in list(tasks.keys()):
+        task = tasks.get(tid)
+        if not task:
+            continue
+        if task.finished_at and now - task.finished_at > TASK_TTL_SECONDS:
+            tasks.pop(tid, None)
+
+    # Бакеты rate-limit логина: без очистки словарь растёт неограниченно
+    # (ключ на каждый уникальный IP); выкидываем протухшие целиком.
+    for ip in list(_login_attempts.keys()):
+        bucket = _login_attempts.get(ip)
+        if not bucket or now - max(bucket) > LOGIN_WINDOW_SECONDS:
+            _login_attempts.pop(ip, None)
+
+    retention = int(os.environ.get("SCANNER_HISTORY_RETENTION_DAYS", "0") or 0)
+    if retention > 0:
+        import database
+
+        database.prune_old_scans(retention)
+
+
 async def gc_loop():
     while True:
         try:
             await asyncio.sleep(GC_INTERVAL_SECONDS)
-            now = time.time()
-
-            for sid in list(sessions.keys()):
-                entry = sessions.get(sid)
-                if not entry:
-                    continue
-                _, created_at = entry
-                if now - created_at > SESSION_TTL_SECONDS:
-                    sessions.pop(sid, None)
-
-            for tid in list(tasks.keys()):
-                task = tasks.get(tid)
-                if not task:
-                    continue
-                if task.finished_at and now - task.finished_at > TASK_TTL_SECONDS:
-                    tasks.pop(tid, None)
-
-            retention = int(os.environ.get("SCANNER_HISTORY_RETENTION_DAYS", "0") or 0)
-            if retention > 0:
-                import database
-
-                database.prune_old_scans(retention)
+            _gc_sweep(time.time())
         except asyncio.CancelledError:
             break
         except Exception:

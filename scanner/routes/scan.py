@@ -144,7 +144,7 @@ async def ws_scan(websocket: WebSocket, task_id: str):
         }
     )
 
-    if task.status in ("completed", "failed"):
+    if task.status in ("completed", "failed", "cancelled"):
         await websocket.send_json({"type": "complete", "status": task.status})
         try:
             await websocket.close()

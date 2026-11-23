@@ -73,7 +73,11 @@ async def check_stored_xss(ctx: ScanContext, endpoints: list[str]) -> list[dict]
         r = await _safe_get(ctx.client, f"{ctx.target_url}{ep}")
         if r is None:
             continue
-        if "html" in r.headers.get("content-type", "") and payload in r.text:
+        try:
+            text = r.text
+        except (UnicodeDecodeError, LookupError):
+            continue
+        if "html" in r.headers.get("content-type", "") and payload in text:
             findings.append(
                 {
                     "level": "HIGH",

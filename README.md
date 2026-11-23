@@ -4,7 +4,7 @@
 [![Security Scan](https://github.com/Godlike-Bagheera/curseach/actions/workflows/security-scan.yml/badge.svg)](https://github.com/Godlike-Bagheera/curseach/actions/workflows/security-scan.yml)
 
 Учебный DAST-сканер безопасности API + намеренно уязвимая цель («Damn Vulnerable API»)
-в одном репозитории. Сканер читает OpenAPI-спеку цели и прогоняет **27 проверок**
+в одном репозитории. Сканер читает OpenAPI-спеку цели и прогоняет **34 проверок**
 (SQLi, XSS, IDOR/BOLA/BFLA, JWT alg=none, заголовки, TLS/сертификат, CORS, rate-limit,
 SCA через OSV.dev и др.), показывая live-логи по WebSocket и собирая отчёты
 HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ), CWE и OWASP API Top 10**.
@@ -27,7 +27,7 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 - Anti-SSRF (включая пиннинг проверенного IP от DNS-rebinding), CSRF-Origin-политика, CSP,
   PBKDF2-пароли, HttpOnly-cookie, rate-limit логина.
 - **Справочник `/vulns`**: EN + RU-название и смысл популярных уязвимостей, рекомендации,
-  CWE/OWASP API Top 10 и реестр всех 27 проверок; поиск без перезагрузки, доступен гостю.
+  CWE/OWASP API Top 10 и реестр всех 34 проверок; поиск без перезагрузки, доступен гостю.
 - **Фильтр истории по датам**: период «С/По», пресеты «Сегодня/7/30 дней», счётчик,
   экспорт XLSX за выбранный период; выбор сохраняется в localStorage.
 - **JetBrains Mono self-hosted** (`static/fonts/`) — строгая CSP без внешних CDN, работа офлайн.

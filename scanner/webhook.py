@@ -10,14 +10,14 @@ WEBHOOK_TIMEOUT = 5.0
 WEBHOOK_RETRIES = 1  # одна повторная попытка после неудачи
 
 
-def build_summary(task) -> dict:
+def build_summary(task, status: str | None = None) -> dict:
     """Короткая JSON-сводка для webhook (без находок и секретов)."""
     return {
         "event": "scan.completed",
         "task_id": task.id,
         "target_url": task.target_url,
         "mode": task.mode,
-        "status": task.status,
+        "status": status or task.status,
         "score": task.score,
         "critical": task.critical_count,
         "high": task.high_count,

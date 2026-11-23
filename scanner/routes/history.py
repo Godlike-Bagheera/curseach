@@ -224,7 +224,7 @@ async def view_history_full(scan_id: int, request: Request, user: str = Depends(
 
 
 # ---------- Серверный PDF (WeasyPrint, без колонтитулов браузера) ----------
-def _render_pdf(template_name: str, ctx: dict, filename: str) -> Response:
+async def _render_pdf(template_name: str, ctx: dict, filename: str) -> Response:
     from .. import pdf as pdf_mod
 
     if not pdf_mod.is_available():
@@ -232,9 +232,14 @@ def _render_pdf(template_name: str, ctx: dict, filename: str) -> Response:
             status_code=503,
             detail="WeasyPrint не установлен. Выполните: pip install weasyprint",
         )
-    html_str = common.templates.get_template(template_name).render(**ctx)
+
+    def _render() -> bytes:
+        html_str = common.templates.get_template(template_name).render(**ctx)
+        return pdf_mod.html_to_pdf(html_str, ctx)
+
     try:
-        pdf_bytes = pdf_mod.html_to_pdf(html_str, ctx)
+        # WeasyPrint — CPU-bound: рендерим в threadpool, не блокируя event loop.
+        pdf_bytes = await run_in_threadpool(_render)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {exc}") from exc
     return Response(
@@ -249,7 +254,7 @@ async def download_history_pdf(scan_id: int, user: str = Depends(require_admin))
     """PDF страницы «Диаграмма» (SVG-диаграммы вместо Canvas)."""
     scan = await _get_scan_or_404(scan_id)
     ctx = build_chart_context(scan)
-    return _render_pdf("chart.html", ctx, f"scan_{scan_id}_chart.pdf")
+    return await _render_pdf("chart.html", ctx, f"scan_{scan_id}_chart.pdf")
 
 
 @router.get("/history/{scan_id}/full/pdf")
@@ -257,7 +262,7 @@ async def download_history_full_pdf(scan_id: int, user: str = Depends(require_ad
     """PDF полного объединённого отчёта."""
     scan = await _get_scan_or_404(scan_id)
     ctx = build_chart_context(scan, include_findings=True)
-    return _render_pdf("report_full.html", ctx, f"scan_{scan_id}_full_report.pdf")
+    return await _render_pdf("report_full.html", ctx, f"scan_{scan_id}_full_report.pdf")
 
 
 @router.get("/history/{scan_id}/view/pdf")
@@ -282,7 +287,7 @@ async def download_history_view_pdf(scan_id: int, user: str = Depends(require_ad
         "requests_used": scan.get("requests_used", 0),
         "requests_max": scan.get("requests_max", 0),
     }
-    return _render_pdf("report.html", ctx, f"scan_{scan_id}_report.pdf")
+    return await _render_pdf("report.html", ctx, f"scan_{scan_id}_report.pdf")
 
 
 # ---------- Экспорт ----------
@@ -323,7 +328,7 @@ async def download_history_sarif(scan_id: int, user: str = Depends(require_admin
 async def download_history_bundle(scan_id: int, user: str = Depends(require_admin)):
     scan = await _get_scan_or_404(scan_id)
     host_part = safe_host_for_filename(scan["target_url"])
-    zip_bytes, zip_name = build_scan_bundle(scan, host_part)
+    zip_bytes, zip_name = await run_in_threadpool(build_scan_bundle, scan, host_part)
     return Response(
         content=zip_bytes,
         media_type="application/zip",
