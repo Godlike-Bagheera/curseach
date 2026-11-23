@@ -29,8 +29,6 @@ async def check_xss(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
                     r = await probe(ctx, s, body_over={name: payload})
                 if r is None:
                     continue
-                # Отражение в JSON/тексте — не XSS: браузер не исполнит скрипт
-                # из application/json. Флагаем только HTML-ответы.
                 ctype = r.headers.get("content-type", "").lower()
                 if "text/html" not in ctype and "application/xhtml" not in ctype:
                     continue
@@ -59,17 +57,21 @@ async def check_xss(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
 
 
 async def check_stored_xss(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
-    """POST с XSS-payload в writable-эндпоинты, затем GET HTML-страниц: ищем неотэкранированное отражение."""
+    """POST с XSS-payload во ВСЕ writable-эндпоинты, затем GET ВСЕХ HTML-страниц.
+
+    Раньше лимиты [:3] и [:12] скрывали уязвимые эндпоинты за пределами
+    первых N. Теперь проходим по всем.
+    """
     findings: list[dict] = []
     payload = "<script>alert(1337)</script>"
-    for ep in _writable_endpoints(ctx, endpoints)[:3]:
+    for ep in _writable_endpoints(ctx, endpoints):
         await _safe_post(
             ctx.client,
             f"{ctx.target_url}{ep}",
             json={"comment": payload, "text": payload, "body": payload, "name": payload, "message": payload},
         )
     static = [e for e in endpoints if "{" not in e and "}" not in e]
-    for ep in static[:12]:
+    for ep in static:
         r = await _safe_get(ctx.client, f"{ctx.target_url}{ep}")
         if r is None:
             continue
