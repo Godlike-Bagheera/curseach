@@ -128,11 +128,13 @@ def save_scan(
     requests_max: int = 0,
     webhook_url: str = "",
     project_id: int | None = None,
-):
+) -> int:
+    """Сохраняет скан в историю. Возвращает id записи (нужен для live-отчёта)."""
     scan_date = datetime.datetime.now(datetime.timezone.utc).isoformat()
     results_json = json.dumps(results, ensure_ascii=False)
     with _db() as conn:
-        conn.execute(
+        c = conn.cursor()
+        c.execute(
             """
             INSERT INTO scans (target_url, scan_date, critical, high, medium, low, results_json, mode, partial,
                                partial_reason, endpoints_count, surfaces_count, requests_used, requests_max, webhook_url, project_id)
@@ -157,7 +159,7 @@ def save_scan(
                 project_id,
             ),
         )
-
+        return int(c.lastrowid or 0)
 
 def get_all_scans(limit: int = HISTORY_LIMIT_DEFAULT) -> list[dict]:
     with _db() as conn:
