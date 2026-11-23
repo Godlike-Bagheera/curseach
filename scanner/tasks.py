@@ -475,7 +475,13 @@ async def scan_engine(task: ScanTask):
                 checks._SCAN_CTX.reset(tok_ctx)
                 checks._EVIDENCE_LOG.reset(tok_log)
                 checks._CHECK_NAME.reset(tok_name)
-            findings = checks.enrich_findings(findings or [], evidence_log)
+            # enrich_findings может упасть на неожиданных находках — не теряем их:
+            # если обогащение падает, сохраняем находки как есть, чтобы они попали в отчёт.
+            try:
+                findings = checks.enrich_findings(findings or [], evidence_log)
+            except Exception as e:
+                task.add_log(f"[ВНИМАНИЕ] enrich_findings упал для {name}: {e} — находки сохранены как есть")
+                findings = findings or []
             if findings:
                 task.scan_results.extend(findings)
                 task.add_log(f"[!] {name}: найдено {len(findings)}")
