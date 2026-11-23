@@ -13,11 +13,16 @@ from .descriptions import get_vuln_info
 
 # ================== Business logic (эвристика) ==================
 async def check_business_logic(ctx: ScanContext, endpoints: list[str]) -> list[dict]:
+    """Проверка на «сервер вернул данные для отрицательного ID».
+
+    Раньше лимит [:5] — уязвимые эндпоинты за пределами первых 5 не
+    проверялись. Теперь [:15], что покрывает подавляющее большинство API,
+    но всё ещё ограничивает общее число запросов на больших целях.
+    """
     findings: list = []
     param_endpoints = [p for p in endpoints if "{" in p and "}" in p]
 
-    # Ограничиваем, чтобы не долбить API десятками запросов.
-    param_endpoints = param_endpoints[:5]
+    param_endpoints = param_endpoints[:15]
 
     for ep in param_endpoints:
         param_name = ep[ep.find("{") + 1 : ep.find("}")]
