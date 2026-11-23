@@ -4,7 +4,7 @@
 [![Security Scan](https://github.com/Godlike-Bagheera/curseach/actions/workflows/security-scan.yml/badge.svg)](https://github.com/Godlike-Bagheera/curseach/actions/workflows/security-scan.yml)
 
 Учебный DAST-сканер безопасности API + намеренно уязвимая цель («Damn Vulnerable API»)
-в одном репозитории. Сканер читает OpenAPI-спеку цели и прогоняет **34 проверок**
+в одном репозитории. Сканер читает OpenAPI-спеку цели и прогоняет **34 проверки**
 (SQLi, XSS, IDOR/BOLA/BFLA, JWT alg=none, заголовки, TLS/сертификат, CORS, rate-limit,
 SCA через OSV.dev и др.), показывая live-логи по WebSocket и собирая отчёты
 HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ), CWE и OWASP API Top 10**.
@@ -24,10 +24,13 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 - **Отмена скана** кнопкой «Остановить», лимит одновременных сканов.
 - **SARIF → GitHub Security tab**: workflow self-scan сканирует учебную цель и грузит SARIF.
 - **Детерминированная цель**: заголовок `X-Scan-Seed` фиксирует профиль уязвимостей (воспроизводимые тесты).
+- **Серверный PDF** через Playwright/Chromium — работает на Windows, Linux и в Docker без
+  системных библиотек (GTK/Pango больше не нужны). Chromium скачивается автоматически
+  при первом запуске `start.py` или собирается в Docker-образе.
 - Anti-SSRF (включая пиннинг проверенного IP от DNS-rebinding), CSRF-Origin-политика, CSP,
   PBKDF2-пароли, HttpOnly-cookie, rate-limit логина.
 - **Справочник `/vulns`**: EN + RU-название и смысл популярных уязвимостей, рекомендации,
-  CWE/OWASP API Top 10 и реестр всех 34 проверок; поиск без перезагрузки, доступен гостю.
+  CWE/OWASP API Top 10 и реестр всех проверок; поиск без перезагрузки, доступен гостю.
 - **Фильтр истории по датам**: период «С/По», пресеты «Сегодня/7/30 дней», счётчик,
   экспорт XLSX за выбранный период; выбор сохраняется в localStorage.
 - **JetBrains Mono self-hosted** (`static/fonts/`) — строгая CSP без внешних CDN, работа офлайн.
@@ -39,10 +42,99 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 Поднимет уязвимую цель (http://127.0.0.1:8000, Swagger — `/docs`) и сканер
 (http://127.0.0.1:8001). Зависимости доустановятся автоматически.
 
-### Docker
+**Первый запуск:** `start.py` дополнительно скачает Chromium (~150 МБ) для PDF-экспорта
+в `%LOCALAPPDATA%\ms-playwright` (Windows) или `~/.cache/ms-playwright` (Linux/macOS).
+Это разовая операция. Если интернета нет — сканер запустится, все отчёты кроме PDF
+будут работать; чтобы доустановить Chromium вручную: `python -m playwright install chromium`.
+
+## Docker
+
+### Сборка
 
     docker build -t curseach .
-    docker run --rm -p 8000:8000 -p 8001:8001 curseach
+
+**Первый build занимает 5–10 минут:** внутри образа через
+`playwright install --with-deps chromium` скачивается Chromium (~150 МБ) и его
+системные библиотеки (~200 МБ apt-пакетов). Итоговый размер образа — ~800–900 МБ.
+Последующие сборки используют layer cache и проходят за секунды, если
+`requirements.txt` и `Dockerfile` не менялись.
+
+### Запуск
+
+    docker run --rm \
+      -p 8000:8000 -p 8001:8001 \
+      -v curseach_data:/data \
+      curseach
+
+Открыть http://127.0.0.1:8001, войти как `admin / admin`.
+
+### Порты
+
+| Порт | Что |
+|---|---|
+| `8000` | Уязвимая цель (только для сканирования изнутри, наружу не выставлять) |
+| `8001` | Сам сканер (веб-интерфейс + API) |
+
+### Переменные окружения
+
+Задаются через `-e`:
+
+    docker run --rm \
+      -p 8000:8000 -p 8001:8001 \
+      -v curseach_data:/data \
+      -e SCANNER_ADMIN_PASSWORD=strong-admin-pass \
+      -e SCANNER_GUEST_PASSWORD=strong-guest-pass \
+      curseach
+
+Полный список — в разделе «Переменные окружения» ниже. В образе уже предустановлены
+разумные дефолты для локального запуска (`SCANNER_ALLOW_PRIVATE_TARGETS=1`,
+`SCANNER_HOST=0.0.0.0`, `API_HOST=0.0.0.0`, `ALLOWED_HOSTS` для Codespaces).
+
+### Volume `/data`
+
+История сканов хранится в SQLite-файле `scans.db` в `/data`. **Volume обязателен**,
+если хотите сохранять историю между перезапусками контейнера. Без него `docker rm`
+уничтожит базу.
+
+    docker run --rm -v curseach_data:/data ...
+    # или привязать к папке на хосте:
+    docker run --rm -v "$PWD/data:/data" ...
+
+### Healthcheck
+
+В Dockerfile встроен `HEALTHCHECK` на `/healthz`. Проверить статус:
+
+    docker inspect --format='{{.State.Health.Status}}' <container>
+
+### Проверка, что PDF работает в контейнере
+
+    docker run --rm curseach python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(args=['--no-sandbox']); print('Chromium OK'); b.close(); p.stop()"
+
+Если выведет `Chromium OK` — PDF-экспорт в контейнере работает.
+Если Chromium не установился при сборке (нет доступа к apt-репозиториям, корпоративный
+прокси) — образ всё равно соберётся, но PDF будет недоступен, остальные отчёты работают.
+
+### Docker Compose (опционально)
+
+Если удобнее через compose, создайте `docker-compose.yml`:
+
+    services:
+      curseach:
+        build: .
+        ports:
+          - "8000:8000"
+          - "8001:8001"
+        volumes:
+          - curseach_data:/data
+        environment:
+          SCANNER_ADMIN_PASSWORD: change-me
+          SCANNER_GUEST_PASSWORD: change-me
+        restart: unless-stopped
+
+    volumes:
+      curseach_data:
+
+Запуск: `docker compose up -d`.
 
 ## Вход в сканер
 
@@ -81,7 +173,7 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 
 ## Отчёты
 
-HTML (с evidence и классификацией), PDF на сервере (WeasyPrint, без колонтитулов),
+HTML (с evidence и классификацией), PDF на сервере (Playwright/Chromium, без колонтитулов),
 CSV / XLSX (колонки confidence/CWE/OWASP/evidence), JSON, SARIF 2.1.0
 (теги CWE/OWASP, security-severity) и ZIP-бандл со всем сразу.
 
@@ -99,8 +191,9 @@ coverage, smoke-import. Отдельный workflow **Security Scan** скани
 
 - `main.py` — уязвимая цель (FastAPI), профиль уязвимостей рандомизируется на скан (или фиксируется seed-ом)
 - `scanner/` — веб-приложение сканера: `app`, `config`, `security` (anti-SSRF/сессии), `tasks` (движок),
-  `reporting`, `pdf` (WeasyPrint), `vuln_guide` (справочник `/vulns`), `routes/` (auth/scan/history/misc)
-- `checks/` — 27 проверок + поверхности атаки из OpenAPI (`surface.py`), описания и CWE/OWASP (`descriptions.py`)
+  `reporting`, `pdf` (Playwright), `vuln_guide` (справочник `/vulns`), `routes/` (auth/scan/history/misc)
+- `checks/` — 27 файлов проверок (34 отдельных проверки) + поверхности атаки из OpenAPI (`surface.py`),
+  описания и CWE/OWASP (`descriptions.py`)
 - `scripts/self_scan.py` — self-scan для CI (SARIF)
 - `templates/` — index, login, `vulns` (справочник), отчёты и диаграмма
 - `static/` — UI: `style.css`, `fonts.css` + `fonts/` (self-hosted JetBrains Mono), `script.js`,
@@ -122,7 +215,7 @@ coverage, smoke-import. Отдельный workflow **Security Scan** скани
 
 ## Покрытие проверок учебной целью
 
-Все 27 проверок демонстрируются на встроенной цели (кроме TLS — нужна https-цель).
+Все 34 проверки демонстрируются на встроенной цели (кроме TLS — нужна https-цель).
 Матрица «проверка ↔ эндпоинт ↔ условие»: [docs/COVERAGE.md](docs/COVERAGE.md).
 Демо-режим «всё включено»: заголовок `X-Scan-Seed: 0`.
 
