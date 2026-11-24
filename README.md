@@ -49,6 +49,12 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 
 ## Docker
 
+Образ содержит всё окружение: Python 3.12, зависимости по хеш-пинам,
+Playwright + Chromium для PDF-экспорта. Внутри контейнера одной командой
+(`start.py`) поднимаются **оба сервиса**: учебная цель (порт 8000) и сканер
+(порт 8001). Контейнер работает от непривилегированного пользователя `appuser`
+(uid **10001**) — это важно для bind-mount, см. ниже.
+
 ### Сборка
 
     docker build -t curseach .
@@ -59,14 +65,23 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 Последующие сборки используют layer cache и проходят за секунды, если
 `requirements.txt` и `Dockerfile` не менялись.
 
+**Сборка либо проходит целиком, либо падает.** Установка Chromium — часть
+`RUN`-цепочки через `&&`, поэтому если нет доступа к apt-репозиториям или CDN
+Playwright (например, за корпоративным прокси), `docker build` завершится
+ошибкой на шаге `playwright install --with-deps chromium`. «Образа без PDF»
+не получится — для сборки нужен интернет.
+
 ### Запуск
 
-    docker run --rm \
+    docker run -d --name curseach \
       -p 8000:8000 -p 8001:8001 \
       -v curseach_data:/data \
       curseach
 
 Открыть http://127.0.0.1:8001, войти как `admin / admin`.
+Логи: `docker logs -f curseach`. Остановить: `docker stop curseach`.
+Нужен запуск на переднем плане — вместо `-d --name curseach` подставьте `--rm`
+(Ctrl+C остановит контейнер).
 
 ### Порты
 
@@ -75,20 +90,38 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 | `8000` | Уязвимая цель (только для сканирования изнутри, наружу не выставлять) |
 | `8001` | Сам сканер (веб-интерфейс + API) |
 
+Оба сервиса живут в **одном контейнере**, поэтому встроенную цель сканируйте
+прямо по `http://127.0.0.1:8000` — это адрес внутри контейнера, он работает.
+Публиковать порт 8000 наружу не обязательно: `-p 8000:8000` можно убрать,
+цель всё равно останется доступна сканеру.
+
+Если цель запущена **на хосте**, вне контейнера, то `127.0.0.1` из контейнера
+её не достанет — используйте `http://host.docker.internal:<порт>` (Docker
+Desktop), а на Linux добавьте к `docker run` флаг
+`--add-host=host.docker.internal:host-gateway`.
+
 ### Переменные окружения
 
 Задаются через `-e`:
 
-    docker run --rm \
-      -p 8000:8000 -p 8001:8001 \
+    docker run -d --name curseach \
+      -p 8001:8001 \
       -v curseach_data:/data \
       -e SCANNER_ADMIN_PASSWORD=strong-admin-pass \
       -e SCANNER_GUEST_PASSWORD=strong-guest-pass \
       curseach
 
-Полный список — в разделе «Переменные окружения» ниже. В образе уже предустановлены
-разумные дефолты для локального запуска (`SCANNER_ALLOW_PRIVATE_TARGETS=1`,
-`SCANNER_HOST=0.0.0.0`, `API_HOST=0.0.0.0`, `ALLOWED_HOSTS` для Codespaces).
+Полный список — в разделе «Переменные окружения» ниже. В образе уже
+предустановлены дефолты для контейнера: `SCANNER_HOST=0.0.0.0`,
+`SCANNER_PORT=8001`, `API_HOST=0.0.0.0`, `API_PORT=8000`,
+`SCANNER_DB_PATH=/data/scans.db`, `SCANNER_ALLOW_PRIVATE_TARGETS=1`
+и `ALLOWED_HOSTS` для localhost и Codespaces.
+
+**Открываете сканер не через localhost?** Если заходить по IP сервера или
+домену (`http://192.168.1.50:8001`, `https://scanner.example.com`), добавьте
+этот хост в `ALLOWED_HOSTS`, иначе вход вернёт `403 Origin not allowed`:
+
+    -e ALLOWED_HOSTS="127.0.0.1,localhost,192.168.1.50,scanner.example.com"
 
 ### Volume `/data`
 
@@ -96,23 +129,35 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 если хотите сохранять историю между перезапусками контейнера. Без него `docker rm`
 уничтожит базу.
 
-    docker run --rm -v curseach_data:/data ...
-    # или привязать к папке на хосте:
-    docker run --rm -v "$PWD/data:/data" ...
+Рекомендуется именованный volume — Docker создаёт его сам и с нужными правами:
+
+    docker run -d --name curseach -v curseach_data:/data ...
+
+Bind-mount папки с хоста тоже работает, но контейнер живёт под uid **10001**,
+и папка должна быть доступна ему на запись. Несуществующую папку Docker создаёт
+от root — тогда сканер **упадёт на старте** с
+`sqlite3.OperationalError: unable to open database file`. На Linux подготовьте
+папку заранее:
+
+    mkdir -p data && sudo chown 10001:10001 data
+    docker run -d --name curseach -v "$PWD/data:/data" ...
 
 ### Healthcheck
 
-В Dockerfile встроен `HEALTHCHECK` на `/healthz`. Проверить статус:
+В Dockerfile встроен `HEALTHCHECK`: раз в 30 секунд опрашивается `GET /healthz`
+(без авторизации) на порту сканера. Проверить статус контейнера из примера выше:
 
-    docker inspect --format='{{.State.Health.Status}}' <container>
+    docker inspect --format='{{.State.Health.Status}}' curseach
+
+`healthy` — сканер готов к работе.
 
 ### Проверка, что PDF работает в контейнере
 
-    docker run --rm curseach python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(args=['--no-sandbox']); print('Chromium OK'); b.close(); p.stop()"
+    docker run --rm curseach python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage']); print('Chromium OK'); b.close(); p.stop()"
 
-Если выведет `Chromium OK` — PDF-экспорт в контейнере работает.
-Если Chromium не установился при сборке (нет доступа к apt-репозиториям, корпоративный
-прокси) — образ всё равно соберётся, но PDF будет недоступен, остальные отчёты работают.
+Если выведет `Chromium OK` — PDF-экспорт в контейнере работает. Флаги
+`--no-sandbox --disable-dev-shm-usage` — ровно те, что использует сам сканер
+(`scanner/pdf.py`): они нужны для Chromium под non-root в контейнере.
 
 ### Docker Compose (опционально)
 
@@ -134,7 +179,8 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
     volumes:
       curseach_data:
 
-Запуск: `docker compose up -d`.
+Запуск: `docker compose up -d`, логи: `docker compose logs -f`, остановка:
+`docker compose down` (том с историей сохраняется; `down -v` удалит и его).
 
 ## Вход в сканер
 
@@ -159,14 +205,16 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 |---|---|---|
 | `SCANNER_ADMIN_PASSWORD` / `SCANNER_GUEST_PASSWORD` | admin / guest | пароли входа в сканер |
 | `SCAN_CONCURRENCY` | 8 | одновременных запросов внутри скана |
-| `SCAN_MAX_REQUESTS` | 1500 | бюджет запросов на скан |
+| `SCAN_MAX_REQUESTS` | 3000 | бюджет запросов на скан |
 | `SCAN_RPS` | 20 | запросов в секунду (0 — без лимита) |
 | `SCAN_TOTAL_TIMEOUT` | 300 | общий таймаут скана, сек |
 | `MAX_CONCURRENT_SCANS` | 3 | одновременных сканов на процесс |
 | `SCAN_PIN_DNS` | 1 | пиннить проверенный IP (anti-DNS-rebinding) |
 | `SCANNER_ALLOW_PRIVATE_TARGETS` | 1 | разрешить private/loopback цели (учебный стенд) |
 | `ALLOWED_HOSTS` | localhost + Codespaces | разрешённые Origin/хосты |
-| `SCANNER_DB_PATH` | scans.db | файл истории (SQLite, WAL) |
+| `SCANNER_DB_PATH` | scans.db | файл истории (SQLite, WAL); в образе — `/data/scans.db` |
+| `SCANNER_HOST` / `SCANNER_PORT` | 127.0.0.1 / 8001 | адрес и порт сканера (в образе host — `0.0.0.0`) |
+| `API_HOST` / `API_PORT` | 127.0.0.1 / 8000 | адрес и порт учебной цели (в образе host — `0.0.0.0`) |
 
 **Важно:** сессии и задачи хранятся в памяти процесса — запускайте сканер
 в **один воркер** (`uvicorn --workers 1`, как в `start.py`/Docker).
