@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" class="is-loading">
+<html lang="ru"{% if show_loader %} class="is-loading"{% endif %}>
 <head>
     <meta charset="UTF-8">
     <title>DEVSECOPS СКАНЕР</title>
@@ -15,8 +15,10 @@
 </head>
 <body data-guest="{{ 'true' if is_guest else 'false' }}" data-user="{{ user }}">
 
+{% if show_loader %}
 <!-- ============================================================
      ЭКРАН ЗАГРУЗКИ — "включение ЭЛТ-монитора"
+     Показывается один раз сразу после успешного логина.
      Класс is-loading на <html> стоит сразу в разметке — без рывка.
      ============================================================ -->
 <div class="loading-screen" id="loading-screen">
@@ -28,6 +30,7 @@
         <div class="loading-screen__status" id="loading-status">ИНИЦИАЛИЗАЦИЯ...</div>
     </div>
 </div>
+{% endif %}
 
 <div class="app" id="app">
     <header class="app-header">

@@ -10,10 +10,16 @@ from ..security import (
     create_session,
     destroy_session,
     get_current_user,
+    sessions,
 )
 from . import common
 
 router = APIRouter()
+
+# Сессии, которым CRT-экран загрузки ещё не показывался:
+# он появляется один раз сразу после успешного логина и больше не повторяется
+# (обновление главной, возврат на неё, новые вкладки — без анимации).
+_fresh_logins: set[str] = set()
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -46,6 +52,8 @@ async def login_post(
             status_code=401,
         )
     sid = create_session(user)
+    _fresh_logins.add(sid)
+    _fresh_logins.intersection_update(sessions)  # чистим флаги мёртвых сессий
     resp = RedirectResponse(url="/", status_code=303)
     resp.set_cookie(
         key="session_id",
@@ -62,6 +70,7 @@ async def login_post(
 @router.post("/logout")
 async def logout(session_id: str | None = Cookie(None)):
     destroy_session(session_id)
+    _fresh_logins.discard(session_id)
     resp = RedirectResponse(url="/login", status_code=303)
     resp.delete_cookie("session_id", path="/")
     return resp
@@ -72,11 +81,15 @@ async def index(request: Request, session_id: str | None = Cookie(None)):
     user = get_current_user(session_id)
     if user is None:
         return RedirectResponse(url="/login", status_code=303)
+    # Экран загрузки — только при первом заходе после логина (одноразовый флаг)
+    show_loader = session_id in _fresh_logins
+    _fresh_logins.discard(session_id)
     return common.templates.TemplateResponse(
         request,
         "index.html",
         {
             "user": user,
             "is_guest": user == "guest",
+            "show_loader": show_loader,
         },
     )
