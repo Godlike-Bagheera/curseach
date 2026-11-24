@@ -417,10 +417,21 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
         ".print-page { height: auto !important; overflow: visible !important;"
         " page-break-after: always; break-after: page;"
         " page-break-inside: avoid; break-inside: avoid; }"
-        ".print-page.last-page { page-break-after: auto; break-after: auto; }"
+        # Последняя секция (находки + футер) выше одного листа — разрешаем
+        # ей нормально делиться, иначе Chromium выталкивает её целиком и
+        # футер остаётся один на чистой странице.
+        ".print-page.last-page { page-break-after: auto; break-after: auto;"
+        " page-break-inside: auto; break-inside: auto; }"
         ".chart-canvas canvas { display: none !important; }"
         ".chart-box svg, .types-section svg,"
         " .chart-layout svg { max-width: 100%; height: auto; }"
+        # PDF: типы уязвимостей печатаем обычным текстом, без пунктира
+        # (на экране подсказка-ссылка на справочник остаётся).
+        ".vuln-link { text-decoration: none !important; }"
+        # Футер приклеен к концу отчёта: разрыв перед ним запрещён —
+        # если не влезает, переносится вместе с последней строкой таблицы.
+        ".doc-footer { page-break-before: avoid !important; break-before: avoid !important;"
+        " page-break-inside: avoid !important; break-inside: avoid !important; }"
         "</style>"
     )
     if "</head>" in doc:
