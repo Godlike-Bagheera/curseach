@@ -361,6 +361,47 @@ def make_types_bars_svg(types_data: list[dict], width: int = 640) -> str:
 _SCRIPT_RE = re.compile(r"<script\b.*?</script>", re.S | re.I)
 _TOOLBAR_RE = re.compile(r'<div class="toolbar">.*?</div>', re.S)
 _PAYLOAD_RE = re.compile(r'<script id="chart-data" type="application/json">(.*?)</script>', re.S)
+_FOOTER_RE = re.compile(r'<div class="doc-footer">.*?</div>', re.S)
+_FINDINGS_TABLE_RE = re.compile(r'<table class="findings-table">.*?</table>', re.S)
+
+
+def _keep_footer_with_last_row(doc: str) -> str:
+    """Склеивает футер с последней находкой в общий неразрывный <tbody>.
+
+    Chromium НЕ умеет break-before/break-after: avoid, зато умеет
+    break-inside: avoid. Переносим футер в таблицу находок последней
+    строкой и оборачиваем «последняя находка + футер» в один <tbody>:
+    если они не влезают в остаток листа — переносятся вместе, и футер
+    никогда не остаётся один на чистой странице.
+    """
+    fm = _FOOTER_RE.search(doc)
+    if not fm:
+        return doc
+    footer_html = fm.group(0)
+    without = doc[:fm.start()] + doc[fm.end():]
+    tm = _FINDINGS_TABLE_RE.search(without)
+    if not tm:
+        return doc
+    table = tm.group(0)
+    tb_open = table.find("<tbody>")
+    tb_close = table.rfind("</tbody>")
+    if tb_open == -1 or tb_close == -1:
+        return doc
+    body = table[tb_open + len("<tbody>"):tb_close]
+    last_tr = body.rfind("<tr>")
+    if last_tr == -1:
+        return doc
+    even = " pdf-even" if body.count("<tr>") % 2 == 0 else ""
+    colspan = max(1, len(re.findall(r"<th[\s>]", table)))
+    new_body = (
+        body[:last_tr]
+        + '</tbody><tbody class="pdf-keep-end' + even + '">'
+        + body[last_tr:]
+        + '<tr class="pdf-footer-row"><td colspan="' + str(colspan) + '">'
+        + footer_html + "</td></tr>"
+    )
+    new_table = table[:tb_open + len("<tbody>")] + new_body + table[tb_close:]
+    return without[:tm.start()] + new_table + without[tm.end():]
 
 
 def html_to_pdf(html_str: str, ctx: dict, base_url: str | None = None) -> bytes:
@@ -428,10 +469,13 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
         # PDF: типы уязвимостей печатаем обычным текстом, без пунктира
         # (на экране подсказка-ссылка на справочник остаётся).
         ".vuln-link { text-decoration: none !important; }"
-        # Футер приклеен к концу отчёта: разрыв перед ним запрещён —
-        # если не влезает, переносится вместе с последней строкой таблицы.
-        ".doc-footer { page-break-before: avoid !important; break-before: avoid !important;"
-        " page-break-inside: avoid !important; break-inside: avoid !important; }"
+        # Футер склеен с последней находкой в общий неразрывный <tbody>
+        # (Chromium не умеет break-before: avoid, зато умеет break-inside).
+        ".pdf-keep-end { page-break-inside: avoid !important; break-inside: avoid !important; }"
+        ".pdf-footer-row > td { border: none !important; padding: 0 !important;"
+        " background: #fff !important; }"
+        ".pdf-keep-end.pdf-even > tr:first-child > td { background: #f7f8fa !important; }"
+        ".doc-footer { page-break-inside: avoid !important; break-inside: avoid !important; }"
         "</style>"
     )
     if "</head>" in doc:
@@ -441,6 +485,7 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
 
     doc = _TOOLBAR_RE.sub("", doc)
     doc = _SCRIPT_RE.sub("", doc)
+    doc = _keep_footer_with_last_row(doc)
     doc = _sanitize_resources(doc)
 
     tmpdir = tempfile.mkdtemp(prefix="curseach_pdf_")
