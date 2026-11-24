@@ -49,138 +49,118 @@ HTML / PDF / CSV / XLSX / SARIF / ZIP — с **evidence (запрос/ответ
 
 ## Docker
 
-Образ содержит всё окружение: Python 3.12, зависимости по хеш-пинам,
-Playwright + Chromium для PDF-экспорта. Внутри контейнера одной командой
-(`start.py`) поднимаются **оба сервиса**: учебная цель (порт 8000) и сканер
-(порт 8001). Контейнер работает от непривилегированного пользователя `appuser`
-(uid **10001**) — это важно для bind-mount, см. ниже.
+Стенд разворачивается на любой машине с Docker (Linux-сервер Ubuntu/Debian,
+macOS, Windows с Docker Desktop) — Python, зависимости и Chromium ставить
+не нужно, всё уже внутри образа. В одном контейнере поднимаются оба сервиса:
+сканер (порт 8001) и учебная цель (порт 8000, доступна сканеру изнутри контейнера).
 
-### Сборка
+### Требования
 
-    docker build -t curseach .
-
-**Первый build занимает 5–10 минут:** внутри образа через
-`playwright install --with-deps chromium` скачивается Chromium (~150 МБ) и его
-системные библиотеки (~200 МБ apt-пакетов). Итоговый размер образа — ~800–900 МБ.
-Последующие сборки используют layer cache и проходят за секунды, если
-`requirements.txt` и `Dockerfile` не менялись.
-
-**Сборка либо проходит целиком, либо падает.** Установка Chromium — часть
-`RUN`-цепочки через `&&`, поэтому если нет доступа к apt-репозиториям или CDN
-Playwright (например, за корпоративным прокси), `docker build` завершится
-ошибкой на шаге `playwright install --with-deps chromium`. «Образа без PDF»
-не получится — для сборки нужен интернет.
+- Docker Engine 20.10+
+- Docker Compose V2
 
 ### Запуск
 
-    docker run -d --name curseach \
-      -p 8000:8000 -p 8001:8001 \
-      -v curseach_data:/data \
-      curseach
+    git clone https://github.com/Godlike-Bagheera/curseach.git
+    cd curseach
+    docker compose up -d --build
 
-Открыть http://127.0.0.1:8001, войти как `admin / admin`.
-Логи: `docker logs -f curseach`. Остановить: `docker stop curseach`.
-Нужен запуск на переднем плане — вместо `-d --name curseach` подставьте `--rm`
-(Ctrl+C остановит контейнер).
+Первая сборка занимает 5–10 минут: внутри образа скачивается Chromium (~150 МБ)
+и его системные библиотеки (~200 МБ apt-пакетов), итоговый образ — ~800–900 МБ.
+Повторные сборки проходят за секунды благодаря кэшу слоёв. Для сборки нужен
+интернет: установка Chromium — часть `RUN`-цепочки через `&&`, поэтому без
+доступа к apt-репозиториям или CDN Playwright сборка упадёт на шаге
+`playwright install --with-deps chromium` («образа без PDF» не получится).
 
-### Порты
+### Доступ
 
-| Порт | Что |
+| Что | Адрес |
 |---|---|
-| `8000` | Уязвимая цель (только для сканирования изнутри, наружу не выставлять) |
-| `8001` | Сам сканер (веб-интерфейс + API) |
+| Сканер (веб-интерфейс) | http://127.0.0.1:8001 — вход `admin / admin` |
+| Учебная цель | http://127.0.0.1:8000 — этот адрес вводите в сканер |
 
-Оба сервиса живут в **одном контейнере**, поэтому встроенную цель сканируйте
-прямо по `http://127.0.0.1:8000` — это адрес внутри контейнера, он работает.
-Публиковать порт 8000 наружу не обязательно: `-p 8000:8000` можно убрать,
-цель всё равно останется доступна сканеру.
+Оба сервиса живут в одном контейнере, поэтому адрес цели `127.0.0.1:8000`
+работает прямо из интерфейса сканера. Наружу порт 8000 по умолчанию
+**не публикуется** — это намеренно уязвимое приложение. Если он всё же нужен
+снаружи, раскомментируйте строку `8000:8000` в `compose.yaml`.
 
-Если цель запущена **на хосте**, вне контейнера, то `127.0.0.1` из контейнера
-её не достанет — используйте `http://host.docker.internal:<порт>` (Docker
-Desktop), а на Linux добавьте к `docker run` флаг
-`--add-host=host.docker.internal:host-gateway`.
+### Запуск на сервере (доступ по IP/домену)
 
-### Переменные окружения
+Если открывать сканер по адресу сервера (`http://<IP_СЕРВЕРА>:8001`), добавьте
+этот хост в `ALLOWED_HOSTS` — иначе вход вернёт `403 Origin not allowed`.
+Всё настраивается через файл `.env` рядом с `compose.yaml`:
 
-Задаются через `-e`:
+    ALLOWED_HOSTS=127.0.0.1,localhost,<IP_СЕРВЕРА>
+    SCANNER_ADMIN_PASSWORD=strong-admin-pass
+    SCANNER_GUEST_PASSWORD=strong-guest-pass
 
+Затем `docker compose up -d`. Пароли по умолчанию — `admin` / `guest`,
+для публичного сервера обязательно смените их. Полный список переменных —
+в разделе «Переменные окружения» ниже, про защиту — в «Безопасность
+при публичном деплое».
+
+### Остановка и перезапуск
+
+    docker compose stop     # пауза с сохранением данных
+    docker compose start    # продолжить работу
+    docker compose down     # удалить контейнер (история сканов в томе сохраняется)
+    docker compose down -v  # удалить контейнер И историю сканов
+
+Логи: `docker compose logs -f`. Статус: `docker compose ps` — в колонке STATUS
+должно быть `healthy` (в образ встроен `HEALTHCHECK` на `GET /healthz`
+без авторизации, раз в 30 секунд).
+
+### Ручной запуск без compose (альтернатива)
+
+    docker build -t curseach .
     docker run -d --name curseach \
       -p 8001:8001 \
       -v curseach_data:/data \
-      -e SCANNER_ADMIN_PASSWORD=strong-admin-pass \
-      -e SCANNER_GUEST_PASSWORD=strong-guest-pass \
       curseach
 
-Полный список — в разделе «Переменные окружения» ниже. В образе уже
-предустановлены дефолты для контейнера: `SCANNER_HOST=0.0.0.0`,
+Логи: `docker logs -f curseach`, остановить: `docker stop curseach`.
+Нужен запуск на переднем плане — вместо `-d --name curseach` подставьте `--rm`.
+Переменные задаются через `-e` (например, `-e SCANNER_ADMIN_PASSWORD=...`).
+В образе уже предустановлены дефолты для контейнера: `SCANNER_HOST=0.0.0.0`,
 `SCANNER_PORT=8001`, `API_HOST=0.0.0.0`, `API_PORT=8000`,
-`SCANNER_DB_PATH=/data/scans.db`, `SCANNER_ALLOW_PRIVATE_TARGETS=1`
-и `ALLOWED_HOSTS` для localhost и Codespaces.
+`SCANNER_DB_PATH=/data/scans.db`, `SCANNER_ALLOW_PRIVATE_TARGETS=1`.
 
-**Открываете сканер не через localhost?** Если заходить по IP сервера или
-домену (`http://192.168.1.50:8001`, `https://scanner.example.com`), добавьте
-этот хост в `ALLOWED_HOSTS`, иначе вход вернёт `403 Origin not allowed`:
+### Volume `/data` и bind-mount
 
-    -e ALLOWED_HOSTS="127.0.0.1,localhost,192.168.1.50,scanner.example.com"
+История сканов — SQLite-файл `/data/scans.db`. И `compose.yaml`, и пример выше
+используют именованный том `curseach_data`: он переживает `docker rm` /
+`docker compose down` и создаётся с нужными правами автоматически.
 
-### Volume `/data`
-
-История сканов хранится в SQLite-файле `scans.db` в `/data`. **Volume обязателен**,
-если хотите сохранять историю между перезапусками контейнера. Без него `docker rm`
-уничтожит базу.
-
-Рекомендуется именованный volume — Docker создаёт его сам и с нужными правами:
-
-    docker run -d --name curseach -v curseach_data:/data ...
-
-Bind-mount папки с хоста тоже работает, но контейнер живёт под uid **10001**,
-и папка должна быть доступна ему на запись. Несуществующую папку Docker создаёт
-от root — тогда сканер **упадёт на старте** с
+Bind-mount папки с хоста тоже работает, но контейнер живёт под
+непривилегированным пользователем `appuser` (uid **10001**), и папка должна
+быть доступна ему на запись. Несуществующую папку Docker создаёт от root —
+тогда сканер **упадёт на старте** с
 `sqlite3.OperationalError: unable to open database file`. На Linux подготовьте
 папку заранее:
 
     mkdir -p data && sudo chown 10001:10001 data
-    docker run -d --name curseach -v "$PWD/data:/data" ...
+    docker run -d --name curseach -p 8001:8001 -v "$PWD/data:/data" curseach
 
-### Healthcheck
+### Сканирование целей вне контейнера
 
-В Dockerfile встроен `HEALTHCHECK`: раз в 30 секунд опрашивается `GET /healthz`
-(без авторизации) на порту сканера. Проверить статус контейнера из примера выше:
+`127.0.0.1` из контейнера — это сам контейнер. Цель, запущенную на хосте,
+сканируйте через `http://host.docker.internal:<порт>` (Docker Desktop),
+а на Linux добавьте сервису в `compose.yaml`:
 
-    docker inspect --format='{{.State.Health.Status}}' curseach
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
-`healthy` — сканер готов к работе.
+(при ручном запуске — флаг `--add-host=host.docker.internal:host-gateway`).
 
 ### Проверка, что PDF работает в контейнере
+
+После сборки (`docker compose build` или `docker build`):
 
     docker run --rm curseach python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage']); print('Chromium OK'); b.close(); p.stop()"
 
 Если выведет `Chromium OK` — PDF-экспорт в контейнере работает. Флаги
 `--no-sandbox --disable-dev-shm-usage` — ровно те, что использует сам сканер
 (`scanner/pdf.py`): они нужны для Chromium под non-root в контейнере.
-
-### Docker Compose (опционально)
-
-Если удобнее через compose, создайте `docker-compose.yml`:
-
-    services:
-      curseach:
-        build: .
-        ports:
-          - "8000:8000"
-          - "8001:8001"
-        volumes:
-          - curseach_data:/data
-        environment:
-          SCANNER_ADMIN_PASSWORD: change-me
-          SCANNER_GUEST_PASSWORD: change-me
-        restart: unless-stopped
-
-    volumes:
-      curseach_data:
-
-Запуск: `docker compose up -d`, логи: `docker compose logs -f`, остановка:
-`docker compose down` (том с историей сохраняется; `down -v` удалит и его).
 
 ## Вход в сканер
 
@@ -248,7 +228,7 @@ coverage, smoke-import. Отдельный workflow **Security Scan** скани
   `history_filter.*` (фильтр истории), `vulns.js` (поиск по справочнику)
 - `database.py` — история сканов (SQLite, WAL)
 - `tests/` — pytest: юнит-тесты проверок и роутов + e2e-скан
-- `Dockerfile`, `.devcontainer/`, `.github/workflows/` — контейнер, Codespaces, CI и Security Scan
+- `Dockerfile`, `compose.yaml`, `.devcontainer/`, `.github/workflows/` — контейнер, Compose, Codespaces, CI и Security Scan
 
 ## Безопасность при публичном деплое
 

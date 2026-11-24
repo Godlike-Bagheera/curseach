@@ -1,0 +1,21 @@
+# Развёртывание одной командой: docker compose up -d --build
+# Подробности — раздел «Docker» в README.md.
+services:
+  curseach:
+    build: .
+    image: curseach
+    ports:
+      - "8001:8001"
+      # Учебная цель (намеренно уязвимое приложение) наружу по умолчанию
+      # не публикуется: сканер сканирует её внутри контейнера по http://127.0.0.1:8000.
+      # - "8000:8000"
+    volumes:
+      - curseach_data:/data
+    environment:
+      SCANNER_ADMIN_PASSWORD: "${SCANNER_ADMIN_PASSWORD:-admin}"
+      SCANNER_GUEST_PASSWORD: "${SCANNER_GUEST_PASSWORD:-guest}"
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-127.0.0.1,localhost,::1,*.github.dev,*.githubcodespaces.app,*.preview.app.github.dev}"
+    restart: unless-stopped
+
+volumes:
+  curseach_data:
