@@ -1,4 +1,4 @@
-"""Регресс-тесты вёрстки PDF: типы уязвимостей без подчёркивания, футер не убегает на отдельный лист."""
+"""Регресс-тесты вёрстки PDF: шапка таблицы не теряется, футер — в полях листа."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ _HEAD = (
 )
 _FOOTER = (
     '<div class="doc-footer"><span>Отчёт сформирован автоматически системой DevSecOps Scanner</span>'
-    "<span>2026-11-23 17:53:55</span></div>"
+    "<span>2026-11-25 14:43:36</span></div>"
 )
 
 
@@ -90,51 +90,38 @@ def render(monkeypatch):
 def test_vuln_types_printed_without_underline(render):
     doc = render(_report())
     assert ".vuln-link { text-decoration: none !important; }" in doc
-    # override идёт после стилей шаблона — гарантированно перебивает пунктир
     assert doc.index("text-decoration: none !important") > doc.index("underline dotted")
 
 
-def test_pdf_tail_css_present(render):
-    doc = render(_report())
-    assert ".pdf-tail { page-break-inside: avoid !important; break-inside: avoid !important; }" in doc
-    assert ".pdf-tail-table { margin-bottom: 0 !important; }" in doc
+def test_footer_in_page_margin_boxes(render):
+    doc = render(_report(), {"scan_date": "2026-11-25 14:43:36"})
+    assert "@bottom-left" in doc and "@bottom-right" in doc
+    assert "Отчёт сформирован автоматически системой DevSecOps Scanner" in doc
+    assert 'content: "2026-11-25 14:43:36"' in doc
+    # в потоке документа футер скрыт: не дублируется и не создаёт страницу
+    assert ".doc-footer { display: none !important; }" in doc
 
 
-def test_footer_wrapped_with_last_finding(render):
+def test_footer_date_falls_back_to_ctx(render):
+    doc = render(_HEAD + "<p>нет футера</p></body></html>", {"scan_date": "2026-01-02 03:04:05"})
+    assert 'content: "2026-01-02 03:04:05"' in doc
+
+
+def test_css_str_escapes_quotes():
+    bs = chr(92)
+    q = chr(34)
+    assert pdf._css_str("a" + q + "b" + bs + "c") == "a" + bs + q + "b" + bs + bs + "c"
+
+
+def test_findings_table_stays_intact(render):
     doc = render(_report(rows=3))
-    assert doc.count('class="pdf-tail"') == 1
+    # таблицу не режем: thead Chromium повторяет на каждом листе сам
+    assert "pdf-tail" not in doc
+    assert doc.count("<tbody>") == 1
+    assert "<thead>" in doc
+    for i in range(3):
+        assert f"SQL Injection #{i}" in doc
     assert doc.count('class="doc-footer"') == 1
-    main, tail = doc.split('<div class="pdf-tail">', 1)
-    assert "SQL Injection #0" in main
-    assert "SQL Injection #1" in main
-    assert "SQL Injection #2" not in main
-    assert 'class="doc-footer"' not in main
-    # последняя находка и футер — в одном неразрывном блоке, футер после строки
-    assert "SQL Injection #2" in tail
-    assert "doc-footer" in tail
-    assert tail.index("SQL Injection #2") < tail.index("doc-footer")
-    assert '<col style="width:85px">' in tail
-    assert '<col style="width:150px">' in tail
-
-
-def test_single_finding_still_keeps_footer(render):
-    doc = render(_report(rows=1))
-    tail = doc.split('<div class="pdf-tail">', 1)[1]
-    assert "SQL Injection #0" in tail
-    assert "doc-footer" in tail
-
-
-def test_report_without_findings_unchanged():
-    html = _HEAD + "<p>Уязвимостей не обнаружено.</p>" + _FOOTER + "</body></html>"
-    assert pdf._keep_footer_with_last_row(html) == html
-
-
-def test_footer_with_nested_divs_extracted_whole():
-    footer = '<div class="doc-footer"><div class="left"><span>Отчёт</span></div><span>дата</span></div>'
-    doc = pdf._keep_footer_with_last_row(_report(rows=2, footer=footer))
-    tail = doc.split('<div class="pdf-tail">', 1)[1]
-    assert footer in tail
-    assert doc.count("<div") == doc.count("</div>")
 
 
 def test_toolbar_with_nested_divs_removed_cleanly(render):
@@ -142,11 +129,10 @@ def test_toolbar_with_nested_divs_removed_cleanly(render):
     doc = render(_report(rows=2, toolbar=toolbar))
     assert "toolbar-buttons" not in doc
     assert "Скачать PDF" not in doc
-    # непарный </div> закрывал .page раньше времени — разметка должна остаться парной
     assert doc.count("<div") == doc.count("</div>")
 
 
-def test_real_report_template_layout(render):
+def _env():
     jinja2 = pytest.importorskip("jinja2")
     from scanner.vuln_guide import slugify
 
@@ -155,7 +141,11 @@ def test_real_report_template_layout(render):
         autoescape=jinja2.select_autoescape(["html", "htm", "xml"]),
     )
     env.filters["vuln_slug"] = slugify
-    findings = [
+    return env
+
+
+def _findings(n: int) -> list[dict]:
+    return [
         {
             "level": "HIGH",
             "type": "SQL Injection",
@@ -163,64 +153,53 @@ def test_real_report_template_layout(render):
             "desc": "desc",
             "details": {"recommendation": "fix"},
         }
-        for i in range(4)
+        for i in range(n)
     ]
+
+
+def test_real_report_template_layout(render):
+    env = _env()
     ctx = {
         "target_url": "http://target",
-        "findings": findings,
+        "findings": _findings(4),
         "critical": 0,
         "high": 4,
         "medium": 0,
         "low": 0,
         "score": 40,
         "mode_ru": "ПОЛНАЯ ПРОВЕРКА",
-        "scan_date": "2026-11-23 17:53:55",
+        "scan_date": "2026-11-25 14:43:36",
         "scan_id": 123,
     }
     doc = render(env.get_template("report.html").render(**ctx), ctx)
     assert ".vuln-link { text-decoration: none !important; }" in doc
-    main, tail = doc.split('<div class="pdf-tail">', 1)
-    assert "/api/3" in tail and "doc-footer" in tail
-    assert "<code>/api/3</code>" not in main
-    assert 'class="doc-footer"' not in main
+    assert "@bottom-left" in doc and 'content: "2026-11-25 14:43:36"' in doc
+    assert ".doc-footer { display: none !important; }" in doc
+    assert "pdf-tail" not in doc
+    assert "<thead>" in doc and "<code>/api/3</code>" in doc
     assert doc.count("<div") == doc.count("</div>")
-def test_real_full_report_template_layout(render):
-    """Полный отчёт (report_full.html): тот же хвост «последняя находка + футер»."""
-    jinja2 = pytest.importorskip("jinja2")
-    from scanner.reporting import build_chart_context
-    from scanner.vuln_guide import slugify
 
-    env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(os.path.join(pdf.BASE_DIR, "templates")),
-        autoescape=jinja2.select_autoescape(["html", "htm", "xml"]),
-    )
-    env.filters["vuln_slug"] = slugify
+
+def test_real_full_report_template_layout(render):
+    from scanner.reporting import build_chart_context
+
+    env = _env()
     scan = {
         "id": 123,
         "target_url": "http://target",
-        "scan_date": "2026-11-23T17:53:55",
+        "scan_date": "2026-11-25T14:43:36",
         "critical": 0,
         "high": 4,
         "medium": 0,
         "low": 0,
         "mode": "full",
-        "results": [
-            {
-                "level": "HIGH",
-                "type": "SQL Injection",
-                "endpoint": f"/api/{i}",
-                "desc": "desc",
-                "details": {"recommendation": "fix"},
-            }
-            for i in range(4)
-        ],
+        "results": _findings(4),
     }
     ctx = build_chart_context(scan, include_findings=True)
     doc = render(env.get_template("report_full.html").render(**ctx), ctx)
     assert ".vuln-link { text-decoration: none !important; }" in doc
-    assert doc.count('class="pdf-tail"') == 1
-    main, tail = doc.split('<div class="pdf-tail">', 1)
-    assert "/api/3" in tail and "doc-footer" in tail
-    assert "<code>/api/3</code>" not in main
-    assert 'class="doc-footer"' not in main
+    assert "@bottom-left" in doc and 'content: "2026-11-25 14:43:36"' in doc
+    assert ".doc-footer { display: none !important; }" in doc
+    assert "pdf-tail" not in doc
+    assert "<thead>" in doc and "<code>/api/3</code>" in doc
     assert doc.count("<div") == doc.count("</div>")

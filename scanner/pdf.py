@@ -360,8 +360,11 @@ def make_types_bars_svg(types_data: list[dict], width: int = 640) -> str:
 
 _SCRIPT_RE = re.compile(r"<script\b.*?</script>", re.S | re.I)
 _PAYLOAD_RE = re.compile(r'<script id="chart-data" type="application/json">(.*?)</script>', re.S)
-_FINDINGS_TABLE_RE = re.compile(r'<table class="findings-table">.*?</table>', re.S)
 _DIV_TOKEN_RE = re.compile(r"<div\b|</div\s*>", re.I)
+_SPAN_RE = re.compile(r"<span[^>]*>(.*?)</span>", re.S)
+_TAG_RE = re.compile(r"<[^>]+>")
+
+_FOOTER_LEFT_DEFAULT = "Отчёт сформирован автоматически системой DevSecOps Scanner"
 
 
 def _class_open_re(tag: str, cls: str) -> re.Pattern:
@@ -403,50 +406,43 @@ def _strip_toolbar(doc: str) -> str:
         doc = doc[: span[0]] + doc[span[1] :]
 
 
-def _keep_footer_with_last_row(doc: str) -> str:
-    """Гарантированно держит футер вместе с последней находкой.
+def _css_str(value: str) -> str:
+    """Экранирует текст для CSS-строки content: "..."."""
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", " ")
 
-    Chromium соблюдает break-inside: avoid только на блочных элементах
-    (tbody/группы строк он рвёт). Последнюю находку и футер выносим в один
-    блочный <div class="pdf-tail"> с break-inside: avoid: на новый лист они
-    уезжают только вместе, футер никогда не остаётся один.
+
+def _footer_margin_boxes(doc: str, ctx: dict) -> str:
+    """Колонтитул в полях листа: @bottom-left / @bottom-center / @bottom-right.
+
+    Chromium 131+ (playwright 1.65 -> Chromium 158) рисует margin boxes В ПОЛЯХ
+    листа на каждой странице: они не пересекаются с контентом, не создают
+    отдельных страниц и не могут «осиротеть». Футер больше не живёт в потоке
+    документа и не отрывает последнюю находку от шапки таблицы: таблица
+    остаётся целой, а её thead Chromium повторяет на каждом листе сам.
     """
+    left = _FOOTER_LEFT_DEFAULT
+    right = str(ctx.get("scan_date") or "")
     fm = _FOOTER_OPEN_RE.search(doc)
-    if not fm:
-        return doc
-    span = _div_block(doc, fm.start())
-    if span is None:
-        return doc
-    footer_html = doc[span[0] : span[1]]
-    without = doc[: span[0]] + doc[span[1] :]
-    tm = _FINDINGS_TABLE_RE.search(without)
-    if not tm:
-        return doc
-    table = tm.group(0)
-    tb_open = table.find("<tbody>")
-    tb_close = table.rfind("</tbody>")
-    if tb_open == -1 or tb_close == -1:
-        return doc
-    body = table[tb_open + len("<tbody>"):tb_close]
-    rows = re.findall(r"<tr>.*?</tr>", body, re.S)
-    if not rows:
-        return doc
-    cols = ""
-    thead_m = re.search(r"<thead>.*?</thead>", table, re.S)
-    if thead_m:
-        for th in re.findall(r"<th\b[^>]*>", thead_m.group(0)):
-            w = re.search(r"width:\s*([\d.]+px)", th)
-            cols += f'<col style="width:{w.group(1)}">' if w else "<col>"
-    new_table = table[:tb_open + len("<tbody>")] + "".join(rows[:-1]) + table[tb_close:]
-    tail = (
-        '<div class="pdf-tail">'
-        '<table class="findings-table pdf-tail-table">'
-        + (f"<colgroup>{cols}</colgroup>" if cols else "")
-        + "<tbody>" + rows[-1] + "</tbody></table>"
-        + footer_html
-        + "</div>"
+    if fm:
+        span = _div_block(doc, fm.start())
+        if span is not None:
+            footer_html = doc[span[0] : span[1]]
+            texts = [_html.unescape(_TAG_RE.sub("", s)).strip() for s in _SPAN_RE.findall(footer_html)]
+            texts = [t for t in texts if t]
+            if texts:
+                left = texts[0]
+            if len(texts) >= 2:
+                right = texts[-1]
+    font = (
+        "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,"
+        " 'Helvetica Neue', Arial, sans-serif; font-size: 8pt; color: #888; letter-spacing: 0.3px;"
     )
-    return without[:tm.start()] + new_table + tail + without[tm.end():]
+    rule = "border-top: 1px solid #d0d4d9; vertical-align: top; padding-top: 3mm;"
+    return (
+        f'@bottom-left {{ content: "{_css_str(left)}"; {font} {rule} }}'
+        f'@bottom-center {{ content: ""; {rule} }}'
+        f'@bottom-right {{ content: "{_css_str(right)}"; {font} {rule} }}'
+    )
 
 
 def html_to_pdf(html_str: str, ctx: dict, base_url: str | None = None) -> bytes:
@@ -492,9 +488,11 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
 
     doc = re.sub(r"<canvas[^>]*>", lambda m: _svg_for(m.group(0)), doc, flags=re.I)
 
+    footer_boxes = _footer_margin_boxes(doc, ctx)
+
     override_css = (
         "<style>"
-        "@page { size: A4; margin: 15mm 14mm 16mm; }"
+        "@page { size: A4; margin: 15mm 14mm 16mm; " + footer_boxes + " }"
         "html, body { background: #fff !important; color: #1a1a1a !important;"
         " -webkit-print-color-adjust: exact; print-color-adjust: exact; }"
         ".page { box-shadow: none !important; margin: 0 !important;"
@@ -514,9 +512,10 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
         # PDF: типы уязвимостей печатаем обычным текстом, без пунктира
         # (на экране подсказка-ссылка на справочник остаётся).
         ".vuln-link { text-decoration: none !important; }"
-        ".pdf-tail { page-break-inside: avoid !important; break-inside: avoid !important; }"
-        ".pdf-tail-table { margin-bottom: 0 !important; }"
-        ".doc-footer { page-break-inside: avoid !important; break-inside: avoid !important; }"
+        # Футер — в полях листа (@page margin boxes выше): в потоке документа
+        # прячем его, чтобы не дублировался и не создавал отдельную страницу.
+        # Таблица находок остаётся целой — thead повторяется на каждом листе.
+        ".doc-footer { display: none !important; }"
         "</style>"
     )
     if "</head>" in doc:
@@ -526,7 +525,6 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
 
     doc = _strip_toolbar(doc)
     doc = _SCRIPT_RE.sub("", doc)
-    doc = _keep_footer_with_last_row(doc)
     doc = _sanitize_resources(doc)
 
     tmpdir = tempfile.mkdtemp(prefix="curseach_pdf_")
