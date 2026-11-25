@@ -365,6 +365,10 @@ _SPAN_RE = re.compile(r"<span[^>]*>(.*?)</span>", re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
 
 _FOOTER_LEFT_DEFAULT = "Отчёт сформирован автоматически системой DevSecOps Scanner"
+_TYPES_CAPTION_RE = re.compile(
+    r'<div class="types-table-wrap">(\s*)<h3>(.*?)</h3>(\s*<table class="types-table">\s*<thead>\s*)(<tr>.*?</tr>)',
+    re.S,
+)
 
 
 def _class_open_re(tag: str, cls: str) -> re.Pattern:
@@ -445,6 +449,34 @@ def _footer_margin_boxes(doc: str, ctx: dict) -> str:
     )
 
 
+def _repeat_types_captions(doc: str) -> str:
+    """Переносит заголовок блока «По типам…» в thead таблицы типов.
+
+    Chromium повторяет thead на каждом листе, но НЕ повторяет заголовки секций
+    (.section-title / h3) вне таблицы. Когда длинная таблица типов уезжает на
+    новый лист, шапка «ПО ТИПАМ УЯЗВИМОСТЕЙ» оставалась на предыдущем. Кладём
+    её первой строкой thead (colspan на все колонки) — теперь она переносится
+    вместе с «ТИП УРОВЕНЬ КОЛ-ВО ДОЛЯ» на каждый лист. Отдельный h3 убираем,
+    чтобы на первом листе заголовок не дублировался.
+    """
+
+    def _repl(m: re.Match) -> str:
+        cols = m.group(4).count("<th")
+        return (
+            '<div class="types-table-wrap">'
+            + m.group(1)
+            + m.group(3)
+            + '<tr class="types-caption"><th colspan="'
+            + str(cols)
+            + '">'
+            + m.group(2)
+            + "</th></tr>"
+            + m.group(4)
+        )
+
+    return _TYPES_CAPTION_RE.sub(_repl, doc)
+
+
 def html_to_pdf(html_str: str, ctx: dict, base_url: str | None = None) -> bytes:
     """HTML строка страницы отчёта + контекст рендера -> PDF bytes.
 
@@ -516,6 +548,10 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
         # прячем его, чтобы не дублировался и не создавал отдельную страницу.
         # Таблица находок остаётся целой — thead повторяется на каждом листе.
         ".doc-footer { display: none !important; }"
+        # Заголовок блока типов перенесён в thead (повторяется на каждом листе).
+        ".types-table thead tr.types-caption th { background: #f7f8fa !important; color: #666 !important;"
+        " font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;"
+        " text-align: center; border: 1px solid #d0d4d9 !important; padding: 8px 10px; }"
         "</style>"
     )
     if "</head>" in doc:
@@ -525,6 +561,7 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
 
     doc = _strip_toolbar(doc)
     doc = _SCRIPT_RE.sub("", doc)
+    doc = _repeat_types_captions(doc)
     doc = _sanitize_resources(doc)
 
     tmpdir = tempfile.mkdtemp(prefix="curseach_pdf_")

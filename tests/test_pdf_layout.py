@@ -203,3 +203,46 @@ def test_real_full_report_template_layout(render):
     assert "pdf-tail" not in doc
     assert "<thead>" in doc and "<code>/api/3</code>" in doc
     assert doc.count("<div") == doc.count("</div>")
+
+def _types_scan():
+    return {
+        "id": 7,
+        "target_url": "http://target",
+        "scan_date": "2026-11-25T14:43:36",
+        "critical": 1,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "mode": "full",
+        "results": [
+            {
+                "level": "CRITICAL",
+                "type": "Vulnerable Dependency (OSV)",
+                "endpoint": "/api/x",
+                "desc": "d",
+                "details": {},
+            },
+        ],
+    }
+
+
+def test_types_caption_repeats_in_thead(render):
+    from scanner.reporting import build_chart_context
+
+    env = _env()
+    ctx = build_chart_context(_types_scan())
+    doc = render(env.get_template("chart.html").render(**ctx), ctx)
+    cap = '<tr class="types-caption"><th colspan="4">По типам уязвимостей</th></tr>'
+    assert cap in doc
+    assert "<h3>По типам уязвимостей</h3>" not in doc
+    assert doc.index("<thead>") < doc.index(cap) < doc.index("<th>Тип</th>")
+
+
+def test_full_report_types_caption_repeats(render):
+    from scanner.reporting import build_chart_context
+
+    env = _env()
+    ctx = build_chart_context(_types_scan(), include_findings=True)
+    doc = render(env.get_template("report_full.html").render(**ctx), ctx)
+    assert 'class="types-caption"' in doc
+    assert doc.index('<table class="types-table">') < doc.index('class="types-caption"')
