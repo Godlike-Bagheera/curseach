@@ -52,7 +52,7 @@
       <h1>Сравнение сканов</h1>
       <div class="org">DevSecOps Scanner · динамика находок</div>
     </div>
-    <div class="doc-id">А #{{ a.id }} → Б #{{ b.id }}<br>{{ b.scan_date.replace('T', ' ')[:19] }}</div>
+    <div class="doc-id">А #{{ a.id }} → Б #{{ b.id }}<br>{{ b.scan_date_display }}</div>
   </div>
 
   <div class="toolbar">
@@ -70,14 +70,14 @@
     <div class="meta-card">
       <h2>А · базовый скан #{{ a.id }}</h2>
       <div class="target">{{ a.target_url }}</div>
-      <div class="row"><span>Дата</span><span>{{ a.scan_date.replace('T', ' ')[:19] }}</span></div>
+      <div class="row"><span>Дата (МСК)</span><span>{{ a.scan_date_display }}</span></div>
       <div class="row"><span>Оценка</span><span class="score">{{ a.score }}</span></div>
       <div class="row"><span>Крит / Выс / Сред / Низк</span><span>{{ a.critical }} / {{ a.high }} / {{ a.medium }} / {{ a.low }}</span></div>
     </div>
     <div class="meta-card">
       <h2>Б · новый скан #{{ b.id }}</h2>
       <div class="target">{{ b.target_url }}</div>
-      <div class="row"><span>Дата</span><span>{{ b.scan_date.replace('T', ' ')[:19] }}</span></div>
+      <div class="row"><span>Дата (МСК)</span><span>{{ b.scan_date_display }}</span></div>
       <div class="row"><span>Оценка</span><span class="score">{{ b.score }}</span></div>
       <div class="row"><span>Крит / Выс / Сред / Низк</span><span>{{ b.critical }} / {{ b.high }} / {{ b.medium }} / {{ b.low }}</span></div>
     </div>

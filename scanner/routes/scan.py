@@ -207,11 +207,13 @@ async def get_json_report(task_id: str, user: str = Depends(require_admin)):
         raise HTTPException(status_code=404, detail="Task not found")
     if task.status not in ("completed", "failed"):
         raise HTTPException(status_code=400, detail="Scan not finished")
+    scan_dt = datetime.datetime.fromtimestamp(task.finished_at or time.time(), datetime.timezone.utc)
     return JSONResponse(
         {
-            "scan_date": datetime.datetime.fromtimestamp(
-                task.finished_at or time.time(), datetime.timezone.utc
-            ).isoformat(),
+            # Единый JSON-контракт с reporting.scan_json_payload:
+            # scan_date — машинный aware UTC ISO, scan_date_display — МСК для UI.
+            "scan_date": scan_dt.isoformat(),
+            "scan_date_display": format_msk(scan_dt.isoformat()),
             "target": task.target_url,
             "mode": task.mode,
             "selected_checks": task.selected_checks,

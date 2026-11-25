@@ -8,8 +8,17 @@
   try { state = JSON.parse(localStorage.getItem(LS)) || {}; } catch (e) { state = {}; }
   let panel = null, host = null;
 
-  const iso = d => d.toISOString().slice(0, 10);
-  const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n + 1); return d; };
+  // Пресеты считаются по календарным суткам МСК (UTC+3) — как на сервере
+  // (database.query_scans / _filter_scans_by_date). Локальная TZ браузера не участвует:
+  // сдвигаем момент на +3 часа и дальше работаем только UTC-геттерами/сеттерами.
+  const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
+  const mskDay = (d = new Date()) => new Date(d.getTime() + MSK_OFFSET_MS).toISOString().slice(0, 10);
+  const mskDaysAgo = n => {
+    const d = new Date(Date.now() + MSK_OFFSET_MS);
+    // setUTCDate, а не setDate: иначе на границе суток/месяца/года получим off-by-one.
+    d.setUTCDate(d.getUTCDate() - n + 1);
+    return d.toISOString().slice(0, 10);
+  };
   const save = () => localStorage.setItem(LS, JSON.stringify(state));
   const reload = () => { if (typeof window.__curseachHistoryReload === 'function') window.__curseachHistoryReload(); };
 
@@ -37,16 +46,19 @@
     panel = document.createElement('div');
     panel.className = 'hf-panel';
     panel.setAttribute('role', 'group');
-    panel.setAttribute('aria-label', 'Фильтр истории по датам');
+    panel.setAttribute('aria-label', 'Фильтр истории по датам (МСК)');
     panel.innerHTML =
-      '<label>С<input type="date" data-k="from" aria-label="Дата начала"></label>' +
-      '<label>По<input type="date" data-k="to" aria-label="Дата конца"></label>' +
+      '<label>С<input type="date" data-k="from" aria-label="Дата начала (МСК)"' +
+      ' title="Дата начала периода по московскому времени (UTC+3)"></label>' +
+      '<label>По<input type="date" data-k="to" aria-label="Дата конца (МСК)"' +
+      ' title="Дата конца периода по московскому времени (UTC+3), включительно"></label>' +
       '<span class="hf-chips">' +
-      '<button type="button" class="hf-chip" data-d="1">Сегодня</button>' +
-      '<button type="button" class="hf-chip" data-d="7">7 дней</button>' +
-      '<button type="button" class="hf-chip" data-d="30">30 дней</button>' +
-      '<button type="button" class="hf-chip" data-d="0">Всё время</button>' +
-      '</span><button type="button" class="hf-reset">Сброс</button>' +
+      '<button type="button" class="hf-chip" data-d="1" title="Текущие сутки по Москве (UTC+3)">Сегодня</button>' +
+      '<button type="button" class="hf-chip" data-d="7" title="Последние 7 суток МСК, включая сегодня">7 дней</button>' +
+      '<button type="button" class="hf-chip" data-d="30" title="Последние 30 суток МСК, включая сегодня">30 дней</button>' +
+      '<button type="button" class="hf-chip" data-d="0" title="Без ограничения по датам">Всё время</button>' +
+      '</span><button type="button" class="hf-reset" title="Сбросить фильтр дат">Сброс</button>' +
+      '<span class="hf-tz" title="Даты и пресеты считаются по московскому времени">МСК (UTC+3)</span>' +
       '<span class="hf-count"></span>';
     h.parentNode.insertBefore(panel, h);
     panel.querySelectorAll('input[type=date]').forEach(i => {
@@ -59,7 +71,7 @@
     });
     panel.querySelectorAll('.hf-chip').forEach(c => c.addEventListener('click', () => {
       const n = +c.dataset.d;
-      setRange(n ? iso(daysAgo(n)) : null, n ? iso(new Date()) : null, c);
+      setRange(n ? mskDaysAgo(n) : null, n ? mskDay() : null, c);
     }));
     panel.querySelector('.hf-reset').addEventListener('click', () => setRange(null, null, null));
     exportHint();

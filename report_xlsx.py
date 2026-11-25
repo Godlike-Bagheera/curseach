@@ -105,7 +105,7 @@ def generate_xlsx(
 
     ws.merge_cells("A2:F2")
     cell_a2 = ws["A2"]
-    cell_a2.value = f"Сформирован: {scan_str}   |   Система: DevSecOps Scanner"
+    cell_a2.value = f"Сформирован: {scan_str} (МСК)   |   Система: DevSecOps Scanner"
     cell_a2.font = Font(name="Calibri", size=10, color="666666")
     cell_a2.alignment = Alignment(horizontal="left", vertical="center")
     ws.row_dimensions[2].height = 18
@@ -116,7 +116,7 @@ def generate_xlsx(
     meta_rows = [
         ("Целевой ресурс", target_url),
         ("Режим сканирования", _MODE_TITLES.get(mode, "Полная проверка")),
-        ("Дата и время", scan_str),
+        ("Дата и время (МСК)", scan_str),
         ("Оценка безопасности", f"{score} / 100"),
     ]
     for key, value in meta_rows:
@@ -284,6 +284,23 @@ def generate_xlsx(
     return buf.getvalue()
 
 
+def _now_msk() -> str:
+    """Текущее время в МСК строкой 'YYYY-MM-DD HH:MM:SS' (шапка сводного отчёта)."""
+    return _display_msk(datetime.datetime.now(datetime.timezone.utc).isoformat())
+
+
+def _display_msk(value) -> str:
+    """scan_date -> строка МСК: машинный ISO (с 'T') конвертируем, готовую строку — как есть.
+
+    Ленивый импорт: scanner.reporting импортирует report_xlsx на уровне модуля,
+    поэтому наверху его брать нельзя (цикл).
+    """
+    from scanner.reporting import format_msk
+
+    text = str(value or "")
+    return format_msk(text) if "T" in text else text[:19]
+
+
 def generate_history_xlsx(scans: list[dict[str, Any]]) -> bytes | None:
     """
     Сводный XLSX по всей истории сканирований.
@@ -322,9 +339,7 @@ def generate_history_xlsx(scans: list[dict[str, Any]]) -> bytes | None:
 
     ws.merge_cells("A2:I2")
     ws["A2"].value = (
-        f"Всего записей: {len(scans)}   |   "
-        f"Система: DevSecOps Scanner   |   "
-        f"Сформирован: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"Всего записей: {len(scans)}   |   Система: DevSecOps Scanner   |   Сформирован: {_now_msk()} (МСК)"
     )
     ws["A2"].font = Font(name="Calibri", size=10, color="666666")
     ws["A2"].alignment = left
@@ -335,7 +350,7 @@ def generate_history_xlsx(scans: list[dict[str, Any]]) -> bytes | None:
     # ---- Шапка таблицы ----
     headers = [
         "ID",
-        "Дата",
+        "Дата (МСК)",
         "Цель",
         "Оценка",
         "Критично",
@@ -367,7 +382,8 @@ def generate_history_xlsx(scans: list[dict[str, Any]]) -> bytes | None:
             total = crit + high + med + low
             score = calculate_score(crit, high, med, low)
 
-            date_str = (s.get("scan_date") or "").replace("T", " ")[:19]
+            # Строка может прийти как машинный ISO (UTC), так и уже готовой строкой МСК.
+            date_str = _display_msk(s.get("scan_date"))
             ws.append(
                 [
                     s.get("id", ""),

@@ -363,7 +363,7 @@
             </div>
             <div class="doc-header-right">
                 <div class="doc-id">Документ № {{ scan_date[:10].replace('-', '') }}-01</div>
-                <div class="doc-date">Дата формирования: {{ scan_date }}</div>
+                <div class="doc-date">Дата формирования (МСК): {{ scan_date }}</div>
             </div>
         </div>
 
@@ -378,7 +378,7 @@
                     <td class="value">{{ mode_ru }}</td>
                 </tr>
                 <tr>
-                    <td class="key">Дата и время</td>
+                    <td class="key">Дата и время (МСК)</td>
                     <td class="value">{{ scan_date }}</td>
                 </tr>
                 {% if endpoints_count or requests_max %}

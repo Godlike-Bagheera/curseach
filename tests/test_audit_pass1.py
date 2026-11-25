@@ -28,8 +28,12 @@ def authed_client():
 def test_profile_form_fields_roundtrip():
     database.init_db()
     pid = database.save_auth_profile(
-        "audit-form-prof", auth_type="form", username="u", password="p",
-        form_fields={"csrf": "abc"}, login_path="/login",
+        "audit-form-prof",
+        auth_type="form",
+        username="u",
+        password="p",
+        form_fields={"csrf": "abc"},
+        login_path="/login",
     )
     try:
         p = database.get_auth_profile(pid)
@@ -82,9 +86,7 @@ def test_scheduler_sets_task_loop(monkeypatch):
 
 
 def test_schedule_custom_mode_rejected(authed_client):
-    r = authed_client.post(
-        "/schedules", json={"target_url": "http://127.0.0.1:8000", "mode": "custom", "interval": 30}
-    )
+    r = authed_client.post("/schedules", json={"target_url": "http://127.0.0.1:8000", "mode": "custom", "interval": 30})
     assert r.status_code == 400
 
 
@@ -97,8 +99,15 @@ def test_schedule_bad_webhook_rejected(authed_client):
 
 def test_history_exports_use_real_mode():
     scan = {
-        "id": 1, "target_url": "http://t", "scan_date": "2026-01-01T00:00:00+00:00",
-        "critical": 0, "high": 0, "medium": 0, "low": 0, "results": [], "mode": "quick",
+        "id": 1,
+        "target_url": "http://t",
+        "scan_date": "2026-01-01T00:00:00+00:00",
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "results": [],
+        "mode": "quick",
     }
     assert json.loads(scan_json_payload(scan))["mode"] == "quick"
     assert "БЫСТРАЯ ПРОВЕРКА" in scan_csv_bytes(scan).decode("utf-8-sig")

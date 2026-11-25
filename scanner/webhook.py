@@ -4,6 +4,9 @@ POST JSON-сводки на webhook_url цели. Таймаут + 1 повто�
 ошибка доставки НИКОГДА не валит скан — результаты уже сохранены в историю.
 """
 
+import datetime
+import time
+
 import httpx
 
 WEBHOOK_TIMEOUT = 5.0
@@ -11,9 +14,18 @@ WEBHOOK_RETRIES = 1  # одна повторная попытка после н�
 
 
 def build_summary(task, status: str | None = None) -> dict:
-    """Короткая JSON-сводка для webhook (без находок и секретов)."""
+    """Короткая JSON-сводка для webhook (без находок и секретов).
+
+    Время — тот же контракт, что и в JSON-отчётах: scan_date = aware UTC ISO
+    (машинный), scan_date_display = строка МСК (отображение).
+    """
+    from .reporting import format_msk
+
+    finished = datetime.datetime.fromtimestamp(task.finished_at or time.time(), datetime.timezone.utc).isoformat()
     return {
         "event": "scan.completed",
+        "scan_date": finished,
+        "scan_date_display": format_msk(finished),
         "task_id": task.id,
         "target_url": task.target_url,
         "mode": task.mode,

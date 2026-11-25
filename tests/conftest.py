@@ -22,3 +22,17 @@ def _reset_auth_state():
     yield
     security._login_attempts.clear()
     security.sessions.clear()
+
+
+@pytest.fixture(autouse=True)
+def _ensure_db_schema():
+    """Схема тестовой БД не должна зависеть от порядка запуска файлов.
+
+    Раньше таблицы создавал первый попавшийся тест с init_db(): при запуске
+    подмножества файлов часть тестов падала на 'no such table: scans'.
+    init_db() идемпотентен (CREATE TABLE IF NOT EXISTS).
+    """
+    import database
+
+    database.init_db()
+    yield

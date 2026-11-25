@@ -161,6 +161,7 @@ def save_scan(
         )
         return int(c.lastrowid or 0)
 
+
 def get_all_scans(limit: int = HISTORY_LIMIT_DEFAULT) -> list[dict]:
     with _db() as conn:
         c = conn.cursor()
@@ -307,14 +308,20 @@ def query_scans(date_from=None, date_to=None, target=None, limit=50, offset=0):
     """
     where = []
     params = []
+    # Границы суток МСК переводим в UTC и пишем БЕЗ offset: в БД соседствуют
+    # aware-ISO ('...+00:00', save_scan) и legacy-naive строки, а SQL сравнивает
+    # TEXT лексикографически. Naive-граница корректна для обеих форм:
+    #   '...T21:00:00'       == границе -> включается нижней границей;
+    #   '...T21:00:00+00:00' >  границы -> включается нижней границей;
+    #   обе формы на верхней границе НЕ < границы -> исключаются (полуинтервал).
+    # Индекс idx_scans_scan_date продолжает работать: сравнение остаётся по TEXT.
     if date_from:
-        # 00:00 МСК = 21:00 UTC пред.дня; БД хранит aware UTC ISO, поэтому
-        # передаём в SQL полные UTC-datetime-строки, а не только YYYY-MM-DD.
+        # 00:00 МСК = 21:00 UTC пред.дня.
         try:
             dt = datetime.datetime.fromisoformat(date_from)
         except ValueError:
             return [], 0
-        from_utc = (dt - datetime.timedelta(hours=3)).replace(tzinfo=datetime.timezone.utc)
+        from_utc = (dt - datetime.timedelta(hours=3)).replace(tzinfo=None)
         where.append("scan_date >= ?")
         params.append(from_utc.isoformat())
     if date_to:
@@ -323,9 +330,7 @@ def query_scans(date_from=None, date_to=None, target=None, limit=50, offset=0):
         except ValueError:
             return [], 0
         # Эксклюзивно: начало следующего дня МСК = 21:00 UTC текущего дня.
-        next_day_utc = (dt - datetime.timedelta(hours=3) + datetime.timedelta(days=1)).replace(
-            tzinfo=datetime.timezone.utc
-        )
+        next_day_utc = (dt - datetime.timedelta(hours=3) + datetime.timedelta(days=1)).replace(tzinfo=None)
         where.append("scan_date < ?")
         params.append(next_day_utc.isoformat())
     if target:
@@ -555,7 +560,11 @@ def get_trend(project_id=None, limit: int = 200) -> list[dict]:
     with _db() as conn:
         c = conn.cursor()
         c.execute(
-            f"SELECT substr(scan_date, 1, 10) AS d, SUM(critical), SUM(high), SUM(medium), SUM(low) "
+            # Суточная группировка — по дню МСК (UTC+3), а не по UTC-дню:
+            # скан в 23:30 МСК (20:30 UTC) иначе попадал бы не в свой день тренда.
+            # SQLite date() одинаково понимает aware-ISO ('+00:00'), 'Z',
+            # legacy-naive и строки с микросекундами.
+            f"SELECT date(scan_date, '+3 hours') AS d, SUM(critical), SUM(high), SUM(medium), SUM(low) "
             f"FROM scans {where} GROUP BY d ORDER BY d DESC LIMIT ?",
             params + [int(limit)],
         )

@@ -448,7 +448,7 @@
             </div>
             <div class="doc-header-right">
                 <div class="doc-id">Документ № {{ scan_date[:10].replace('-', '') }}-{{ scan_id }}</div>
-                <div class="doc-date">Дата формирования: {{ scan_date }}</div>
+                <div class="doc-date">Дата формирования (МСК): {{ scan_date }}</div>
             </div>
         </div>
 
@@ -459,7 +459,7 @@
                     <td class="value">{{ target_url }}</td>
                 </tr>
                 <tr>
-                    <td class="key">Дата сканирования</td>
+                    <td class="key">Дата сканирования (МСК)</td>
                     <td class="value">{{ scan_date }}</td>
                 </tr>
                 <tr>

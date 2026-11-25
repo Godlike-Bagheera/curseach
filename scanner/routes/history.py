@@ -22,6 +22,7 @@ from ..reporting import (
     results_to_sarif,
     scan_csv_bytes,
     scan_json_payload,
+    utc_iso,
 )
 from ..security import require_admin, safe_host_for_filename
 from . import common
@@ -74,7 +75,7 @@ async def export_history_xlsx(
 
     scans = await run_in_threadpool(database.get_all_scans)
     scans = _filter_scans_by_date(scans, date_from, date_to)
-    # Фильтр выше работает по датам в БД (UTC), а в таблицу печатаем время проверки в МСК.
+    # Фильтр выше работает по МСК-датам, и в таблицу печатаем время проверки в МСК.
     content = report_xlsx.generate_history_xlsx([{**s, "scan_date": format_msk(s["scan_date"])} for s in scans])
     if content is None:
         raise HTTPException(
@@ -110,7 +111,8 @@ def _build_diff(sa: dict, sb: dict) -> dict:
         return {
             "id": s["id"],
             "target_url": s["target_url"],
-            "scan_date": format_msk(s["scan_date"]),
+            "scan_date": utc_iso(s["scan_date"]),
+            "scan_date_display": format_msk(s["scan_date"]),
             "critical": s["critical"],
             "high": s["high"],
             "medium": s["medium"],
@@ -164,15 +166,20 @@ async def get_history(
 ):
     """История сканов с серверной фильтрацией по дате/цели и пагинацией."""
     items, total = await run_in_threadpool(database.query_scans, date_from, date_to, target, limit, offset)
-    # Хранение остаётся UTC, отображение — МСК: таблица истории и график берут дату отсюда.
-    items = [{**s, "scan_date": format_msk(s["scan_date"])} for s in items]
+    # Единый JSON-контракт: scan_date — машинный aware UTC ISO,
+    # scan_date_display — строка МСК для таблицы истории и графика.
+    items = [
+        {**s, "scan_date": utc_iso(s["scan_date"]), "scan_date_display": format_msk(s["scan_date"])} for s in items
+    ]
     return JSONResponse(items, headers={"X-Total-Count": str(total)})
 
 
 @router.get("/history/{scan_id}")
 async def get_history_item(scan_id: int, user: str = Depends(require_admin)):
     scan = await _get_scan_or_404(scan_id)
-    return JSONResponse({**scan, "scan_date": format_msk(scan["scan_date"])})
+    return JSONResponse(
+        {**scan, "scan_date": utc_iso(scan["scan_date"]), "scan_date_display": format_msk(scan["scan_date"])}
+    )
 
 
 @router.delete("/history/{scan_id}")

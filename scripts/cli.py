@@ -9,10 +9,10 @@
 
 import argparse
 import asyncio
+import datetime
 import json
 import os
 import sys
-import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -61,7 +61,7 @@ def main(argv=None) -> int:
     for lvl in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
         print(f"  {lvl}: {sum(1 for f in findings if f.get('level') == lvl)}")
     if args.out:
-        sarif = results_to_sarif(args.url, time.strftime("%Y-%m-%dT%H:%M:%S"), findings)
+        sarif = results_to_sarif(args.url, datetime.datetime.now(datetime.timezone.utc).isoformat(), findings)
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(sarif, f, ensure_ascii=False, indent=2)
     if args.json:

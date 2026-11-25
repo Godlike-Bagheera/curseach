@@ -44,7 +44,7 @@ def test_export_xlsx_with_range():
 
 def test_filter_scans_by_date_msk_rollover():
     """Скан в 22:30 UTC (01:30 МСК следующего дня) попадает в фильтр по МСК-дате следующего дня."""
-    from scanner.reporting import format_msk
+
     scans = [
         {"scan_date": "2026-11-25T22:30:00+00:00"},  # 01:30 МСК 2026-11-26
         {"scan_date": "2026-11-25T20:00:00+00:00"},  # 23:00 МСК 2026-11-25

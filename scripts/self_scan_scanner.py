@@ -9,6 +9,7 @@ scanner-приложение как гость и падаем при любой
 
 import argparse
 import asyncio
+import datetime
 import json
 import os
 import socket
@@ -77,7 +78,7 @@ def main() -> int:
             return 1
         task = ScanTask(url, mode=args.mode)
         asyncio.run(scan_engine(task))
-        sarif = results_to_sarif(url, time.strftime("%Y-%m-%dT%H:%M:%S"), task.scan_results)
+        sarif = results_to_sarif(url, datetime.datetime.now(datetime.timezone.utc).isoformat(), task.scan_results)
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(sarif, f, ensure_ascii=False, indent=2)
         critical = [r for r in task.scan_results if r.get("level") == "CRITICAL"]

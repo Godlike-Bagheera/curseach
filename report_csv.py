@@ -59,7 +59,7 @@ def generate_csv(
     # ---- Метаданные ----
     writer.writerow(["Целевой ресурс", target_url])
     writer.writerow(["Режим сканирования", _MODE_TITLES.get(mode, "Полная проверка")])
-    writer.writerow(["Дата и время", scan_str])
+    writer.writerow(["Дата и время (МСК)", scan_str])
     writer.writerow(["Оценка безопасности", f"{score} / 100"])
     writer.writerow([])
 

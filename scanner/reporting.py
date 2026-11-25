@@ -9,8 +9,10 @@ import hashlib
 import io
 import json as _json
 import os
+import re
 import zipfile
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 
 import report_csv
 import report_xlsx
@@ -24,15 +26,40 @@ from .config import LEVEL_RANK, MODE_TITLES_REPORT, PUBLIC_URL, VERSION, calcula
 _MSK = timezone(timedelta(hours=3), "MSK")
 
 
-def format_msk(value) -> str:
-    """ISO (aware или naive=UTC) -> 'YYYY-MM-DD HH:MM:SS' по Москве."""
+def _parse_iso(value) -> datetime | None:
+    """ISO-строка -> aware datetime. Naive считаем UTC, суффикс 'Z' допустим.
+
+    None — значение не разобрали. Микросекунды (datetime.isoformat) и legacy-naive
+    строки из БД поддерживаются; дата без времени трактуется как полночь UTC.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text[-1] in "Zz":
+        text = text[:-1] + "+00:00"
     try:
-        dt = datetime.fromisoformat(str(value))
-    except (TypeError, ValueError):
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+def format_msk(value) -> str:
+    """ISO (aware, naive=UTC, 'Z') -> 'YYYY-MM-DD HH:MM:SS' по Москве (слой отображения)."""
+    dt = _parse_iso(value)
+    if dt is None:
         return str(value or "")
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(_MSK).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def utc_iso(value) -> str:
+    """ISO (aware, naive=UTC, 'Z') -> нормализованный aware UTC ISO ('+00:00').
+
+    Единый машинный формат scan_date во всех JSON-ответах и SARIF.
+    Пустая строка, если значение не разобрали.
+    """
+    dt = _parse_iso(value)
+    return dt.astimezone(timezone.utc).isoformat() if dt is not None else ""
 
 
 def msk_stamp(value=None) -> str:
@@ -182,7 +209,10 @@ def inline_chartjs(html: str) -> str:
 def scan_json_payload(scan: dict) -> bytes:
     score = calculate_score(scan["critical"], scan["high"], scan["medium"], scan["low"])
     payload = {
-        "scan_date": format_msk(scan["scan_date"]),
+        # Машинный формат — aware UTC ISO (как /report/json/{task_id});
+        # человекочитаемая дата МСК — отдельным полем, чтобы не ломать CI-потребителей.
+        "scan_date": utc_iso(scan["scan_date"]),
+        "scan_date_display": format_msk(scan["scan_date"]),
         "target": scan["target_url"],
         "mode": scan.get("mode") or "full",
         "metrics": {
@@ -280,9 +310,25 @@ def _evidence_text(f: dict) -> str:
     return "\n".join(parts)
 
 
+def _sarif_automation_id(target_url: str) -> str:
+    """Стабильный automationDetails.id: категория прогона не зависит от времени.
+
+    GitHub Code Scanning использует automationDetails.id как «категорию»: если id
+    меняется от скана к скану (была МСК-стампа, до неё — сырой ISO), каждый аплоад
+    создаёт новую категорию и алерты прошлых прогонов не дедуплицируются с новыми.
+    Поэтому id строится только из цели (host:port), а время прогона уходит
+    в invocations[].endTimeUtc (UTC по спеке) + properties.scanDateMsk (отображение).
+    """
+    netloc = urlsplit(str(target_url or "")).netloc or str(target_url or "")
+    host = netloc.rsplit("@", 1)[-1].lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", host).strip("-")
+    return f"devsecops/{slug or 'target'}"
+
+
 def results_to_sarif(target_url: str, scan_date: str, findings: list[dict]) -> dict:
     """SARIF 2.1.0: evidence редактируется, helpUri ведёт на /vulns,
-    partialFingerprints дают стабильность алертов между сканами."""
+    partialFingerprints и стабильный automationDetails.id дают стабильность
+    алертов между сканами. Время прогона: endTimeUtc (UTC) + scanDateMsk (МСК)."""
     from checks.base import redact_evidence
 
     from .vuln_guide import slugify
@@ -342,7 +388,17 @@ def results_to_sarif(target_url: str, scan_date: str, findings: list[dict]) -> d
                 "tool": {"driver": {"name": "DevSecOps Scanner", "version": VERSION, "rules": list(rules.values())}},
                 "columnKind": "utf16CodeUnits",
                 "results": results,
-                "automationDetails": {"id": f"devsecops/{msk_stamp(scan_date)}"},
+                "automationDetails": {"id": _sarif_automation_id(target_url)},
+                "invocations": [
+                    {
+                        "executionSuccessful": True,
+                        # SARIF требует UTC-время с суффиксом Z; МСК — только в properties.
+                        "endTimeUtc": (utc_iso(scan_date) or datetime.now(timezone.utc).isoformat()).replace(
+                            "+00:00", "Z"
+                        ),
+                        "properties": {"scanDateMsk": format_msk(scan_date)},
+                    }
+                ],
             }
         ],
     }

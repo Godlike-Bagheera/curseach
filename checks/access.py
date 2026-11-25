@@ -243,7 +243,7 @@ async def check_cors(ctx: ScanContext, endpoints: list[str] | None = None) -> li
     """
     findings: list = []
     urls_to_test: list[str] = [ctx.target_url]
-    for ep in (endpoints or []):
+    for ep in endpoints or []:
         if len(urls_to_test) >= 5:
             break
         if "{" in ep or "}" in ep:

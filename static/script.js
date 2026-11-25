@@ -504,6 +504,14 @@ async function cancelScan() {
     }
 }
 
+// Единый JSON-контракт истории/отчётов: scan_date — машинный aware UTC ISO,
+// scan_date_display — готовая строка МСК (UTC+3). Показываем всегда МСК;
+// fallback на scan_date нужен только для старых ответов без display-поля.
+function scanDateMsk(s) {
+    const raw = (s && (s.scan_date_display || s.scan_date)) || '';
+    return String(raw).replace('T', ' ').slice(0, 19);
+}
+
 // Имя файла JSON-отчёта: report_<host>_<YYYY-MM-DD>.json (как у CSV/XLSX).
 function jsonReportFilename(data) {
     try {
@@ -511,11 +519,17 @@ function jsonReportFilename(data) {
         let host;
         try { host = new URL(data.target).host; } catch (e) { host = null; }
         if (!host) return 'ci_cd_report.json';
-        const date = (data.scan_date ? new Date(data.scan_date) : new Date());
-        if (isNaN(date.getTime())) return 'ci_cd_report.json';
-        // Дата в имени файла — МСК (UTC+3), как у CSV/XLSX: фиксированный сдвиг
-        // и UTC-срез, чтобы имя не зависело от часового пояса браузера.
-        const datePart = new Date(date.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        // Дата в имени файла — МСК (UTC+3), как у CSV/XLSX. Сервер уже отдаёт
+        // scan_date_display в МСК; иначе считаем фиксированным сдвигом и UTC-срезом,
+        // чтобы имя не зависело от часового пояса браузера.
+        let datePart;
+        if (data.scan_date_display) {
+            datePart = String(data.scan_date_display).slice(0, 10);
+        } else {
+            const date = (data.scan_date ? new Date(data.scan_date) : new Date());
+            if (isNaN(date.getTime())) return 'ci_cd_report.json';
+            datePart = new Date(date.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        }
         const hostPart = host.replace(/[^a-zA-Z0-9]+/g, '_');
         return `report_${hostPart}_${datePart}.json`;
     } catch (e) {
@@ -579,10 +593,7 @@ function renderHistoryChart(scans) {
 
     const ordered = [...scans].reverse().slice(-20);
 
-    const labels = ordered.map(s => {
-        const raw = s.scan_date.replace('T', ' ');
-        return raw.slice(5, 16);
-    });
+    const labels = ordered.map(s => scanDateMsk(s).slice(5, 16));
 
     const crit  = ordered.map(s => s.critical ?? 0);
     const high  = ordered.map(s => s.high ?? 0);
@@ -763,7 +774,7 @@ async function loadHistory(page) {
                     el('td', { className: 'col-diff diff-cell' }, [el('input', { type: 'checkbox', className: 'diff-check',
                         dataset: { id: String(s.id), target: s.target_url }, title: 'Выбрать для сравнения' })]),
                     el('td', { className: 'col-id', text: String(s.id) }),
-                    el('td', { className: 'col-date', text: s.scan_date.replace('T', ' ').slice(0, 19) }),
+                    el('td', { className: 'col-date', text: scanDateMsk(s), title: 'Время сканирования (МСК, UTC+3)' }),
                     el('td', { className: 'col-target url-cell', text: s.target_url, title: s.target_url }),
                     el('td', { className: 'col-sev' }, [sevBadge('badge-crit', s.critical)]),
                     el('td', { className: 'col-sev' }, [sevBadge('badge-high', s.high)]),

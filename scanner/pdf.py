@@ -83,6 +83,7 @@ def _in_running_loop() -> bool:
 
 # ---------- Санитизация ресурсов (anti-SSRF/LFI) ----------
 
+
 def _static_path(url: str) -> str | None:
     """Локальный путь, если url ведёт в /static/ сканера; иначе None."""
     u = (url or "").strip()
@@ -94,9 +95,9 @@ def _static_path(url: str) -> str | None:
             return local if os.path.isfile(local) else None
         return None
     if u.startswith("/static/"):
-        rel = u[len("/static/"):]
+        rel = u[len("/static/") :]
     elif u.startswith("static/"):
-        rel = u[len("static/"):]
+        rel = u[len("static/") :]
     else:
         return None
     rel = rel.split("?")[0].split("#")[0].lstrip("/")
@@ -122,13 +123,14 @@ def _static_data_uri(url: str) -> str | None:
 
 def _sanitize_css_urls(css: str) -> str:
     def _repl(m: re.Match) -> str:
-        raw = m.group(1).strip().strip('"\'')
+        raw = m.group(1).strip().strip("\"'")
         if raw.startswith("data:"):
             return m.group(0)
         data = _static_data_uri(raw)
         if data is None:
             return "url(data:,)"
         return f"url({data})"
+
     return re.sub(r"url\(([^)]+)\)", _repl, css)
 
 
@@ -150,7 +152,7 @@ def _sanitize_resources(html_str: str) -> str:
         if path is None:
             return ""
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 content = f.read()
         except Exception:
             return ""
@@ -504,6 +506,7 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
         if m:
             try:
                 import json as _json
+
                 payload = _json.loads(m.group(1))
                 critical = int(payload.get("critical", 0))
                 high = int(payload.get("high", 0))
