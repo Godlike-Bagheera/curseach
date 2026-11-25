@@ -366,13 +366,12 @@ _FINDINGS_TABLE_RE = re.compile(r'<table class="findings-table">.*?</table>', re
 
 
 def _keep_footer_with_last_row(doc: str) -> str:
-    """Склеивает футер с последней находкой в общий неразрывный <tbody>.
+    """Гарантированно держит футер вместе с последней находкой.
 
-    Chromium НЕ умеет break-before/break-after: avoid, зато умеет
-    break-inside: avoid. Переносим футер в таблицу находок последней
-    строкой и оборачиваем «последняя находка + футер» в один <tbody>:
-    если они не влезают в остаток листа — переносятся вместе, и футер
-    никогда не остаётся один на чистой странице.
+    Chromium соблюдает break-inside: avoid только на блочных элементах
+    (tbody/группы строк он рвёт). Последнюю находку и футер выносим в один
+    блочный <div class="pdf-tail"> с break-inside: avoid: на новый лист они
+    уезжают только вместе, футер никогда не остаётся один.
     """
     fm = _FOOTER_RE.search(doc)
     if not fm:
@@ -388,20 +387,25 @@ def _keep_footer_with_last_row(doc: str) -> str:
     if tb_open == -1 or tb_close == -1:
         return doc
     body = table[tb_open + len("<tbody>"):tb_close]
-    last_tr = body.rfind("<tr>")
-    if last_tr == -1:
+    rows = re.findall(r"<tr>.*?</tr>", body, re.S)
+    if not rows:
         return doc
-    even = " pdf-even" if body.count("<tr>") % 2 == 0 else ""
-    colspan = max(1, len(re.findall(r"<th[\s>]", table)))
-    new_body = (
-        body[:last_tr]
-        + '</tbody><tbody class="pdf-keep-end' + even + '">'
-        + body[last_tr:]
-        + '<tr class="pdf-footer-row"><td colspan="' + str(colspan) + '">'
-        + footer_html + "</td></tr>"
+    cols = ""
+    thead_m = re.search(r"<thead>.*?</thead>", table, re.S)
+    if thead_m:
+        for th in re.findall(r"<th\b[^>]*>", thead_m.group(0)):
+            w = re.search(r"width:\s*([\d.]+px)", th)
+            cols += f'<col style="width:{w.group(1)}">' if w else "<col>"
+    new_table = table[:tb_open + len("<tbody>")] + "".join(rows[:-1]) + table[tb_close:]
+    tail = (
+        '<div class="pdf-tail">'
+        '<table class="findings-table pdf-tail-table">'
+        + (f"<colgroup>{cols}</colgroup>" if cols else "")
+        + "<tbody>" + rows[-1] + "</tbody></table>"
+        + footer_html
+        + "</div>"
     )
-    new_table = table[:tb_open + len("<tbody>")] + new_body + table[tb_close:]
-    return without[:tm.start()] + new_table + without[tm.end():]
+    return without[:tm.start()] + new_table + tail + without[tm.end():]
 
 
 def html_to_pdf(html_str: str, ctx: dict, base_url: str | None = None) -> bytes:
@@ -469,12 +473,8 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
         # PDF: типы уязвимостей печатаем обычным текстом, без пунктира
         # (на экране подсказка-ссылка на справочник остаётся).
         ".vuln-link { text-decoration: none !important; }"
-        # Футер склеен с последней находкой в общий неразрывный <tbody>
-        # (Chromium не умеет break-before: avoid, зато умеет break-inside).
-        ".pdf-keep-end { page-break-inside: avoid !important; break-inside: avoid !important; }"
-        ".pdf-footer-row > td { border: none !important; padding: 0 !important;"
-        " background: #fff !important; }"
-        ".pdf-keep-end.pdf-even > tr:first-child > td { background: #f7f8fa !important; }"
+        ".pdf-tail { page-break-inside: avoid !important; break-inside: avoid !important; }"
+        ".pdf-tail-table { margin-bottom: 0 !important; }"
         ".doc-footer { page-break-inside: avoid !important; break-inside: avoid !important; }"
         "</style>"
     )
