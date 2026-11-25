@@ -342,7 +342,7 @@ def results_to_sarif(target_url: str, scan_date: str, findings: list[dict]) -> d
                 "tool": {"driver": {"name": "DevSecOps Scanner", "version": VERSION, "rules": list(rules.values())}},
                 "columnKind": "utf16CodeUnits",
                 "results": results,
-                "automationDetails": {"id": f"devsecops/{scan_date}"},
+                "automationDetails": {"id": f"devsecops/{msk_stamp(scan_date)}"},
             }
         ],
     }

@@ -35,3 +35,5 @@ def test_sarif_column_kind_and_enrichment():
     uri = res["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
     assert uri == "api/users/user_id" and "://" not in uri
     assert res["properties"]["targetUrl"] == "http://t"
+    # automationDetails.id — в МСК: scan_date="2026-01-01" (naive UTC) -> 2026-01-01_03-00 МСК
+    assert run["automationDetails"]["id"] == "devsecops/2026-01-01_03-00"

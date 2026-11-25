@@ -40,3 +40,18 @@ def test_export_xlsx_with_range():
     assert ok.headers["content-type"].startswith("application/vnd.openxmlformats")
     empty = client.get("/history/export.xlsx?from=2999-01-01")
     assert empty.status_code == 200
+
+
+def test_filter_scans_by_date_msk_rollover():
+    """Скан в 22:30 UTC (01:30 МСК следующего дня) попадает в фильтр по МСК-дате следующего дня."""
+    from scanner.reporting import format_msk
+    scans = [
+        {"scan_date": "2026-11-25T22:30:00+00:00"},  # 01:30 МСК 2026-11-26
+        {"scan_date": "2026-11-25T20:00:00+00:00"},  # 23:00 МСК 2026-11-25
+    ]
+    # Фильтр по 2026-11-26 должен вернуть только первый скан (МСК-дата = 2026-11-26)
+    assert len(_filter_scans_by_date(scans, "2026-11-26", "2026-11-26")) == 1
+    # Фильтр по 2026-11-25 должен вернуть только второй скан (МСК-дата = 2026-11-25)
+    assert len(_filter_scans_by_date(scans, "2026-11-25", "2026-11-25")) == 1
+    # Фильтр по 2026-11-25 to 2026-11-26 должен вернуть оба
+    assert len(_filter_scans_by_date(scans, "2026-11-25", "2026-11-26")) == 2

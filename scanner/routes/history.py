@@ -41,12 +41,16 @@ async def _get_scan_or_404(scan_id: int) -> dict:
 # ВАЖНО: /history/export.xlsx объявлен ДО /history/{scan_id},
 # иначе "export.xlsx" парсился бы как scan_id (как в исходном web_app.py).
 def _filter_scans_by_date(scans: list, date_from: str | None, date_to: str | None) -> list:
-    """Фильтр сканов по дате (YYYY-MM-DD, включительно). Пустые границы — без фильтра."""
+    """Фильтр сканов по дате (YYYY-MM-DD, МСК). Пустые границы — без фильтра.
+
+    Время в БД — aware UTC ISO; здесь конвертируем в МСК через format_msk()
+    и сравниваем только дату (первые 10 символов).
+    """
     if not date_from and not date_to:
         return scans
     out = []
     for s in scans:
-        d = (s.get("scan_date") or "")[:10]
+        d = format_msk(s.get("scan_date") or "")[:10]
         if date_from and d < date_from:
             continue
         if date_to and d > date_to:

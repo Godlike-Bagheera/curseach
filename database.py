@@ -300,18 +300,34 @@ def delete_all_scans() -> int:
 
 
 def query_scans(date_from=None, date_to=None, target=None, limit=50, offset=0):
-    """Серверная фильтрация истории по дате (YYYY-MM-DD) и цели + пагинация.
+    """Серверная фильтрация истории по дате (YYYY-MM-DD, МСК) и цели + пагинация.
 
+    Границы дат — в МСК (UTC+3): `2026-11-26` покрывает все сканы с 00:00 по 23:59 МСК.
     Возвращает (items, total): items — страница записей, total — всего под фильтром.
     """
     where = []
     params = []
     if date_from:
-        where.append("substr(scan_date, 1, 10) >= ?")
-        params.append(date_from)
+        # 00:00 МСК = 21:00 UTC пред.дня; БД хранит aware UTC ISO, поэтому
+        # передаём в SQL полные UTC-datetime-строки, а не только YYYY-MM-DD.
+        try:
+            dt = datetime.datetime.fromisoformat(date_from)
+        except ValueError:
+            return [], 0
+        from_utc = (dt - datetime.timedelta(hours=3)).replace(tzinfo=datetime.timezone.utc)
+        where.append("scan_date >= ?")
+        params.append(from_utc.isoformat())
     if date_to:
-        where.append("substr(scan_date, 1, 10) <= ?")
-        params.append(date_to)
+        try:
+            dt = datetime.datetime.fromisoformat(date_to)
+        except ValueError:
+            return [], 0
+        # Эксклюзивно: начало следующего дня МСК = 21:00 UTC текущего дня.
+        next_day_utc = (dt - datetime.timedelta(hours=3) + datetime.timedelta(days=1)).replace(
+            tzinfo=datetime.timezone.utc
+        )
+        where.append("scan_date < ?")
+        params.append(next_day_utc.isoformat())
     if target:
         # Экранируем LIKE-wildcards, чтобы ввод пользователя не менял семантику фильтра.
         esc = target.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
