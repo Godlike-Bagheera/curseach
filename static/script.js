@@ -513,7 +513,9 @@ function jsonReportFilename(data) {
         if (!host) return 'ci_cd_report.json';
         const date = (data.scan_date ? new Date(data.scan_date) : new Date());
         if (isNaN(date.getTime())) return 'ci_cd_report.json';
-        const datePart = date.toISOString().slice(0, 10);
+        // Дата в имени файла — МСК (UTC+3), как у CSV/XLSX: фиксированный сдвиг
+        // и UTC-срез, чтобы имя не зависело от часового пояса браузера.
+        const datePart = new Date(date.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
         const hostPart = host.replace(/[^a-zA-Z0-9]+/g, '_');
         return `report_${hostPart}_${datePart}.json`;
     } catch (e) {
@@ -728,7 +730,7 @@ async function loadHistory(page) {
                 el('tr', null, [
                     el('th', { className: 'col-diff', text: 'DIFF', title: 'Отметьте два скана одной цели и нажмите «Сравнить»' }),
                     el('th', { className: 'col-id', text: 'ID', title: 'Номер скана в истории' }),
-                    el('th', { className: 'col-date', text: 'ДАТА (UTC)', title: 'Когда выполнялось сканирование (всемирное время)' }),
+                    el('th', { className: 'col-date', text: 'ДАТА (МСК)', title: 'Когда выполнялось сканирование (московское время, UTC+3)' }),
                     el('th', { className: 'col-target', text: 'ЦЕЛЬ', title: 'Адрес просканированного API' }),
                     el('th', { className: 'col-sev th-crit', text: 'КРИТ', title: 'Критические находки: возможен полный взлом — чинить немедленно' }),
                     el('th', { className: 'col-sev th-high', text: 'ВЫС', title: 'Высокий риск: реальная утечка данных или доступ к чужим аккаунтам' }),

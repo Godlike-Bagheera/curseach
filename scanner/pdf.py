@@ -552,6 +552,14 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
         ".types-table thead tr.types-caption th { background: #f7f8fa !important; color: #666 !important;"
         " font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;"
         " text-align: center; border: 1px solid #d0d4d9 !important; padding: 8px 10px; }"
+        # Каркас div'а Chromium рисует только на первом/последнем куске блока —
+        # на переносе таблица оставалась без краёв. В PDF убираем каркас: границы
+        # даёт сама таблица через ячейки, повторяемый thead несёт верхний край на каждом листе.
+        ".types-table-wrap { border: none !important; background: transparent !important; padding: 0 !important; }"
+        ".types-table { border-collapse: collapse !important; }"
+        ".types-table th, .types-table td { border-left: 1px solid #d0d4d9 !important; border-right: 1px solid #d0d4d9 !important; }"
+        ".types-table tbody tr:last-child td { border-bottom: 1px solid #d0d4d9 !important; }"
+        ".types-table thead tr.types-caption th { border-top: 2px solid #d0d4d9 !important; }"
         "</style>"
     )
     if "</head>" in doc:

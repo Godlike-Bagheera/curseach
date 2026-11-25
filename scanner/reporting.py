@@ -10,12 +10,41 @@ import io
 import json as _json
 import os
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import report_csv
 import report_xlsx
 
 from .config import LEVEL_RANK, MODE_TITLES_REPORT, PUBLIC_URL, VERSION, calculate_score
+
+# ---------- Единое время отображения: Москва (UTC+3) ----------
+# В БД время проверки хранится в aware UTC (database.save_scan) и не меняется.
+# Здесь — только слой отображения: фиксированный offset +3, без zoneinfo/tzdata,
+# чтобы отчёты, история и PDF показывали одну и ту же строку независимо от TZ сервера.
+_MSK = timezone(timedelta(hours=3), "MSK")
+
+
+def format_msk(value) -> str:
+    """ISO (aware или naive=UTC) -> 'YYYY-MM-DD HH:MM:SS' по Москве."""
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return str(value or "")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(_MSK).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def msk_stamp(value=None) -> str:
+    """Стампа для имён файлов: 'YYYY-MM-DD_HH-MM' МСК; value — дата проверки, иначе сейчас."""
+    base = format_msk(value) if value is not None else datetime.now(_MSK).strftime("%Y-%m-%d %H:%M:%S")
+    return base[:16].replace(" ", "_").replace(":", "-")
+
+
+def msk_datetime(value) -> datetime:
+    """ISO -> naive datetime в МСК: CSV/XLSX печатают его через strftime как есть."""
+    return datetime.fromisoformat(format_msk(value))
+
 
 # JinjaTemplates инжектится из scanner.app через init_templates(),
 # чтобы избежать циклического импорта.
@@ -104,7 +133,7 @@ def build_chart_context(scan: dict, include_findings: bool = False) -> dict:
         "partial_reason": scan.get("partial_reason", ""),
         "scan_id": scan["id"],
         "target_url": scan["target_url"],
-        "scan_date": scan["scan_date"].replace("T", " ")[:19],
+        "scan_date": format_msk(scan["scan_date"]),
         "critical": scan["critical"],
         "high": scan["high"],
         "medium": scan["medium"],
@@ -153,7 +182,7 @@ def inline_chartjs(html: str) -> str:
 def scan_json_payload(scan: dict) -> bytes:
     score = calculate_score(scan["critical"], scan["high"], scan["medium"], scan["low"])
     payload = {
-        "scan_date": scan["scan_date"],
+        "scan_date": format_msk(scan["scan_date"]),
         "target": scan["target_url"],
         "mode": scan.get("mode") or "full",
         "metrics": {
@@ -170,7 +199,7 @@ def scan_json_payload(scan: dict) -> bytes:
 
 def scan_csv_bytes(scan: dict) -> bytes:
     score = calculate_score(scan["critical"], scan["high"], scan["medium"], scan["low"])
-    scan_dt = datetime.fromisoformat(scan["scan_date"])
+    scan_dt = msk_datetime(scan["scan_date"])
     return report_csv.generate_csv(
         target_url=scan["target_url"],
         mode=scan.get("mode") or "full",
@@ -188,7 +217,7 @@ def scan_xlsx_bytes(scan: dict) -> bytes | None:
     if not report_xlsx.is_available():
         return None
     score = calculate_score(scan["critical"], scan["high"], scan["medium"], scan["low"])
-    scan_dt = datetime.fromisoformat(scan["scan_date"])
+    scan_dt = msk_datetime(scan["scan_date"])
     return report_xlsx.generate_xlsx(
         target_url=scan["target_url"],
         mode=scan.get("mode") or "full",
@@ -358,7 +387,7 @@ def build_scan_bundle(scan: dict, host_part: str) -> tuple:
         "и нажмите «Печать (браузером)» (Ctrl+P → «Сохранить как PDF»).</p>"
     ).encode()
 
-    date_part = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    date_part = msk_stamp(scan["scan_date"])
     zip_name = f"scan_{scan_id}_{host_part}_{date_part}.zip"
 
     buf = io.BytesIO()

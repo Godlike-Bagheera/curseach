@@ -13,7 +13,7 @@ import report_csv
 import report_xlsx
 
 from ..config import SCAN_MAX_REQUESTS, SESSION_TTL_SECONDS
-from ..reporting import render_report
+from ..reporting import format_msk, msk_datetime, msk_stamp, render_report
 from ..security import origin_allowed, require_admin, safe_host_for_filename, sessions, validate_target_url
 from ..tasks import AccountConfig, ScanRequest, ScanTask, run_scan_in_thread, tasks
 
@@ -177,7 +177,7 @@ async def get_html_report(task_id: str, request: Request, user: str = Depends(re
     if task.status not in ("completed", "failed"):
         raise HTTPException(status_code=400, detail="Scan not finished")
 
-    scan_dt = datetime.datetime.fromtimestamp(task.finished_at or time.time())
+    scan_dt = datetime.datetime.fromtimestamp(task.finished_at or time.time(), datetime.timezone.utc)
 
     return render_report(
         request=request,
@@ -189,7 +189,7 @@ async def get_html_report(task_id: str, request: Request, user: str = Depends(re
         low=task.low_count,
         score=task.score,
         mode=task.mode,
-        scan_date=scan_dt.strftime("%Y-%m-%d %H:%M:%S"),
+        scan_date=format_msk(scan_dt.isoformat()),
         partial=task.partial,
         partial_reason=task.partial_reason,
         endpoints_count=task.endpoints_count,
@@ -209,7 +209,9 @@ async def get_json_report(task_id: str, user: str = Depends(require_admin)):
         raise HTTPException(status_code=400, detail="Scan not finished")
     return JSONResponse(
         {
-            "scan_date": datetime.datetime.fromtimestamp(task.finished_at or time.time()).isoformat(),
+            "scan_date": datetime.datetime.fromtimestamp(
+                task.finished_at or time.time(), datetime.timezone.utc
+            ).isoformat(),
             "target": task.target_url,
             "mode": task.mode,
             "selected_checks": task.selected_checks,
@@ -233,11 +235,11 @@ async def get_csv_report(task_id: str, user: str = Depends(require_admin)):
     if task.status not in ("completed", "failed"):
         raise HTTPException(status_code=400, detail="Scan not finished")
 
-    scan_dt = datetime.datetime.fromtimestamp(task.finished_at or time.time())
+    scan_dt = datetime.datetime.fromtimestamp(task.finished_at or time.time(), datetime.timezone.utc)
     content = report_csv.generate_csv(
         target_url=task.target_url,
         mode=task.mode,
-        scan_dt=scan_dt,
+        scan_dt=msk_datetime(scan_dt.isoformat()),
         score=task.score,
         critical=task.critical_count,
         high=task.high_count,
@@ -247,7 +249,7 @@ async def get_csv_report(task_id: str, user: str = Depends(require_admin)):
     )
 
     host_part = safe_host_for_filename(task.target_url)
-    date_part = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+    date_part = msk_stamp(scan_dt.isoformat())
     filename = f"scan_{host_part}_{date_part}.csv"
 
     return Response(
@@ -271,11 +273,11 @@ async def get_xlsx_report(task_id: str, user: str = Depends(require_admin)):
     if task.status not in ("completed", "failed"):
         raise HTTPException(status_code=400, detail="Scan not finished")
 
-    scan_dt = datetime.datetime.fromtimestamp(task.finished_at or time.time())
+    scan_dt = datetime.datetime.fromtimestamp(task.finished_at or time.time(), datetime.timezone.utc)
     content = report_xlsx.generate_xlsx(
         target_url=task.target_url,
         mode=task.mode,
-        scan_dt=scan_dt,
+        scan_dt=msk_datetime(scan_dt.isoformat()),
         score=task.score,
         critical=task.critical_count,
         high=task.high_count,
@@ -291,7 +293,7 @@ async def get_xlsx_report(task_id: str, user: str = Depends(require_admin)):
         )
 
     host_part = safe_host_for_filename(task.target_url)
-    date_part = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+    date_part = msk_stamp(scan_dt.isoformat())
     filename = f"scan_{host_part}_{date_part}.xlsx"
 
     return Response(

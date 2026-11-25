@@ -198,11 +198,13 @@ def test_real_full_report_template_layout(render):
     ctx = build_chart_context(scan, include_findings=True)
     doc = render(env.get_template("report_full.html").render(**ctx), ctx)
     assert ".vuln-link { text-decoration: none !important; }" in doc
-    assert "@bottom-left" in doc and 'content: "2026-11-25 14:43:36"' in doc
+    # scan_date в контексте — уже МСК: 14:43:36 UTC -> 17:43:36 MSK
+    assert "@bottom-left" in doc and 'content: "2026-11-25 17:43:36"' in doc
     assert ".doc-footer { display: none !important; }" in doc
     assert "pdf-tail" not in doc
     assert "<thead>" in doc and "<code>/api/3</code>" in doc
     assert doc.count("<div") == doc.count("</div>")
+
 
 def _types_scan():
     return {
@@ -246,3 +248,30 @@ def test_full_report_types_caption_repeats(render):
     doc = render(env.get_template("report_full.html").render(**ctx), ctx)
     assert 'class="types-caption"' in doc
     assert doc.index('<table class="types-table">') < doc.index('class="types-caption"')
+
+
+def test_format_msk_utc_naive_rollover():
+    from scanner.reporting import format_msk
+
+    assert format_msk("2026-11-25T14:43:36+00:00") == "2026-11-25 17:43:36"
+    assert format_msk("2026-11-25T14:43:36") == "2026-11-25 17:43:36"  # naive считаем UTC
+    assert format_msk("2026-11-25T22:30:00+00:00") == "2026-11-26 01:30:00"  # переход суток
+    assert format_msk("") == ""
+    assert format_msk("мусор") == "мусор"
+
+
+def test_chart_context_date_is_msk():
+    from scanner.reporting import build_chart_context
+
+    ctx = build_chart_context(_types_scan())  # _types_scan: naive 2026-11-25T14:43:36
+    assert ctx["scan_date"] == "2026-11-25 17:43:36"
+
+
+def test_types_table_self_framed(render):
+    from scanner.reporting import build_chart_context
+
+    env = _env()
+    ctx = build_chart_context(_types_scan())
+    doc = render(env.get_template("chart.html").render(**ctx), ctx)
+    assert ".types-table-wrap { border: none !important" in doc
+    assert ".types-table thead tr.types-caption th { border-top: 2px solid #d0d4d9 !important; }" in doc

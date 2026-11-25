@@ -4,7 +4,6 @@ PDF рендерится на сервере через WeasyPrint (/history/{id
 /view/pdf). Браузерная печать (window.print()) осталась как резерв.
 """
 
-import datetime
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -18,6 +17,8 @@ from ..config import MODE_TITLES_REPORT, calculate_score
 from ..reporting import (
     build_chart_context,
     build_scan_bundle,
+    format_msk,
+    msk_stamp,
     results_to_sarif,
     scan_csv_bytes,
     scan_json_payload,
@@ -69,14 +70,15 @@ async def export_history_xlsx(
 
     scans = await run_in_threadpool(database.get_all_scans)
     scans = _filter_scans_by_date(scans, date_from, date_to)
-    content = report_xlsx.generate_history_xlsx(scans)
+    # Фильтр выше работает по датам в БД (UTC), а в таблицу печатаем время проверки в МСК.
+    content = report_xlsx.generate_history_xlsx([{**s, "scan_date": format_msk(s["scan_date"])} for s in scans])
     if content is None:
         raise HTTPException(
             status_code=500,
             detail="Не удалось сформировать XLSX-отчёт",
         )
 
-    date_part = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+    date_part = msk_stamp()
     filename = f"history_{date_part}.xlsx"
 
     return Response(
@@ -104,7 +106,7 @@ def _build_diff(sa: dict, sb: dict) -> dict:
         return {
             "id": s["id"],
             "target_url": s["target_url"],
-            "scan_date": s["scan_date"],
+            "scan_date": format_msk(s["scan_date"]),
             "critical": s["critical"],
             "high": s["high"],
             "medium": s["medium"],
@@ -158,13 +160,15 @@ async def get_history(
 ):
     """История сканов с серверной фильтрацией по дате/цели и пагинацией."""
     items, total = await run_in_threadpool(database.query_scans, date_from, date_to, target, limit, offset)
+    # Хранение остаётся UTC, отображение — МСК: таблица истории и график берут дату отсюда.
+    items = [{**s, "scan_date": format_msk(s["scan_date"])} for s in items]
     return JSONResponse(items, headers={"X-Total-Count": str(total)})
 
 
 @router.get("/history/{scan_id}")
 async def get_history_item(scan_id: int, user: str = Depends(require_admin)):
     scan = await _get_scan_or_404(scan_id)
-    return JSONResponse(scan)
+    return JSONResponse({**scan, "scan_date": format_msk(scan["scan_date"])})
 
 
 @router.delete("/history/{scan_id}")
@@ -197,7 +201,7 @@ async def view_history_report(scan_id: int, request: Request, user: str = Depend
             "low": scan["low"],
             "score": score,
             "mode_ru": MODE_TITLES_REPORT.get(scan.get("mode") or "full", "ПОЛНАЯ ПРОВЕРКА"),
-            "scan_date": scan["scan_date"].replace("T", " ")[:19],
+            "scan_date": format_msk(scan["scan_date"]),
             "source": "history",
             "scan_id": scan["id"],
             "endpoints_count": scan.get("endpoints_count", 0),
@@ -279,7 +283,7 @@ async def download_history_view_pdf(scan_id: int, user: str = Depends(require_ad
         "low": scan["low"],
         "score": score,
         "mode_ru": MODE_TITLES_REPORT.get(scan.get("mode") or "full", "ПОЛНАЯ ПРОВЕРКА"),
-        "scan_date": scan["scan_date"].replace("T", " ")[:19],
+        "scan_date": format_msk(scan["scan_date"]),
         "source": "history",
         "scan_id": scan["id"],
         "endpoints_count": scan.get("endpoints_count", 0),
