@@ -184,3 +184,43 @@ def test_real_report_template_layout(render):
     assert "<code>/api/3</code>" not in main
     assert 'class="doc-footer"' not in main
     assert doc.count("<div") == doc.count("</div>")
+def test_real_full_report_template_layout(render):
+    """Полный отчёт (report_full.html): тот же хвост «последняя находка + футер»."""
+    jinja2 = pytest.importorskip("jinja2")
+    from scanner.reporting import build_chart_context
+    from scanner.vuln_guide import slugify
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(os.path.join(pdf.BASE_DIR, "templates")),
+        autoescape=jinja2.select_autoescape(["html", "htm", "xml"]),
+    )
+    env.filters["vuln_slug"] = slugify
+    scan = {
+        "id": 123,
+        "target_url": "http://target",
+        "scan_date": "2026-11-23T17:53:55",
+        "critical": 0,
+        "high": 4,
+        "medium": 0,
+        "low": 0,
+        "mode": "full",
+        "results": [
+            {
+                "level": "HIGH",
+                "type": "SQL Injection",
+                "endpoint": f"/api/{i}",
+                "desc": "desc",
+                "details": {"recommendation": "fix"},
+            }
+            for i in range(4)
+        ],
+    }
+    ctx = build_chart_context(scan, include_findings=True)
+    doc = render(env.get_template("report_full.html").render(**ctx), ctx)
+    assert ".vuln-link { text-decoration: none !important; }" in doc
+    assert doc.count('class="pdf-tail"') == 1
+    main, tail = doc.split('<div class="pdf-tail">', 1)
+    assert "/api/3" in tail and "doc-footer" in tail
+    assert "<code>/api/3</code>" not in main
+    assert 'class="doc-footer"' not in main
+    assert doc.count("<div") == doc.count("</div>")
