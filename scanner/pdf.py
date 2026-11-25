@@ -359,10 +359,48 @@ def make_types_bars_svg(types_data: list[dict], width: int = 640) -> str:
 # ---------- Конвертация HTML-страницы отчёта в PDF ----------
 
 _SCRIPT_RE = re.compile(r"<script\b.*?</script>", re.S | re.I)
-_TOOLBAR_RE = re.compile(r'<div class="toolbar">.*?</div>', re.S)
 _PAYLOAD_RE = re.compile(r'<script id="chart-data" type="application/json">(.*?)</script>', re.S)
-_FOOTER_RE = re.compile(r'<div class="doc-footer">.*?</div>', re.S)
 _FINDINGS_TABLE_RE = re.compile(r'<table class="findings-table">.*?</table>', re.S)
+_DIV_TOKEN_RE = re.compile(r"<div\b|</div\s*>", re.I)
+
+
+def _class_open_re(tag: str, cls: str) -> re.Pattern:
+    """Открывающий тег с классом cls (в т.ч. среди других классов)."""
+    return re.compile(rf'<{tag}\b[^>]*class="(?:[^"]*\s)?{cls}(?:\s[^"]*)?"[^>]*>', re.I)
+
+
+_TOOLBAR_OPEN_RE = _class_open_re("div", "toolbar")
+_FOOTER_OPEN_RE = _class_open_re("div", "doc-footer")
+
+
+def _div_block(doc: str, start: int) -> tuple[int, int] | None:
+    """Границы [start, end) целого <div>…</div> с учётом вложенности.
+
+    Ленивый `.*?</div>` обрывает блок на первом же внутреннем </div>: у тулбара
+    внутри лежит .toolbar-buttons, поэтому после вырезания оставался непарный
+    </div>, который закрывал родительский контейнер раньше времени.
+    """
+    depth = 0
+    for m in _DIV_TOKEN_RE.finditer(doc, start):
+        if m.group(0).lower().startswith("<div"):
+            depth += 1
+        else:
+            depth -= 1
+            if depth == 0:
+                return start, m.end()
+    return None
+
+
+def _strip_toolbar(doc: str) -> str:
+    """Вырезает тулбар целиком: кнопки не должны попадать в PDF ни текстом, ни разметкой."""
+    while True:
+        m = _TOOLBAR_OPEN_RE.search(doc)
+        if m is None:
+            return doc
+        span = _div_block(doc, m.start())
+        if span is None:
+            return doc
+        doc = doc[: span[0]] + doc[span[1] :]
 
 
 def _keep_footer_with_last_row(doc: str) -> str:
@@ -373,11 +411,14 @@ def _keep_footer_with_last_row(doc: str) -> str:
     блочный <div class="pdf-tail"> с break-inside: avoid: на новый лист они
     уезжают только вместе, футер никогда не остаётся один.
     """
-    fm = _FOOTER_RE.search(doc)
+    fm = _FOOTER_OPEN_RE.search(doc)
     if not fm:
         return doc
-    footer_html = fm.group(0)
-    without = doc[:fm.start()] + doc[fm.end():]
+    span = _div_block(doc, fm.start())
+    if span is None:
+        return doc
+    footer_html = doc[span[0] : span[1]]
+    without = doc[: span[0]] + doc[span[1] :]
     tm = _FINDINGS_TABLE_RE.search(without)
     if not tm:
         return doc
@@ -483,7 +524,7 @@ def _render_pdf_sync(html_str: str, ctx: dict, base_url: str | None) -> bytes:
     else:
         doc = override_css + doc
 
-    doc = _TOOLBAR_RE.sub("", doc)
+    doc = _strip_toolbar(doc)
     doc = _SCRIPT_RE.sub("", doc)
     doc = _keep_footer_with_last_row(doc)
     doc = _sanitize_resources(doc)
