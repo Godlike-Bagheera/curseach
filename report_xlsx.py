@@ -338,9 +338,9 @@ def generate_history_xlsx(scans: list[dict[str, Any]]) -> bytes | None:
     ws.row_dimensions[1].height = 24
 
     ws.merge_cells("A2:I2")
-    ws["A2"].value = (
-        f"Всего записей: {len(scans)}   |   Система: DevSecOps Scanner   |   Сформирован: {_now_msk()} (МСК)"
-    )
+    ws[
+        "A2"
+    ].value = f"Всего записей: {len(scans)}   |   Система: DevSecOps Scanner   |   Сформирован: {_now_msk()} (МСК)"
     ws["A2"].font = Font(name="Calibri", size=10, color="666666")
     ws["A2"].alignment = left
     ws.row_dimensions[2].height = 18
