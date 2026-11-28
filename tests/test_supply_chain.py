@@ -37,14 +37,13 @@ def test_requirements_all_hashed():
 
 
 def test_requirements_direct_pins_kept():
+    # Прямые зависимости запинены (==X.Y.Z); конкретные версии НЕ хардкодим.
+    # Хардкод номеров воевал с Dependabot: любой bump ломал этот тест (PR #58).
+    # Нужный инвариант — «прямой пин с версией», а не «конкретная версия»;
+    # целостность хешей проверяет test_requirements_all_hashed.
     txt = open(os.path.join(ROOT, "requirements.txt"), encoding="utf-8").read()
-    for pin in (
-        "fastapi==0.163.1",
-        "httpx==0.28.1",
-        "pydantic==2.14.3",
-        "uvicorn[standard]==0.54.0",
-    ):
-        assert pin in txt
+    for pkg in ("fastapi", "httpx", "pydantic", "uvicorn[standard]"):
+        assert re.search(rf"^{re.escape(pkg)}==\d+\.\d+", txt, re.M), f"{pkg} должен быть запинен через =="
     # weasyprint полностью удалён (PDF теперь через Playwright)
     assert "weasyprint==" not in txt, "weasyprint removed: PDF now uses Playwright"
     # playwright ставится отдельным шагом (start.py + Dockerfile), не через
@@ -92,5 +91,6 @@ def test_dockerfile_digest_and_require_hashes():
 
 
 def test_httpx2_trusted_kept():
+    # httpx2 (преемник httpx, мейнтейнится Pydantic) остаётся запиненным в dev.
     txt = open(os.path.join(ROOT, "requirements-dev.txt"), encoding="utf-8").read()
-    assert "httpx2==2.16.2" in txt
+    assert re.search(r"^httpx2==\d+\.\d+", txt, re.M), "httpx2 должен остаться в requirements-dev.txt"
